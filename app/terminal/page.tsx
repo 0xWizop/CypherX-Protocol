@@ -20,6 +20,7 @@ import {
   where,
 } from "firebase/firestore";
 import debounce from "lodash/debounce";
+import { tokenMapping } from "@/app/tokenMapping";
 
 // Types
 interface Notification {
@@ -74,6 +75,26 @@ interface DexToken {
   fdv?: number;
   pairCreatedAt?: number;
   info?: { imageUrl?: string };
+}
+
+interface ScanResult {
+  token?: {
+    name?: string;
+    symbol?: string;
+  };
+  honeypotResult?: {
+    isHoneypot?: boolean;
+    honeypotReason?: string;
+  };
+  summary?: {
+    risk?: string;
+    riskLevel?: string;
+    flags?: { flag: string; description: string }[];
+  };
+  simulationResult?: {
+    buyTax?: number;
+    sellTax?: number;
+  };
 }
 
 // Constants
@@ -166,13 +187,12 @@ export default function HomebaseTerminal() {
     "/shortcuts - Show keyboard shortcuts",
     "/account - Manage your account",
     "/news - Navigate to Base Chain News",
-    "/dashboard - Navigate to Competitions Dashboard",
-    "/tournaments - Navigate to Competitions",
-    "/whales - Navigate to Whale Watcher page",
+    "/tournaments - Navigate to Trading Competitions",
+    "/whales - Navigate to Whale Watchers page",
     "/scan <token-address> - Audits the smart contract",
-    "/token-stats <symbol> - e.g. /token-stats CLANKER to fetch stats",
-    "/screener - Open Token Screener",
-    "/setdisplayname <name> - Set your display name",
+    "/<tokenname>-stats - e.g. /CLANKER-stats to fetch stats",
+    "/screener - Open Token Scanner",
+    "/setdisplay <name> - Set your display name",
     "/signup <email> <password> - Create a new account",
     "/login <email> <password> - Login to your account",
     "/logout - Logout of your account",
@@ -189,7 +209,7 @@ export default function HomebaseTerminal() {
   ]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationCache, setNotificationCache] = useState<Notification[]>([]);
-  const [pinnedNotifications, setPinnedNotifications] = useState<string[]>([]); // For pinned notifications
+  const [pinnedNotifications, setPinnedNotifications] = useState<string[]>([]);
   const [notificationFilter, setNotificationFilter] = useState<{
     type: string;
     excludeTypes: string[];
@@ -199,7 +219,7 @@ export default function HomebaseTerminal() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [lastCommand, setLastCommand] = useState("");
   const [isAlertSoundEnabled, setIsAlertSoundEnabled] = useState(true);
-  const [showNotifications, setShowNotifications] = useState(true); // For mobile toggle
+  const [showNotifications, setShowNotifications] = useState(true);
   const [sysUpdates] = useState<string[]>([
     "Checking system integrity...",
     "Fetching security patches...",
@@ -242,13 +262,11 @@ export default function HomebaseTerminal() {
     "/shortcuts",
     "/account",
     "/news",
-    "/dashboard",
     "/tournaments",
     "/whales",
     "/scan",
-    "/token-stats",
     "/screener",
-    "/setdisplayname",
+    "/setdisplay",
     "/signup",
     "/login",
     "/logout",
@@ -275,27 +293,22 @@ export default function HomebaseTerminal() {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        const prefsQuery = query(
-          collection(db, `users/${currentUser.uid}/preferences`)
-        );
-        onSnapshot(prefsQuery, (snapshot) => {
-          const prefsData: any = {};
-          snapshot.forEach((doc) => {
-            prefsData[doc.id] = doc.data().value;
-          });
-          setPreferences((prev) => ({
-            ...prev,
-            notifications: prefsData.notifications || prev.notifications,
-            favorites: prefsData.favorites || prev.favorites,
-            terminalStyle: prefsData.terminalStyle || prev.terminalStyle,
-            prioritizeNotifications:
-              prefsData.prioritizeNotifications ??
-              prev.prioritizeNotifications,
-            notificationFilter: prefsData.notificationFilter || prev.notificationFilter,
-          }));
-          // Load persistent filters
-          if (prefsData.notificationFilter) {
-            setNotificationFilter(prefsData.notificationFilter);
+        const userDocRef = doc(db, `users/${currentUser.uid}`);
+        onSnapshot(userDocRef, (doc) => {
+          if (doc.exists()) {
+            const userData = doc.data();
+            setPreferences((prev) => ({
+              ...prev,
+              notifications: userData.preferences?.notifications || prev.notifications,
+              favorites: userData.preferences?.favorites || prev.favorites,
+              terminalStyle: userData.preferences?.terminalStyle || prev.terminalStyle,
+              prioritizeNotifications:
+                userData.preferences?.prioritizeNotifications ?? prev.prioritizeNotifications,
+              notificationFilter: userData.preferences?.notificationFilter || prev.notificationFilter,
+            }));
+            if (userData.preferences?.notificationFilter) {
+              setNotificationFilter(userData.preferences.notificationFilter);
+            }
           }
         });
 
@@ -340,7 +353,7 @@ export default function HomebaseTerminal() {
           prioritizeNotifications: true,
         });
         setSnoozedTokens([]);
-        setNotificationFilter({ type: "all", excludeTypes: [] }); // Reset filters for non-logged-in users
+        setNotificationFilter({ type: "all", excludeTypes: [] });
       }
     });
     return () => unsubscribe();
@@ -350,11 +363,17 @@ export default function HomebaseTerminal() {
   useEffect(() => {
     if (user) {
       setDoc(
-        doc(db, `users/${user.uid}/preferences/notificationFilter`),
-        { value: notificationFilter }
+        doc(db, `users/${user.uid}`),
+        {
+          preferences: {
+            ...preferences,
+            notificationFilter,
+          },
+        },
+        { merge: true }
       );
     }
-  }, [notificationFilter, user]);
+  }, [notificationFilter, user, preferences]);
 
   // Fetch Tokens (Shared with Screener via Firestore)
   useEffect(() => {
@@ -372,15 +391,13 @@ export default function HomebaseTerminal() {
 
   // Fetch Notifications from Firestore
   useEffect(() => {
-    // Note: Add a TTL policy in Firestore to delete notifications older than 24 hours
-    // e.g., using a Cloud Function or Firestore TTL feature
     const enabledTypes = Object.keys(preferences.notifications).filter(
       (type) => preferences.notifications[type]
     );
     const notificationsQuery = query(
       collection(db, "notifications"),
-      where("type", "in", enabledTypes.length > 0 ? enabledTypes : ["none"]), // Firestore requires non-empty array
-      limit(50) // Performance: Limit to 50 most recent notifications
+      where("type", "in", enabledTypes.length > 0 ? enabledTypes : ["none"]),
+      limit(50)
     );
     const unsubscribe = onSnapshot(notificationsQuery, (snapshot) => {
       const newNotifications: Notification[] = [];
@@ -397,7 +414,6 @@ export default function HomebaseTerminal() {
         }
       });
 
-      // Apply filters
       let filteredNotifications = newNotifications;
       if (notificationFilter.type !== "all") {
         filteredNotifications = filteredNotifications.filter(
@@ -410,13 +426,11 @@ export default function HomebaseTerminal() {
         );
       }
 
-      // Sort by timestamp (newest first), no weights
       const sortedNotifications = filteredNotifications.sort(
         (a, b) =>
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       );
 
-      // Separate pinned and unpinned notifications
       const pinned = sortedNotifications.filter((n) =>
         pinnedNotifications.includes(n.id)
       );
@@ -425,10 +439,8 @@ export default function HomebaseTerminal() {
       );
       const finalNotifications = [...pinned, ...unpinned];
 
-      // Debounced update for performance
       debouncedSetNotifications(finalNotifications);
 
-      // Play alert sound for new notifications
       const newAlerts = finalNotifications.filter(
         (n) => !notificationCache.some((cached) => cached.id === n.id)
       );
@@ -436,7 +448,6 @@ export default function HomebaseTerminal() {
         audioRef.current.play().catch(() => {});
       }
 
-      // Update cache (last 10 minutes)
       setNotificationCache((prev) => {
         const updatedCache = [...prev, ...newAlerts].filter(
           (n) => new Date(n.timestamp).getTime() > Date.now() - 10 * 60 * 1000
@@ -479,7 +490,7 @@ export default function HomebaseTerminal() {
     }, 5000);
 
     fetchNews();
-    const interval = setInterval(fetchNews, 3_600_000); // Every hour
+    const interval = setInterval(fetchNews, 3_600_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -505,7 +516,7 @@ export default function HomebaseTerminal() {
     }, 5000);
 
     fetchAIIndex();
-    const interval = setInterval(fetchAIIndex, AI_INDEX_INTERVAL); // Every 4 hours
+    const interval = setInterval(fetchAIIndex, AI_INDEX_INTERVAL);
     return () => clearInterval(interval);
   }, []);
 
@@ -531,7 +542,7 @@ export default function HomebaseTerminal() {
     };
 
     fetchEthStats();
-    const interval = setInterval(fetchEthStats, ETH_STATS_INTERVAL); // Every 30 minutes
+    const interval = setInterval(fetchEthStats, ETH_STATS_INTERVAL);
     return () => clearInterval(interval);
   }, []);
 
@@ -543,6 +554,10 @@ export default function HomebaseTerminal() {
   useEffect(() => {
     const checkCustomAlerts = () => {
       tokens.forEach((token) => {
+        if (!token.baseToken || !token.baseToken.symbol) {
+          console.warn("Invalid token data:", token);
+          return;
+        }
         const symbol = token.baseToken.symbol;
         const currentPrice = parseFloat(token.priceUsd || "0");
         customAlerts.forEach(async (alert) => {
@@ -607,6 +622,53 @@ export default function HomebaseTerminal() {
       const [cmd, ...args] = command.trim().split(" ");
       const lowerCmd = cmd.toLowerCase();
 
+      // Handle dynamic /<tokenname>-stats command
+      if (lowerCmd.endsWith("-stats")) {
+        const tokenName = lowerCmd.replace(/-stats$/, "").replace("/", "");
+        if (tokenName) {
+          setOutput([`Fetching stats for ${tokenName.toUpperCase()}...`]);
+          try {
+            // Map token name to address using tokenMapping
+            const tokenAddress = tokenMapping[tokenName.toUpperCase()];
+            if (!tokenAddress) {
+              setOutput([`Token ${tokenName.toUpperCase()} not found in token mapping.`]);
+              return;
+            }
+
+            const response = await fetch(
+              `/api/tokens?chainId=base&tokenAddresses=${tokenAddress}`,
+              {
+                method: "GET",
+              }
+            );
+            if (!response.ok) {
+              const errorData = await response.json();
+              setOutput([`Failed to fetch stats for ${tokenName.toUpperCase()}: ${errorData.error || "Network error"}`]);
+              return;
+            }
+            const data = await response.json();
+            if (data && data.length > 0) {
+              const token = data[0];
+              setOutput([
+                `Stats for ${token.baseToken?.symbol || tokenName.toUpperCase()}:`,
+                `Price: $${Number(token.priceUsd || "0").toFixed(5)}`,
+                `24h Change: ${token.priceChange?.h24?.toFixed(2) ?? "N/A"}%`,
+                `Volume (24h): $${token.volume?.h24?.toLocaleString() || "N/A"}`,
+                `Liquidity: $${token.liquidity?.usd?.toLocaleString() || "N/A"}`,
+                `Market Cap: ${token.marketCap ? `$${token.marketCap.toLocaleString()}` : "N/A"}`,
+              ]);
+            } else {
+              setOutput([`Token ${tokenName.toUpperCase()} data not available.`]);
+            }
+          } catch (err) {
+            console.error("Failed to fetch token stats:", err);
+            setOutput([`Failed to fetch stats for ${tokenName.toUpperCase()}: An error occurred.`]);
+            return;
+          }
+        }
+        return;
+      }
+
       switch (lowerCmd) {
         case "/menu":
           setOutput([
@@ -618,13 +680,12 @@ export default function HomebaseTerminal() {
             "/shortcuts - Show keyboard shortcuts",
             "/account - Manage your account",
             "/news - Navigate to Base Chain News",
-            "/dashboard - Navigate to Competitions Dashboard",
-            "/tournaments - Navigate to Competitions",
-            "/whales - Navigate to Whale Watcher page",
+            "/tournaments - Navigate to Trading Competitions",
+            "/whales - Navigate to Whale Watchers page",
             "/scan <token-address> - Audits the smart contract",
-            "/token-stats <symbol> - e.g. /token-stats CLANKER to fetch stats",
-            "/screener - Open Token Screener",
-            "/setdisplayname <name> - Set your display name",
+            "/<tokenname>-stats - e.g. /CLANKER-stats to fetch stats",
+            "/screener - Open Token Scanner",
+            "/setdisplay <name> - Set your display name",
             "/signup <email> <password> - Create a new account",
             "/login <email> <password> - Login to your account",
             "/logout - Logout of your account",
@@ -642,14 +703,14 @@ export default function HomebaseTerminal() {
           break;
 
         case "/clear":
-          setOutput(["Terminal cleared."]); // Only clear terminal output
+          setOutput(["Terminal cleared."]);
           break;
 
         case "/refresh-notifications":
           setOutput(["Refreshing notifications..."]);
           setNotifications([]);
           setNotificationCache([]);
-          setPinnedNotifications([]); // Clear pinned notifications as well
+          setPinnedNotifications([]);
           setOutput(["Notifications refreshed."]);
           break;
 
@@ -668,80 +729,88 @@ export default function HomebaseTerminal() {
           break;
 
         case "/news":
-          router.push("/news");
-          break;
-
-        case "/dashboard":
-          router.push("/dashboard");
+          router.push("/base-chain-news");
           break;
 
         case "/tournaments":
-          router.push("/tournaments");
+          router.push("/tradingcompetition");
           break;
 
         case "/whales":
-          router.push("/whales");
+          router.push("/whale-watchers");
           break;
 
         case "/scan":
           if (args[0]) {
-            setOutput([
-              `Scanning token: ${args[0]}...`,
-              "Checking for vulnerabilities...",
-              "Analyzing contract code...",
-              "Scan complete. No vulnerabilities found.",
-            ]);
+            setOutput([`Scanning token: ${args[0]}...`]);
+            try {
+              const response = await fetch(`/api/honeypot/scan?address=${args[0]}`, {
+                method: "GET",
+              });
+              if (!response.ok) {
+                const errorData = await response.json();
+                setOutput([`Failed to scan token ${args[0]}: ${errorData.error || "Network error"}`]);
+                return;
+              }
+              const result: ScanResult = await response.json();
+              const outputLines = [`Scan result for ${args[0]}:`];
+              outputLines.push(
+                `Token: ${result.token?.name || "Unknown"} (${result.token?.symbol || "N/A"})`
+              );
+              if (result.honeypotResult?.isHoneypot) {
+                outputLines.push("⚠️ WARNING: Potential honeypot detected!");
+                if (result.honeypotResult.honeypotReason) {
+                  outputLines.push(`Reason: ${result.honeypotResult.honeypotReason}`);
+                }
+              } else {
+                outputLines.push("✅ No honeypot detected.");
+              }
+              if (result.summary) {
+                outputLines.push(`Risk: ${result.summary.risk || "N/A"}`);
+                outputLines.push(`Risk Level: ${result.summary.riskLevel || "N/A"}`);
+                if (result.summary.flags && result.summary.flags.length > 0) {
+                  outputLines.push("Flags:");
+                  result.summary.flags.forEach((flag) => {
+                    outputLines.push(`- ${flag.flag}: ${flag.description}`);
+                  });
+                }
+              }
+              if (result.simulationResult) {
+                outputLines.push(`Buy Tax: ${result.simulationResult.buyTax !== undefined ? `${result.simulationResult.buyTax}%` : "N/A"}`);
+                outputLines.push(`Sell Tax: ${result.simulationResult.sellTax !== undefined ? `${result.simulationResult.sellTax}%` : "N/A"}`);
+              }
+              setOutput(outputLines);
+            } catch (err) {
+              console.error("Honeypot scan failed:", err);
+              setOutput(["Failed to scan token: An error occurred."]);
+            }
           } else {
             setOutput(["Please provide a token address: /scan <token-address>"]);
           }
           break;
 
-        case "/token-stats":
-          if (args[0]) {
-            const token = tokens.find(
-              (t) =>
-                t.baseToken.symbol.toLowerCase() === args[0].toLowerCase()
-            );
-            if (token) {
-              setOutput([
-                `Stats for ${token.baseToken.symbol}:`,
-                `Price: $${Number(token.priceUsd).toFixed(5)}`,
-                `24h Change: ${
-                  token.priceChange?.h24?.toFixed(2) ?? "N/A"
-                }%`,
-                `Volume (24h): $${token.volume.h24.toLocaleString()}`,
-                `Liquidity: $${token.liquidity.usd.toLocaleString()}`,
-                `Market Cap: ${
-                  token.marketCap
-                    ? `$${token.marketCap.toLocaleString()}`
-                    : "N/A"
-                }`,
-              ]);
-            } else {
-              setOutput([`Token ${args[0]} not found.`]);
-            }
-          } else {
-            setOutput(["Please provide a token symbol: /token-stats <symbol>"]);
-          }
-          break;
-
         case "/screener":
-          router.push("/screener");
+          router.push("/token-scanner");
           break;
 
-        case "/setdisplayname":
+        case "/setdisplay":
           if (!user) {
             setOutput(["Please login to set display name."]);
             return;
           }
           if (args[0]) {
+            const newDisplayName = args.join(" ");
             await setDoc(
-              doc(db, `users/${user.uid}/preferences/displayName`),
-              { value: args.join(" ") }
+              doc(db, `users/${user.uid}`),
+              {
+                displayName: newDisplayName,
+                preferences: preferences,
+              },
+              { merge: true }
             );
-            setOutput([`Display name set to: ${args.join(" ")}`]);
+            setOutput([`Display name set to: ${newDisplayName}`]);
           } else {
-            setOutput(["Please provide a name: /setdisplayname <name>"]);
+            setOutput(["Please provide a name: /setdisplay <name>"]);
           }
           break;
 
@@ -783,8 +852,14 @@ export default function HomebaseTerminal() {
                 [type]: value,
               };
               await setDoc(
-                doc(db, `users/${user.uid}/preferences/notifications`),
-                { value: updatedPrefs }
+                doc(db, `users/${user.uid}`),
+                {
+                  preferences: {
+                    ...preferences,
+                    notifications: updatedPrefs,
+                  },
+                },
+                { merge: true }
               );
               setOutput([
                 `Notification ${type} set to ${value ? "on" : "off"}.`,
@@ -817,8 +892,14 @@ export default function HomebaseTerminal() {
           } else if (args[0]?.toLowerCase() === "prioritize" && args[1]) {
             const value = args[1].toLowerCase() === "on";
             await setDoc(
-              doc(db, `users/${user.uid}/preferences/prioritizeNotifications`),
-              { value }
+              doc(db, `users/${user.uid}`),
+              {
+                preferences: {
+                  ...preferences,
+                  prioritizeNotifications: value,
+                },
+              },
+              { merge: true }
             );
             setOutput([
               `Notification prioritization ${value ? "enabled" : "disabled"}.`,
@@ -906,7 +987,7 @@ export default function HomebaseTerminal() {
           setOutput(["Syncing alerts..."]);
           setNotifications([]);
           setNotificationCache([]);
-          setPinnedNotifications([]); // Clear pinned notifications as well
+          setPinnedNotifications([]);
           setOutput(["Notifications synced: Check Notification Center."]);
           break;
 
@@ -1040,9 +1121,16 @@ export default function HomebaseTerminal() {
   // Terminal Style Handler
   const handleStyleChange = async (style: string) => {
     if (user) {
-      await setDoc(doc(db, `users/${user.uid}/preferences/terminalStyle`), {
-        value: style,
-      });
+      await setDoc(
+        doc(db, `users/${user.uid}`),
+        {
+          preferences: {
+            ...preferences,
+            terminalStyle: style,
+          },
+        },
+        { merge: true }
+      );
     } else {
       setPreferences((prev) => ({ ...prev, terminalStyle: style }));
     }
@@ -1077,21 +1165,18 @@ export default function HomebaseTerminal() {
       if (isPinned) {
         return prev.filter((pid) => pid !== id);
       } else {
-        return [id, ...prev.filter((pid) => pid !== id)]; // Move to top
+        return [id, ...prev.filter((pid) => pid !== id)];
       }
     });
 
-    // Reorder notifications to place pinned ones at the top
     setNotifications((prev) => {
       const notification = prev.find((n) => n.id === id);
       if (!notification) return prev;
 
       const isPinned = pinnedNotifications.includes(id);
       if (isPinned) {
-        // If already pinned, unpin by removing from pinned list
         return prev;
       } else {
-        // Pin by moving to the top
         const others = prev.filter((n) => n.id !== id);
         return [notification, ...others];
       }
@@ -1104,7 +1189,7 @@ export default function HomebaseTerminal() {
       setOutput(["Please login to snooze notifications."]);
       return;
     }
-    const expiry = Date.now() + 60 * 60 * 1000; // 1 hour
+    const expiry = Date.now() + 60 * 60 * 1000;
     await setDoc(doc(db, `users/${user.uid}/snoozed/${symbol}`), {
       expiry,
     });
@@ -1121,27 +1206,26 @@ export default function HomebaseTerminal() {
     setPinnedNotifications((prev) => prev.filter((pid) => pid !== id));
   };
 
-  // Section Header Component
+  // Section Header Component with Full Gray Background and Theme-Based Separator
   const SectionHeader = ({ title }: { title: string }) => (
     <div className="mb-4">
-      <div className={`w-full h-0.5 bg-gray-600`} /> {/* Thicker, darker separator */}
-      <div className={`relative py-2 px-4 bg-gray-700`}>
-        <h2 className={`text-lg font-bold ${currentStyle.accentText} text-center`}>
+      <div className="w-full bg-gray-700 py-2 px-4 relative flex justify-between items-center">
+        <h2 className={`text-lg font-bold ${currentStyle.accentText}`}>
           {title.replace("_", " ")}
         </h2>
-        <div className="absolute top-1/2 right-4 transform -translate-y-1/2 flex items-center space-x-2">
+        <div className="flex items-center space-x-2">
           <div className="w-3 h-3 bg-red-500 rounded-full"></div>
           <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
           <div className="w-3 h-3 bg-green-500 rounded-full"></div>
         </div>
       </div>
-      <div className={`w-full h-0.5 bg-gray-600`} /> {/* Thicker, darker separator */}
+      <div className={`w-full h-0.5 ${currentStyle.separator}`} />
     </div>
   );
 
   return (
     <div
-      className={`w-screen h-screen ${currentStyle.background} ${currentStyle.text} font-mono m-0 p-0 overflow-hidden flex flex-col`}
+      className={`w-screen h-screen ${currentStyle.background} ${currentStyle.text} font-mono m-0 p-0 overflow-hidden flex flex-col bg-gray-700`}
       style={{ textShadow: preferences.terminalStyle === "classic" ? "0 0 5px rgba(37,99,235,0.5)" : undefined }}
     >
       <audio ref={audioRef} src="/alert.mp3" preload="auto" />
@@ -1150,10 +1234,9 @@ export default function HomebaseTerminal() {
       <div className="hidden md:flex flex-1 w-full h-[calc(100vh-80px)]">
         {/* SYS_UPDATE Panel */}
         <div
-          className={`w-[35%] h-full ${currentStyle.border} border-r ${currentStyle.panelBg} p-4 overflow-y-auto`} // 35%
+          className={`w-[35%] h-full ${currentStyle.border} border-r ${currentStyle.panelBg} p-4 overflow-y-auto`}
         >
           <SectionHeader title="SYS_UPDATE" />
-          <div className={`w-full h-0.5 bg-gray-600 mb-4`} /> {/* Thicker separator */}
           <div className="space-y-2">
             {sysUpdates.map((update, idx) => (
               <p key={idx} className="text-sm">{update}</p>
@@ -1182,15 +1265,14 @@ export default function HomebaseTerminal() {
           </div>
         </div>
 
-        {/* Separator */}
+        {/* Separator (Vertical, thinner and theme-based) */}
         <div className={`w-px h-full ${currentStyle.separator}`} />
 
         {/* TERMINAL_OUTPUT Panel */}
         <div
-          className={`w-2/5 h-full ${currentStyle.border} border-r ${currentStyle.panelBg} p-4 flex flex-col`} // 40%
+          className={`w-2/5 h-full ${currentStyle.border} border-r ${currentStyle.panelBg} p-4 flex flex-col`}
         >
           <SectionHeader title="TERMINAL_OUTPUT" />
-          <div className={`w-full h-0.5 bg-gray-600 mb-4`} /> {/* Thicker separator */}
           <div ref={outputRef} className="flex-1 overflow-y-auto">
             {output.map((line, idx) => (
               <p key={idx} className="text-sm">{line}</p>
@@ -1198,15 +1280,14 @@ export default function HomebaseTerminal() {
           </div>
         </div>
 
-        {/* Separator */}
+        {/* Separator (Vertical, thinner and theme-based) */}
         <div className={`w-px h-full ${currentStyle.separator}`} />
 
         {/* NOTIFICATION_CENTER Panel */}
         <div
-          className={`w-1/4 h-full ${currentStyle.panelBg} p-4 overflow-y-auto`} // 25%
+          className={`w-1/4 h-full ${currentStyle.panelBg} p-4 overflow-y-auto`}
         >
           <SectionHeader title="NOTIFICATION_CENTER" />
-          <div className={`w-full h-0.5 bg-gray-600 mb-4`} /> {/* Thicker separator */}
           <div className="mb-4 space-y-3">
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
@@ -1323,38 +1404,38 @@ export default function HomebaseTerminal() {
                         ? " bg-green-800"
                         : " bg-red-800"
                       : "")
-                  } flex items-start justify-between space-x-3 p-2 rounded transition-colors duration-200 hover:brightness-110 cursor-pointer`}
+                  } flex p-2 rounded transition-colors duration-200 hover:brightness-110 cursor-pointer relative min-h-[80px]`}
                 >
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2">
-                      <FaBell className="w-5 h-5" />
+                  <div className="flex items-start space-x-2 flex-1">
+                    <FaBell className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
                       <p className="font-medium">
                         {notification.type.toUpperCase().replace("_", " ")}: {notification.message}
                       </p>
-                    </div>
-                    <div className="flex items-center space-x-2 mt-1">
-                      <p className="text-xs opacity-80">
-                        {new Date(notification.timestamp).toLocaleString()}
-                      </p>
-                      {notification.pairAddress && (
-                        <button
-                          onClick={() =>
-                            router.push(`/app/token-scanner/${notification.pairAddress}/chart/page.tsx`)
-                          }
-                          className={`text-xs underline transition-colors duration-200 ${
-                            preferences.terminalStyle === "classic"
-                              ? "text-blue-300 hover:text-blue-400"
-                              : preferences.terminalStyle === "hacker"
-                              ? "text-green-500 hover:text-green-400"
-                              : "text-[#4A3728] hover:text-[#C2A47C]"
-                          }`}
-                        >
-                          View Chart
-                        </button>
-                      )}
+                      <div className="flex items-center space-x-2 mt-1">
+                        <p className="text-xs opacity-80">
+                          {new Date(notification.timestamp).toLocaleString()}
+                        </p>
+                        {notification.pairAddress && (
+                          <button
+                            onClick={() =>
+                              router.push(`/app/token-scanner/${notification.pairAddress}/chart/page.tsx`)
+                            }
+                            className={`text-xs underline transition-colors duration-200 ${
+                              preferences.terminalStyle === "classic"
+                                ? "text-blue-300 hover:text-blue-400"
+                                : preferences.terminalStyle === "hacker"
+                                ? "text-green-500 hover:text-green-400"
+                                : "text-[#4A3728] hover:text-[#C2A47C]"
+                            }`}
+                          >
+                            View Chart
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-3">
+                  <div className="flex flex-col items-center space-y-1 ml-2">
                     <button
                       onClick={() => togglePinNotification(notification.id)}
                       className={`p-1 rounded-full transition-colors duration-200 ${
@@ -1392,8 +1473,7 @@ export default function HomebaseTerminal() {
 
       {/* Mobile Layout: Stacked with Collapsible Notifications */}
       <div className="md:hidden flex-1 w-full h-[calc(100vh-80px)] p-4 flex flex-col">
-        <SectionHeader title="TERMINAL OUTPUT" />
-        <div className={`w-full h-0.5 bg-gray-600 mb-4`} /> {/* Thicker separator */}
+        <SectionHeader title="TERMINAL_OUTPUT" />
         <div ref={outputRef} className="flex-1 overflow-y-auto">
           {output.map((line, idx) => (
             <p key={idx} className="text-sm">{line}</p>
@@ -1439,38 +1519,38 @@ export default function HomebaseTerminal() {
                           ? " bg-green-800"
                           : " bg-red-800"
                         : "")
-                    } flex items-start justify-between space-x-3 p-2 rounded transition-colors duration-200 hover:brightness-110 cursor-pointer`}
+                    } flex p-2 rounded transition-colors duration-200 hover:brightness-110 cursor-pointer relative min-h-[80px]`}
                   >
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2">
-                        <FaBell className="w-5 h-5" />
+                    <div className="flex items-start space-x-2 flex-1">
+                      <FaBell className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
                         <p className="font-medium">
                           {notification.type.toUpperCase().replace("_", " ")}: {notification.message}
                         </p>
-                      </div>
-                      <div className="flex items-center space-x-2 mt-1">
-                        <p className="text-xs opacity-80">
-                          {new Date(notification.timestamp).toLocaleString()}
-                        </p>
-                        {notification.pairAddress && (
-                          <button
-                            onClick={() =>
-                              router.push(`/app/token-scanner/${notification.pairAddress}/chart/page.tsx`)
-                            }
-                            className={`text-xs underline transition-colors duration-200 ${
-                              preferences.terminalStyle === "classic"
-                                ? "text-blue-300 hover:text-blue-400"
-                                : preferences.terminalStyle === "hacker"
-                                ? "text-green-500 hover:text-green-400"
-                                : "text-[#4A3728] hover:text-[#C2A47C]"
-                            }`}
-                          >
-                            View Chart
-                          </button>
-                        )}
+                        <div className="flex items-center space-x-2 mt-1">
+                          <p className="text-xs opacity-80">
+                            {new Date(notification.timestamp).toLocaleString()}
+                          </p>
+                          {notification.pairAddress && (
+                            <button
+                              onClick={() =>
+                                router.push(`/app/token-scanner/${notification.pairAddress}/chart/page.tsx`)
+                              }
+                              className={`text-xs underline transition-colors duration-200 ${
+                                preferences.terminalStyle === "classic"
+                                  ? "text-blue-300 hover:text-blue-400"
+                                  : preferences.terminalStyle === "hacker"
+                                  ? "text-green-500 hover:text-green-400"
+                                  : "text-[#4A3728] hover:text-[#C2A47C]"
+                              }`}
+                            >
+                              View Chart
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-3">
+                    <div className="flex flex-col items-center space-y-1 ml-2">
                       <button
                         onClick={() => togglePinNotification(notification.id)}
                         className={`p-1 rounded-full transition-colors duration-200 ${
@@ -1509,7 +1589,7 @@ export default function HomebaseTerminal() {
 
       {/* Command Line (Above Status Bar) */}
       <div
-        className={`w-full h-10 flex items-center space-x-2 px-4 py-2 border-t border-b ${currentStyle.commandLineBg} ${currentStyle.separator}`}
+        className={`w-full h-10 flex items-center space-x-2 px-4 py-2 border-t border-b ${currentStyle.commandLineBg} ${currentStyle.separator} border-t-[0.5px] border-b-[0.5px]`}
       >
         <span className={`text-sm ${currentStyle.accentText}`}>
           user@homebase ~ v1 $
@@ -1525,13 +1605,15 @@ export default function HomebaseTerminal() {
             placeholder="Type command here..."
           />
           {suggestions.length > 0 && (
-            <div className={`absolute bottom-full left-0 w-full rounded shadow-lg z-50 max-h-40 overflow-y-auto ${
-              preferences.terminalStyle === "classic"
-                ? "bg-gray-700 text-blue-300"
-                : preferences.terminalStyle === "hacker"
-                ? "bg-gray-800 text-green-500"
-                : "bg-[#F5F5DC] text-[#4A3728]"
-            }`}>
+            <div
+              className={`absolute bottom-full left-0 w-full rounded shadow-lg z-50 max-h-40 overflow-y-auto ${
+                preferences.terminalStyle === "classic"
+                  ? "bg-gray-700 text-blue-300"
+                  : preferences.terminalStyle === "hacker"
+                  ? "bg-gray-800 text-green-500"
+                  : "bg-[#F5F5DC] text-[#4A3728]"
+              }`}
+            >
               {suggestions.map((suggestion, idx) => (
                 <div
                   key={idx}
@@ -1557,7 +1639,7 @@ export default function HomebaseTerminal() {
 
       {/* Status Bar */}
       <div
-        className={`w-full ${currentStyle.statusBarBg} ${currentStyle.text} p-2 text-xs flex justify-between items-center border-t ${currentStyle.separator}`}
+        className={`w-full ${currentStyle.statusBarBg} ${currentStyle.text} p-2 text-xs flex justify-between items-center ${currentStyle.separator} border-t-[0.5px]`}
       >
         <span>
           <span className="text-red-500">O</span> 1 ISSUE{" "}
@@ -1566,10 +1648,6 @@ export default function HomebaseTerminal() {
         <span>OS: web</span>
         <span>Uptime: {uptime}</span>
         <span>Network: 1.2Mbps</span>
-        <span>Last Command: {lastCommand || "None"}</span>
-        <span className={isOnline ? "text-green-500" : "text-red-500"}>
-          Status: {isOnline ? "ONLINE" : "OFFLINE"}
-        </span>
       </div>
     </div>
   );
