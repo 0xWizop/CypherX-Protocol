@@ -1145,7 +1145,7 @@ export default function ChartV2Page() {
                                   onClick={() => {
                                     setShowTopVolume(false);
                                     if (p.poolAddress) {
-                                      try { window.location.href = `/explore/${p.poolAddress}/chart-v2`; } catch {}
+                                      try { window.location.href = `/explore/${p.poolAddress}/chart`; } catch {}
                                     }
                                   }}
                                 >
