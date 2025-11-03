@@ -16,7 +16,7 @@ const LoadingPage: React.FC = () => {
         >
           <div className="flex justify-center space-x-3">
             <motion.div
-              className="w-4 h-4 bg-blue-400 rounded-full"
+              className="w-4 h-4 bg-blue-600 rounded-full"
               animate={{ 
                 scale: [1, 1.5, 1],
                 opacity: [0.5, 1, 0.5]
@@ -29,7 +29,7 @@ const LoadingPage: React.FC = () => {
               }}
             />
             <motion.div
-              className="w-4 h-4 bg-purple-400 rounded-full"
+              className="w-4 h-4 bg-blue-600 rounded-full"
               animate={{ 
                 scale: [1, 1.5, 1],
                 opacity: [0.5, 1, 0.5]
@@ -42,7 +42,7 @@ const LoadingPage: React.FC = () => {
               }}
             />
             <motion.div
-              className="w-4 h-4 bg-cyan-400 rounded-full"
+              className="w-4 h-4 bg-blue-600 rounded-full"
               animate={{ 
                 scale: [1, 1.5, 1],
                 opacity: [0.5, 1, 0.5]

@@ -2487,7 +2487,7 @@ export default function ChartPage() {
                           </button>
                         </div>
                       </div>
-                                              <div className="overflow-y-auto flex-1 custom-scrollbar min-h-0 rounded-r-lg" style={{ maxHeight: 'calc(100vh - 350px)' }} onScroll={handleTransactionScroll}>
+                                              <div className="overflow-y-auto flex-1 custom-scrollbar min-h-0 rounded-r-lg pb-40" style={{ maxHeight: 'calc(100vh - 180px)' }} onScroll={handleTransactionScroll}>
                           {/* Transactions Tab */}
                           {activeDataTab === "transactions" && (
                             <table className="w-full text-sm text-left font-inter">
@@ -2571,7 +2571,9 @@ export default function ChartPage() {
                             // Calculate row fill percentage based on order size - Enhanced for whale orders
                             let rowFillPercentage = 0;
                             if (usdValue > 0) {
-                              // Enhanced scale: $0-50 = 0-15%, $50-200 = 15-35%, $200-500 = 35-55%, $500-1000 = 55-75%, $1000-5000 = 75-90%, $5000+ = 90-100%
+                              // Refined scale for smoother high-end fill:
+                              // 0–50 => 0–15%, 50–200 => 15–35%, 200–500 => 35–55%, 500–1000 => 55–75%,
+                              // 1000–5000 => 90–99%, >=5000 => 100%
                               if (usdValue <= 50) {
                                 rowFillPercentage = (usdValue / 50) * 15;
                               } else if (usdValue <= 200) {
@@ -2581,16 +2583,15 @@ export default function ChartPage() {
                               } else if (usdValue <= 1000) {
                                 rowFillPercentage = 55 + ((usdValue - 500) / 500) * 20;
                               } else if (usdValue <= 5000) {
-                                rowFillPercentage = 75 + ((usdValue - 1000) / 4000) * 15;
+                                rowFillPercentage = 90 + ((usdValue - 1000) / 4000) * 9; // 1000 -> 90%, 5000 -> 99%
                               } else {
-                                // Whale orders: $5000+ get 90-100% fill
-                                rowFillPercentage = 90 + Math.min((usdValue - 5000) / 10000 * 10, 10); // Cap at 100%
+                                rowFillPercentage = 100; // 5k+ => full
                               }
                             }
 
                               return (
                                   <tr 
-                                    key={tx.id} 
+                                    key={`${tx.id}-${tx.hash || tx.transactionHash || Math.random()}`} 
                                         className={`glass-panel text-gray-100 relative cursor-pointer transition-all duration-200 hover:bg-gray-800/30 border-b border-gray-700 ${
                                       flashTransactions.has(tx.id) ? 'flash-animation slide-in-animation' : ''
                                     }`}
@@ -2719,7 +2720,7 @@ export default function ChartPage() {
                                       const orderLabel = order.type === 'buy' ? "BUY" : "SELL";
                                       
                                       return (
-                                        <tr key={order.id} className="border-b border-gray-800">
+                                        <tr key={`order-${order.id}-${order.transactionHash || order.timestamp || Math.random()}`} className="border-b border-gray-800">
                                           <td className="py-2 pl-4 text-gray-300">
                                             {formatTimeAgo(order.timestamp)}
                                           </td>
@@ -2784,7 +2785,7 @@ export default function ChartPage() {
                                         (position.pnl.startsWith('+') ? "text-green-400" : "text-red-400");
                                       
                                       return (
-                                        <tr key={position.id} className="border-b border-gray-800">
+                                        <tr key={`position-${position.id}-${position.tokenAddress}-${position.entryDate || Math.random()}`} className="border-b border-gray-800">
                                           <td className="py-2 pl-4">
                                             <div className="flex items-center space-x-3">
                                               <div className="w-8 h-8 rounded-full flex items-center justify-center border border-gray-600 flex-shrink-0 overflow-hidden">

@@ -1543,7 +1543,7 @@ export default function TokenScreener() {
         reactToast.error("Invalid token address. Please try again.", { position: "bottom-left" });
         return;
       }
-      const targetUrl = `/trade/${pool}/chart`;
+      const targetUrl = `/explore/${pool}/chart`;
       router.push(targetUrl);
       setTimeout(() => {
         if (window.location.pathname !== targetUrl) {
@@ -2133,7 +2133,7 @@ export default function TokenScreener() {
                           <button
                             onClick={() => {
                               if (token?.poolAddress) {
-                                router.push(`/trade/${token.poolAddress}/chart`);
+                                router.push(`/explore/${token.poolAddress}/chart`);
                                 setSelectedAlerts(null);
                               }
                             }}

@@ -17,8 +17,7 @@ import GlobalSearch from "./GlobalSearch";
 import UserProfileDropdown from "./UserProfileDropdown";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { FiBarChart, FiZap, FiMenu, FiX, FiStar, FiTrash2, FiUser } from "react-icons/fi";
-import { FaBolt } from "react-icons/fa";
+import { FiBarChart, FiMenu, FiX, FiStar, FiTrash2, FiUser } from "react-icons/fi";
 
 // Favorite Token Item Component
 const FavoriteTokenItem = ({ poolAddress, onRemove }: { poolAddress: string; onRemove: () => void }) => {
@@ -134,7 +133,6 @@ const Header: React.FC = () => {
   const { watchlists, removeFromWatchlist } = useWatchlists();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  const [showToolsDropdown, setShowToolsDropdown] = useState(false);
   const [points, setPoints] = useState<number | null>(null);
   const [tier, setTier] = useState<string>('normie');
   const [showTierModal, setShowTierModal] = useState(false);
@@ -145,7 +143,6 @@ const Header: React.FC = () => {
   const { setShowLoginModal, setRedirectTo } = useLoginModal();
 
 
-  const toolsDropdownRef = useRef<HTMLDivElement>(null);
   const walletDropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
@@ -173,9 +170,6 @@ const Header: React.FC = () => {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       
-      if (toolsDropdownRef.current && !toolsDropdownRef.current.contains(event.target as Node)) {
-        setShowToolsDropdown(false);
-      }
       
       const target = event.target as Node;
       const isWalletDropdownOpen = showWalletDropdown;
@@ -202,7 +196,6 @@ const Header: React.FC = () => {
     const handleRouteChange = () => {
       setIsMenuOpen(false);
       
-      setShowToolsDropdown(false);
       setShowWalletDropdown(false);
     };
 
@@ -233,7 +226,7 @@ const Header: React.FC = () => {
                                {/* Desktop Navigation */}
                 <nav className="hidden lg:flex items-center space-x-8">
                  <Link
-                   href="/trade"
+                   href="/explore"
                    className="text-gray-100 text-sm font-medium hover:text-blue-300 transition-all duration-200 group"
                    prefetch={true}
                  >
@@ -289,79 +282,19 @@ const Header: React.FC = () => {
                  </Link>
 
                  <Link
-                   href="/indexes"
+                   href="/explorer"
                    className="text-gray-100 text-sm font-medium hover:text-blue-300 transition-all duration-200 group"
                    prefetch={true}
                  >
                    <span className="relative">
-                     Indexes
+                     Explorer
                      <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-400 group-hover:w-full transition-all duration-300"></span>
                    </span>
                  </Link>
 
 
 
-                 {/* Tools Dropdown */}
-                 <div className="relative" ref={toolsDropdownRef}>
-                   <motion.button
-                     onClick={() => setShowToolsDropdown(!showToolsDropdown)}
-                     className="flex items-center space-x-1 text-gray-100 text-sm font-medium hover:text-blue-300 transition-colors duration-200 group"
-                     whileHover={{ scale: 1.05 }}
-                     transition={{ duration: 0.2 }}
-                   >
-                     <span>Tools</span>
-                     <motion.div
-                       animate={{ rotate: showToolsDropdown ? 180 : 0 }}
-                       transition={{ duration: 0.2 }}
-                     >
-                       <ChevronDownIcon className="w-4 h-4" />
-                     </motion.div>
-                   </motion.button>
-                   
-                   <AnimatePresence>
-                     {showToolsDropdown && (
-                       <motion.div
-                         className="absolute top-full left-0 mt-6 w-56 bg-gray-900/95 backdrop-blur-sm border border-gray-700/60 shadow-2xl"
-                         style={{ zIndex: 999999 }}
-                         initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                         exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                         transition={{ duration: 0.15, ease: "easeOut" }}
-                       >
-                         <div className="p-1.5">
-                           <Link href="/audit" className="flex items-center space-x-2 p-2 hover:bg-gray-800/80 rounded-md transition-all duration-200 group">
-                             <FiZap className="w-4 h-4 text-yellow-400" />
-                             <div>
-                               <div className="text-sm font-medium text-gray-200 group-hover:text-yellow-300 transition-colors duration-200">Smart Audit</div>
-                               <div className="text-xs text-gray-400">Contract security</div>
-                             </div>
-                           </Link>
-                           <Link href="/explorer/latest/block" className="flex items-center space-x-2 p-2 hover:bg-gray-800/80 rounded-md transition-all duration-200 group">
-                             <FiBarChart className="w-4 h-4 text-purple-400" />
-                             <div>
-                               <div className="text-sm font-medium text-gray-200 group-hover:text-purple-300 transition-colors duration-200">Blocks</div>
-                               <div className="text-xs text-gray-400">Latest blocks</div>
-                             </div>
-                           </Link>
-                           <div className="flex items-center space-x-1 p-2 opacity-50 cursor-not-allowed">
-                             <span className="text-blue-400 text-base -ml-1">🐋</span>
-                             <div>
-                               <div className="text-sm font-medium text-gray-400">Whale Scanner</div>
-                               <div className="text-xs text-gray-500">Coming soon</div>
-                             </div>
-                           </div>
-                           <Link href="/smart-money" className="flex items-center space-x-2 p-2 hover:bg-gray-800/80 rounded-md transition-all duration-200 group opacity-50">
-                             <FaBolt className="w-4 h-4 text-green-400" />
-                             <div>
-                               <div className="text-sm font-medium text-gray-200 group-hover:text-green-300 transition-colors duration-200">Smart Money</div>
-                               <div className="text-xs text-gray-400">Coming soon</div>
-                             </div>
-                           </Link>
-                         </div>
-                       </motion.div>
-                     )}
-                   </AnimatePresence>
-                 </div>
+
                </nav>
              </div>
 
@@ -480,7 +413,7 @@ const Header: React.FC = () => {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.1 }}
                     >
-                      <Link href="/trade" className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-700/30 transition-all duration-200 group" prefetch={true}>
+                      <Link href="/explore" className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-700/30 transition-all duration-200 group" prefetch={true}>
                         <span className="text-gray-200 text-sm font-medium">Trade</span>
                       </Link>
                     </motion.div>
@@ -545,8 +478,8 @@ const Header: React.FC = () => {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.3 }}
                     >
-                      <Link href="/indexes" className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-700/30 transition-all duration-200 group" prefetch={true}>
-                        <span className="text-gray-200 text-sm font-medium">Indexes</span>
+                      <Link href="/explorer" className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-700/30 transition-all duration-200 group" prefetch={true}>
+                        <span className="text-gray-200 text-sm font-medium">Explorer</span>
                       </Link>
                     </motion.div>
                   </div>
@@ -579,57 +512,6 @@ const Header: React.FC = () => {
                   <div className="space-y-2">
 
                     
-                    {/* Tools Section */}
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.5 }}
-                      className="space-y-1"
-                    >
-                      <div 
-                        className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/30 transition-all duration-200 cursor-pointer" 
-                        onClick={() => setShowToolsDropdown(!showToolsDropdown)}
-                      >
-                        <span className="text-gray-200 text-sm font-medium">Tools</span>
-                        <motion.div
-                          animate={{ rotate: showToolsDropdown ? 180 : 0 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <ChevronDownIcon className="w-3 h-3 text-gray-400" />
-                        </motion.div>
-                      </div>
-                      
-                      <AnimatePresence>
-                        {showToolsDropdown && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: "auto" }}
-                            exit={{ opacity: 0, height: 0 }}
-                            transition={{ duration: 0.2 }}
-                            className="ml-3 space-y-0.5"
-                          >
-                            <Link href="/audit" className="flex items-center space-x-2 p-1.5 text-xs text-gray-300 hover:text-yellow-400 transition-colors rounded" prefetch={true}>
-                              <FiZap className="w-3 h-3" />
-                              <span>Smart Audit</span>
-                            </Link>
-                            <Link href="/explorer/latest/block" className="flex items-center space-x-2 p-1.5 text-xs text-gray-300 hover:text-purple-400 transition-colors rounded" prefetch={true}>
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                              </svg>
-                              <span>Blocks</span>
-                            </Link>
-                            <div className="flex items-center space-x-1 p-1.5 text-xs text-gray-500 opacity-50">
-                              <span className="text-blue-400 text-xs -ml-0.5">🐋</span>
-                              <span>Whale Scanner (Coming Soon)</span>
-                            </div>
-                            <Link href="/smart-money" className="flex items-center space-x-2 p-1.5 text-xs text-gray-300 hover:text-green-400 transition-colors opacity-50 rounded" prefetch={true}>
-                              <FaBolt className="w-3 h-3" />
-                              <span>Smart Money</span>
-                            </Link>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </motion.div>
                   </div>
                 </div>
               </motion.div>

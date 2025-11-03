@@ -173,91 +173,45 @@ export default function BlockDetails() {
   const gasUsedPercentage = block ? Math.round((parseInt(block.gasUsed) / parseInt(block.gasLimit)) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col">
-      <style jsx>{`
-        .scrollbar-thin::-webkit-scrollbar {
-          width: 6px;
-        }
-        .scrollbar-thin::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .scrollbar-thin::-webkit-scrollbar-thumb {
-          background: #4B5563;
-          border-radius: 3px;
-        }
-        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-          background: #6B7280;
-        }
-        .scrollbar-track-transparent::-webkit-scrollbar-track {
-          background: transparent;
-        }
-      `}</style>
+    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden">
       <Header />
       
-      {/* Separator line between header and main content */}
-      <div className="h-px bg-gray-800"></div>
-      
-      <main className="flex-1 container mx-auto px-4 py-6 pb-4">
-        {/* Header Section */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-2xl font-bold text-white mb-2 flex items-center">
-                <FiBox className="w-5 h-5 mr-3 text-blue-400" />
-                Block #{blockNumber}
-              </h1>
-              <p className="text-gray-400">Detailed block information from Base network</p>
-            </div>
+      <main className="flex-1 bg-slate-900 overflow-hidden">
+        <div className="h-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex flex-col">
+          {/* Header */}
+          <div className="text-left mb-4 flex-shrink-0">
+            <h1 className="text-lg font-normal mb-1 text-white">Block #{blockNumber}</h1>
+            <p className="text-gray-400 text-xs">Detailed block information from Base network</p>
           </div>
-        </motion.div>
 
-        {/* Error Display */}
-        <AnimatePresence>
+          {/* Error Display */}
           {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="bg-red-900/20 border border-red-500/30 p-4 mb-6 text-red-400"
-            >
+            <div className="bg-red-900/20 border border-red-500/30 p-4 mb-6 text-red-400">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-red-400 animate-pulse"></div>
                 Error: {error}
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Loading State */}
-        {loading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex items-center justify-center py-12"
-          >
-            <div className="flex flex-col items-center gap-4">
-              <div className="relative">
-                <div className="w-10 h-10 border-3 border-blue-400/20 border-t-blue-400 animate-spin"></div>
-                <div className="absolute inset-0 w-10 h-10 border-3 border-transparent border-r-blue-300/40 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
-              </div>
-              <span className="text-gray-400 text-sm">Loading block details...</span>
             </div>
-          </motion.div>
-        )}
+          )}
 
-        {/* Block Details */}
-        {!loading && block && (
-          <div className="space-y-4">
-            {/* Block Overview Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-gray-800/30 backdrop-blur-sm border border-gray-700 p-4"
-            >
+          {/* Loading State */}
+          {loading && (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-4">
+                <div className="relative">
+                  <div className="w-10 h-10 border-3 border-blue-400/20 border-t-blue-400 animate-spin"></div>
+                  <div className="absolute inset-0 w-10 h-10 border-3 border-transparent border-r-blue-300/40 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+                </div>
+                <span className="text-gray-400 text-sm">Loading block details...</span>
+              </div>
+            </div>
+          )}
+
+          {/* Block Details */}
+          {!loading && block && (
+            <div className="space-y-4">
+              {/* Block Overview Card */}
+              <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold text-white flex items-center gap-2">
                   <FiHash className="w-5 h-5 text-blue-400" />
@@ -348,13 +302,8 @@ export default function BlockDetails() {
               </div>
             </motion.div>
 
-            {/* Gas Information Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-gray-800/30 backdrop-blur-sm border border-gray-700 p-4"
-            >
+              {/* Gas Information Card */}
+              <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4">
               <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
                 <FiZap className="w-5 h-5 text-blue-400" />
                 Gas Information
@@ -385,13 +334,8 @@ export default function BlockDetails() {
             </motion.div>
 
 
-            {/* Transactions Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-gray-800/30 backdrop-blur-sm border border-gray-700 overflow-hidden"
-            >
+              {/* Transactions Card */}
+              <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg overflow-hidden">
               <div className="px-4 py-2 border-b border-gray-700">
                 <div className="flex items-center justify-between">
                   <h2 className="text-base font-semibold text-white flex items-center gap-2">
@@ -494,24 +438,18 @@ export default function BlockDetails() {
           </div>
         )}
 
-        {/* No Block Data */}
-        {!loading && !block && !error && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-12"
-          >
-            <FiBox className="w-16 h-16 text-gray-500 mx-auto mb-4" />
-            <p className="text-gray-400 text-lg">No block data available</p>
-            <p className="text-gray-500 text-sm mt-2">Please check the block number or try again later.</p>
-          </motion.div>
-        )}
+          {/* No Block Data */}
+          {!loading && !block && !error && (
+            <div className="text-center py-12">
+              <FiBox className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+              <p className="text-gray-400 text-lg">No block data available</p>
+              <p className="text-gray-500 text-sm mt-2">Please check the block number or try again later.</p>
+            </div>
+          )}
+        </div>
       </main>
-
-      {/* Footer - Fixed at bottom */}
-      <div className="flex-shrink-0">
-        <Footer />
-      </div>
+      
+      <Footer />
     </div>
   );
 }

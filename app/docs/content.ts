@@ -91,7 +91,6 @@ export const documentationSections: DocSection[] = [
           
           - **Trade Page**: Browse and trade tokens
           - **Radar**: Discover trending tokens
-          - **Whale Watcher**: Monitor large transactions
           - **Charts**: View detailed price charts
           
           ## Step 3: Make Your First Trade
@@ -165,9 +164,7 @@ export const documentationSections: DocSection[] = [
           
           - **Trade**: Main trading interface
           - **Radar**: Token discovery and trending
-          - **Whale Watcher**: Large transaction monitoring
           - **Explorer**: Block and transaction explorer
-          - **Tools**: Additional utilities
           
           ### Key Components
           

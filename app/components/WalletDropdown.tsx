@@ -2359,7 +2359,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                          </div>
 
                     <button
-                      onClick={() => window.location.href = '/trade'}
+                      onClick={() => window.location.href = '/explore'}
                       className="w-full py-3 px-4 bg-[#0052FF] hover:bg-[#0052FF]/80 text-white rounded-lg font-medium transition-colors"
                     >
                       Go to Swap Page
@@ -2396,7 +2396,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                          </div>
 
                     <button
-                      onClick={() => window.location.href = '/trade'}
+                      onClick={() => window.location.href = '/explore'}
                       className="w-full py-3 px-4 bg-[#0052FF] hover:bg-[#0052FF]/80 text-white rounded-lg font-medium transition-colors"
                     >
                       Go to Trade Page

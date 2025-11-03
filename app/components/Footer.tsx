@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { SiEthereum, SiBitcoin } from "react-icons/si";
-import { FiShield, FiBarChart, FiTrendingUp, FiEye } from "react-icons/fi";
+import { FiBarChart, FiTrendingUp, FiEye, FiCompass, FiCalendar, FiGift } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 
 const Footer = () => {
@@ -11,12 +11,6 @@ const Footer = () => {
   const [btcPrice, setBtcPrice] = useState<number | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<"Connected" | "Disconnected">("Connected");
   const [uptime, setUptime] = useState<string>("0h 0m 0s");
-  const [showAuditWidget, setShowAuditWidget] = useState(false);
-  const [auditAddress, setAuditAddress] = useState("");
-  const [auditResult, setAuditResult] = useState<string | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const auditWidgetRef = useRef<HTMLDivElement>(null);
-  const auditButtonRef = useRef<HTMLButtonElement>(null);
 
   // Fetch ETH and BTC prices with better error handling and caching
   useEffect(() => {
@@ -138,84 +132,7 @@ const Footer = () => {
     };
   }, []);
 
-  // Cleanup audit widget on unmount
-  useEffect(() => {
-    return () => {
-      setShowAuditWidget(false);
-      setAuditResult(null);
-      setAuditAddress("");
-    };
-  }, []);
 
-  // Quick audit function
-  const handleQuickAudit = async () => {
-    if (!auditAddress.trim() || isScanning) return;
-    
-    setIsScanning(true);
-    setAuditResult("Scanning contract...");
-    
-    try {
-      // Call the actual honeypot scan API
-      const response = await fetch(`/api/honeypot/scan?address=${auditAddress.trim()}`);
-      
-      if (!response.ok) {
-        throw new Error('Audit request failed');
-      }
-      
-      const data = await response.json();
-      console.log('Audit API response:', data); // Debug log
-      
-      // Check if we have valid data
-      if (!data || data.error) {
-        setAuditResult("Audit failed");
-        return;
-      }
-      
-      // Determine if contract is secure based on honeypot scan results
-      // The API returns the actual honeypot.is response structure
-      const isHoneypot = data.isHoneypot || false;
-      const isBlacklisted = data.isBlacklisted || false;
-      const isProxy = data.isProxy || false;
-      const isFakeToken = data.isFakeToken || false;
-      const riskLevel = data.summary?.riskLevel || 'Low';
-      
-      console.log('Security checks:', { isHoneypot, isBlacklisted, isProxy, isFakeToken, riskLevel }); // Debug log
-      
-      // Contract is secure if it's not a honeypot and has low risk
-      const isSecure = !isHoneypot && !isBlacklisted && !isProxy && !isFakeToken && riskLevel !== 'High';
-      
-      setAuditResult(isSecure ? "Contract Secure" : "Security Issues Found");
-      
-      // Keep widget open for 5 seconds to show result
-      setTimeout(() => {
-        setAuditResult(null);
-        setAuditAddress("");
-        setShowAuditWidget(false);
-      }, 5000);
-      
-    } catch (error) {
-      console.error('Audit error:', error);
-      setAuditResult("Audit failed");
-      setTimeout(() => setAuditResult(null), 3000);
-    } finally {
-      setIsScanning(false);
-    }
-  };
-
-  // Handle mouse events for audit widget
-  const handleMouseEnter = () => {
-    setShowAuditWidget(true);
-  };
-
-  const handleMouseLeave = () => {
-    // Only close if not scanning and no result is showing
-    // Use setTimeout to prevent immediate closing when moving mouse to widget
-    setTimeout(() => {
-      if (!isScanning && !auditResult) {
-        setShowAuditWidget(false);
-      }
-    }, 100);
-  };
 
   return (
     <footer className="bg-gray-950 border-t border-gray-800 text-gray-300 text-xs py-2 px-4">
@@ -228,9 +145,9 @@ const Footer = () => {
             <span className="text-gray-300">{uptime}</span>
           </div>
           
-          <div className="flex items-center space-x-2">
-            <span className={`w-1.5 h-1.5 rounded-full ${connectionStatus === "Connected" ? "bg-green-400" : "bg-red-400"}`} />
-            <span className={connectionStatus === "Connected" ? "text-green-400" : "text-red-400"}>
+          <div className={`flex items-center space-x-1.5 px-2 py-1 rounded-md ${connectionStatus === "Connected" ? "bg-green-500/20" : "bg-red-500/20"}`}>
+            <span className={`w-1 h-1 rounded-full ${connectionStatus === "Connected" ? "bg-green-400" : "bg-red-400"} mt-0.5`} />
+            <span className={`text-xs font-medium ${connectionStatus === "Connected" ? "text-green-400" : "text-red-400"}`}>
               {connectionStatus}
             </span>
           </div>
@@ -250,88 +167,17 @@ const Footer = () => {
           </div>
         </div>
 
-        {/* Center Section - Navigation Links */}
+        {/* Center Section - Navigation Links (match header) */}
         <div className="flex items-center gap-8">
           <Link 
-            href="/trade" 
+            href="/explore" 
             className="flex items-center space-x-1 hover:text-blue-400 transition-colors duration-200"
             prefetch={true}
           >
             <FiBarChart className="w-3 h-3" />
-            <span>Screener</span>
+            <span>Trade</span>
           </Link>
-          
-          {/* Audit Widget */}
-          <div className="relative" ref={auditWidgetRef}>
-            <button
-              ref={auditButtonRef}
-              onMouseEnter={handleMouseEnter}
-              onMouseLeave={handleMouseLeave}
-              className="flex items-center space-x-1 hover:text-blue-400 transition-colors duration-200"
-            >
-              <FiShield className="w-3 h-3" />
-              <span>Audit</span>
-            </button>
-            
-            <AnimatePresence>
-              {showAuditWidget && (
-                <motion.div
-                  className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-4 w-56 bg-gray-900 border border-gray-700 rounded-lg p-3 shadow-xl z-50"
-                  style={{ 
-                    maxHeight: '300px',
-                    overflowY: 'auto'
-                  }}
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  transition={{ duration: 0.2 }}
-                  onMouseEnter={handleMouseEnter}
-                  onMouseLeave={handleMouseLeave}
-                >
-                  <div className="flex items-center space-x-2 mb-2">
-                    <FiShield className="w-3 h-3 text-blue-400" />
-                    <span className="text-xs font-medium text-gray-200">Contract Audit</span>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      placeholder="Contract address"
-                      value={auditAddress}
-                      onChange={(e) => setAuditAddress(e.target.value)}
-                      className="w-full px-2 py-1 text-xs bg-gray-800 border border-gray-600 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
-                      onKeyPress={(e) => e.key === 'Enter' && handleQuickAudit()}
-                      disabled={isScanning}
-                    />
-                    
-                    <button
-                      onClick={handleQuickAudit}
-                      disabled={!auditAddress.trim() || isScanning}
-                      className="w-full px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded transition-colors"
-                    >
-                      {isScanning ? "Scanning..." : "Scan"}
-                    </button>
-                  </div>
-                  
-                  {auditResult && (
-                    <motion.div 
-                      className="mt-2 text-xs text-center font-medium"
-                      initial={{ opacity: 0, y: -5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      {auditResult.includes("Secure") ? (
-                        <span className="text-green-400">Contract Secure</span>
-                      ) : (
-                        <span className="text-red-400">Security Issues Found</span>
-                      )}
-                    </motion.div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-          
+
           <Link 
             href="/radar" 
             className="flex items-center space-x-1 hover:text-blue-400 transition-colors duration-200"
@@ -340,7 +186,25 @@ const Footer = () => {
             <FiEye className="w-3 h-3" />
             <span>Radar</span>
           </Link>
-          
+
+          <Link 
+            href="/events" 
+            className="flex items-center space-x-1 hover:text-blue-400 transition-colors duration-200"
+            prefetch={true}
+          >
+            <FiCalendar className="w-3 h-3" />
+            <span>Events</span>
+          </Link>
+
+          <Link 
+            href="/rewards" 
+            className="flex items-center space-x-1 hover:text-blue-400 transition-colors duration-200"
+            prefetch={true}
+          >
+            <FiGift className="w-3 h-3" />
+            <span>Rewards</span>
+          </Link>
+
           <Link 
             href="/insights" 
             className="flex items-center space-x-1 hover:text-blue-400 transition-colors duration-200"
@@ -349,16 +213,14 @@ const Footer = () => {
             <FiTrendingUp className="w-3 h-3" />
             <span>Insights</span>
           </Link>
-          
+
           <Link 
-            href="/explorer/latest/block" 
+            href="/explorer" 
             className="flex items-center space-x-1 hover:text-blue-400 transition-colors duration-200"
             prefetch={true}
           >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span>Block Scan</span>
+            <FiCompass className="w-3 h-3" />
+            <span>Explorer</span>
           </Link>
         </div>
 
@@ -410,11 +272,7 @@ const Footer = () => {
           <div className="flex items-center space-x-2">
             <span className="text-gray-500">v1.0.0</span>
             <span className="text-gray-600">•</span>
-            <span className="text-blue-400">Base</span>
-            <span className="text-gray-600">•</span>
-            <span className="text-gray-400">DeFi Analytics</span>
-            <span className="text-gray-600">•</span>
-            <span className="text-gray-400">Smart Contracts</span>
+            <span className="text-gray-400">Trading Terminal</span>
           </div>
         </div>
       </div>
@@ -424,9 +282,9 @@ const Footer = () => {
         {/* Top Row - Status & Prices */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-1">
-              <span className={`w-1.5 h-1.5 rounded-full ${connectionStatus === "Connected" ? "bg-green-400" : "bg-red-400"}`} />
-              <span className={connectionStatus === "Connected" ? "text-green-400" : "text-red-400"}>
+            <div className={`flex items-center space-x-1 px-1.5 py-0.5 rounded-md ${connectionStatus === "Connected" ? "bg-green-500/20" : "bg-red-500/20"}`}>
+              <span className={`w-1 h-1 rounded-full ${connectionStatus === "Connected" ? "bg-green-400" : "bg-red-400"} mt-0.5`} />
+              <span className={`text-xs font-medium ${connectionStatus === "Connected" ? "text-green-400" : "text-red-400"}`}>
                 {connectionStatus}
               </span>
             </div>
@@ -457,12 +315,12 @@ const Footer = () => {
         {/* Middle Row - Navigation Links */}
         <div className="flex items-center justify-center gap-4 mb-3">
           <Link 
-            href="/trade" 
+            href="/explore" 
             className="flex items-center space-x-1 text-gray-400 hover:text-blue-400 transition-colors duration-200"
             prefetch={true}
           >
             <FiBarChart className="w-3 h-3" />
-            <span className="text-xs">Screener</span>
+            <span className="text-xs">Trade</span>
           </Link>
           
           <Link 
@@ -484,81 +342,17 @@ const Footer = () => {
           </Link>
           
           <Link 
-            href="/explorer/latest/block" 
+            href="/explorer" 
             className="flex items-center space-x-1 text-gray-400 hover:text-blue-400 transition-colors duration-200"
             prefetch={true}
           >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span className="text-xs">Blocks</span>
+            <FiCompass className="w-3 h-3" />
+            <span className="text-xs">Explorer</span>
           </Link>
         </div>
 
-        {/* Bottom Row - Audit, Social & Info */}
+        {/* Bottom Row - Social & Info */}
         <div className="flex items-center justify-between">
-          {/* Mobile Audit Button */}
-          <div className="relative">
-            <button
-              onClick={() => setShowAuditWidget(!showAuditWidget)}
-              className="flex items-center space-x-1 text-gray-400 hover:text-blue-400 transition-colors duration-200"
-            >
-              <FiShield className="w-3 h-3" />
-              <span className="text-xs">Audit</span>
-            </button>
-            
-            <AnimatePresence>
-              {showAuditWidget && (
-                <motion.div
-                  className="absolute bottom-full left-0 mb-2 w-48 bg-gray-900 border border-gray-700 rounded-lg p-3 shadow-xl z-50"
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <div className="flex items-center space-x-2 mb-2">
-                    <FiShield className="w-3 h-3 text-blue-400" />
-                    <span className="text-xs font-medium text-gray-200">Contract Audit</span>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      placeholder="Contract address"
-                      value={auditAddress}
-                      onChange={(e) => setAuditAddress(e.target.value)}
-                      className="w-full px-2 py-1 text-xs bg-gray-800 border border-gray-600 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
-                      onKeyPress={(e) => e.key === 'Enter' && handleQuickAudit()}
-                      disabled={isScanning}
-                    />
-                    
-                    <button
-                      onClick={handleQuickAudit}
-                      disabled={!auditAddress.trim() || isScanning}
-                      className="w-full px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded transition-colors"
-                    >
-                      {isScanning ? "Scanning..." : "Scan"}
-                    </button>
-                  </div>
-                  
-                  {auditResult && (
-                    <motion.div 
-                      className="mt-2 text-xs text-center font-medium"
-                      initial={{ opacity: 0, y: -5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      {auditResult.includes("Secure") ? (
-                        <span className="text-green-400">Contract Secure</span>
-                      ) : (
-                        <span className="text-red-400">Security Issues Found</span>
-                      )}
-                    </motion.div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
 
           {/* Social Links */}
           <div className="flex items-center space-x-3">
@@ -602,8 +396,6 @@ const Footer = () => {
           {/* Version Info */}
           <div className="flex items-center space-x-1">
             <span className="text-gray-500 text-xs">v1.0.0</span>
-            <span className="text-gray-600">•</span>
-            <span className="text-blue-400 text-xs">Base</span>
           </div>
         </div>
       </div>

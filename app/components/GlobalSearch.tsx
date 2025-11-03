@@ -129,7 +129,6 @@ interface SearchResults {
   transactions: TransactionSearchResult[];
   blocks: BlockSearchResult[];
   news: NewsSearchResult[];
-  indexes: IndexSearchResult[];
   calendar: CalendarEventSearchResult[];
 }
 
@@ -152,7 +151,6 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
     transactions: [],
     blocks: [],
     news: [],
-    indexes: [],
     calendar: []
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -169,7 +167,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
   const debouncedSearch = useRef(
     debounce(async (searchQuery: string) => {
       if (!searchQuery || searchQuery.length < 2) {
-        setResults({ tokens: [], wallets: [], transactions: [], blocks: [], news: [], indexes: [], calendar: [] });
+        setResults({ tokens: [], wallets: [], transactions: [], blocks: [], news: [], calendar: [] });
         setIsLoading(false);
         return;
       }
@@ -181,7 +179,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
         const response = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
         if (response.ok) {
           const data = await response.json();
-          setResults(data.results || { tokens: [], wallets: [], transactions: [], blocks: [], news: [], indexes: [], calendar: [] });
+          setResults(data.results || { tokens: [], wallets: [], transactions: [], blocks: [], news: [], calendar: [] });
         } else {
           setError("Search failed");
         }
@@ -352,11 +350,6 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
     }
     currentIndex += results.news.length;
     
-    // Check indexes
-    if (index < currentIndex + results.indexes.length) {
-      return { type: "index", result: results.indexes[index - currentIndex] };
-    }
-    currentIndex += results.indexes.length;
     
     // Check calendar
     if (index < currentIndex + results.calendar.length) {
@@ -378,10 +371,10 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
       case "token":
         if (result.poolAddress) {
           console.log('Navigating to token with pool:', result.poolAddress);
-          router.push(`/trade/${result.poolAddress}/chart`);
+          router.push(`/explore/${result.poolAddress}/chart`);
         } else {
           console.log('Navigating to token:', result.address);
-          router.push(`/trade/${result.address}/chart`);
+          router.push(`/explore/${result.address}/chart`);
         }
         break;
       case "wallet":
@@ -402,7 +395,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
         break;
       case "index":
         console.log('Navigating to index token:', result.tokenAddress);
-        router.push(`/trade/${result.tokenAddress}/chart`);
+        router.push(`/explore/${result.tokenAddress}/chart`);
         break;
       case "calendar":
         console.log('Navigating to calendar');
@@ -416,7 +409,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
   };
 
   // Get total results count
-  const totalResults = results.tokens.length + results.wallets.length + results.transactions.length + results.blocks.length + results.news.length + results.indexes.length + results.calendar.length;
+  const totalResults = results.tokens.length + results.wallets.length + results.transactions.length + results.blocks.length + results.news.length + results.calendar.length;
 
   // Format number for display
   const formatNumber = (num: number | undefined) => {
@@ -710,7 +703,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
                  )}
 
                  {/* Separator */}
-                 {results.tokens.length > 0 && (results.wallets.length > 0 || results.transactions.length > 0 || results.blocks.length > 0 || results.news.length > 0 || results.indexes.length > 0 || results.calendar.length > 0) && (
+                 {results.tokens.length > 0 && (results.wallets.length > 0 || results.transactions.length > 0 || results.blocks.length > 0 || results.news.length > 0 || results.calendar.length > 0) && (
                    <div className="py-0">
                      <div className="border-t border-gray-700/50"></div>
                    </div>
@@ -759,7 +752,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
                  )}
 
                  {/* Separator */}
-                 {results.wallets.length > 0 && (results.transactions.length > 0 || results.blocks.length > 0 || results.news.length > 0 || results.indexes.length > 0 || results.calendar.length > 0) && (
+                 {results.wallets.length > 0 && (results.transactions.length > 0 || results.blocks.length > 0 || results.news.length > 0 || results.calendar.length > 0) && (
                    <div className="py-0">
                      <div className="border-t border-gray-700/50"></div>
                    </div>
@@ -808,7 +801,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
                  )}
 
                  {/* Separator */}
-                 {results.transactions.length > 0 && (results.blocks.length > 0 || results.news.length > 0 || results.indexes.length > 0 || results.calendar.length > 0) && (
+                 {results.transactions.length > 0 && (results.blocks.length > 0 || results.news.length > 0 || results.calendar.length > 0) && (
                    <div className="py-0">
                      <div className="border-t border-gray-700/50"></div>
                    </div>
@@ -857,7 +850,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
                  )}
 
                  {/* Separator */}
-                 {results.blocks.length > 0 && (results.news.length > 0 || results.indexes.length > 0 || results.calendar.length > 0) && (
+                 {results.blocks.length > 0 && (results.news.length > 0 || results.calendar.length > 0) && (
                    <div className="py-0">
                      <div className="border-t border-gray-700/50"></div>
                    </div>
@@ -906,89 +899,12 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
                 )}
 
                  {/* Separator */}
-                 {results.news.length > 0 && (results.indexes.length > 0 || results.calendar.length > 0) && (
+                 {results.news.length > 0 && results.calendar.length > 0 && (
                    <div className="py-0">
                      <div className="border-t border-gray-700/50"></div>
                    </div>
                  )}
 
-                 {/* Index Data */}
-                 {results.indexes.length > 0 && (
-                   <div className="mb-0">
-                     <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-700/50 bg-gray-950 z-10">
-                       Index Tokens ({results.indexes.length})
-                     </div>
-                     <div>
-                       {results.indexes.map((index, indexIndex) => {
-                         const globalIndex = results.tokens.length + results.wallets.length + results.transactions.length + results.blocks.length + results.news.length + indexIndex;
-                         const isSelected = selectedIndex === globalIndex;
-                         
-                         return (
-                           <motion.div
-                             key={`${index.indexName}-${index.tokenAddress}`}
-                             initial={{ opacity: 0, x: -20 }}
-                             animate={{ opacity: 1, x: 0 }}
-                             transition={{ delay: indexIndex * 0.05 }}
-                             className={`p-3 hover:bg-blue-500/20 cursor-pointer border-b border-gray-700/50 last:border-b-0 transition-all duration-200 ${
-                               isSelected ? "bg-blue-500/20" : ""
-                             }`}
-                             onClick={() => handleResultClick({ type: "index", result: index })}
-                           >
-                             <div className="flex items-start space-x-3">
-                               {/* Index Icon */}
-                               <div className="relative flex-shrink-0">
-                                 <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center border border-indigo-500/30">
-                                   {getResultIcon("index")}
-                                 </div>
-                                 <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-indigo-400 rounded-full border-2 border-gray-800 text-xs font-bold flex items-center justify-center">
-                                   {index.indexName.charAt(0)}
-                                 </div>
-                               </div>
-                               
-                               {/* Index Info */}
-                               <div className="flex-1 min-w-0">
-                                 {/* First Row: Symbol, Index Name, Weight */}
-                                 <div className="flex items-center justify-between mb-1">
-                                   <div className="flex items-center space-x-2 min-w-0">
-                                     <span className="font-bold text-gray-200 truncate">{index.tokenSymbol}</span>
-                                     <span className="text-sm text-indigo-400 font-medium">({index.indexName})</span>
-                                   </div>
-                                   <div className="flex items-center space-x-2 text-sm">
-                                     <span className="text-gray-300">
-                                       ${index.priceUsd ? parseFloat(index.priceUsd).toFixed(6) : "0.000000"}
-                                     </span>
-                                     <span className="px-2 py-1 rounded text-xs font-medium bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                                       {index.weight}% weight
-                                     </span>
-                                   </div>
-                                 </div>
-                                 
-                                 {/* Second Row: Token Name, Market Cap */}
-                                 <div className="flex items-center justify-between">
-                                   <div className="flex items-center space-x-4 text-xs text-gray-400">
-                                     <span className="text-gray-300 truncate max-w-[200px]">
-                                       {index.tokenName.length > 25 ? index.tokenName.substring(0, 25) + '...' : index.tokenName}
-                                     </span>
-                                     {index.marketCap && (
-                                       <span>MC: ${formatNumber(index.marketCap)}</span>
-                                     )}
-                                   </div>
-                                 </div>
-                               </div>
-                             </div>
-                           </motion.div>
-                         );
-                       })}
-                     </div>
-                   </div>
-                 )}
-
-                 {/* Separator */}
-                 {results.indexes.length > 0 && results.calendar.length > 0 && (
-                   <div className="px-4 py-0">
-                     <div className="border-t border-gray-700/50"></div>
-                   </div>
-                 )}
 
                  {/* Calendar Events */}
                  {results.calendar.length > 0 && (
@@ -998,7 +914,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
                      </div>
                      <div>
                       {results.calendar.map((event, index) => {
-                        const globalIndex = results.tokens.length + results.wallets.length + results.transactions.length + results.blocks.length + results.news.length + results.indexes.length + index;
+                        const globalIndex = results.tokens.length + results.wallets.length + results.transactions.length + results.blocks.length + results.news.length + index;
                         const isSelected = selectedIndex === globalIndex;
                         
                         return (

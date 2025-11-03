@@ -116,30 +116,58 @@ export async function GET(request: Request) {
      // 🔧 FIXED: Filter transactions by token if specified, then collect sell transactions
      let filteredDocs = transactionsSnapshot.docs;
      if (tokenAddress) {
+       const tokenAddressLower = tokenAddress.toLowerCase();
+       console.log("🔧 Positions - Filtering by token address:", tokenAddress);
+       
+       // 🔧 DEBUG: Log sample transaction to see what addresses are stored
+       if (transactionsSnapshot.docs.length > 0) {
+         const sampleData = transactionsSnapshot.docs[0].data();
+         console.log("🔧 Positions - Sample transaction:", {
+           outputToken: sampleData.outputToken,
+           inputToken: sampleData.inputToken,
+           tokenAddress: sampleData.tokenAddress
+         });
+       }
+       
        filteredDocs = transactionsSnapshot.docs.filter(doc => {
          const data = doc.data();
+         // Case-insensitive comparison for token addresses
+         const outputTokenMatch = data.outputToken?.toLowerCase() === tokenAddressLower;
+         const inputTokenMatch = data.inputToken?.toLowerCase() === tokenAddressLower;
+         const tokenAddressMatch = data.tokenAddress?.toLowerCase() === tokenAddressLower;
+         
          // Include if it's a buy order for this token (outputToken) OR a sell order for this token (inputToken)
-         return data.outputToken === tokenAddress || data.inputToken === tokenAddress;
+         return outputTokenMatch || inputTokenMatch || tokenAddressMatch;
        });
+       console.log("🔧 Positions - Filtered docs count:", filteredDocs.length);
+       
+      // If no matches found, keep empty to strictly scope positions to the requested token
+      if (filteredDocs.length === 0) {
+        console.log("🔧 Positions - Token filter returned 0, returning empty positions for this token");
+      }
      }
      
      // First, collect all sell transactions
-     filteredDocs.forEach(doc => {
+       filteredDocs.forEach(doc => {
        const data = doc.data();
-       // Improved logic: A sell is when someone sends a token (not ETH) to the pool
+       // Improved logic: A sell is when someone sends a token (not ETH/WETH) to the pool
        // This works for both ETH pairs and non-ETH pairs (like USDC pairs)
-       const isSell = data.inputToken !== "ETH" && data.inputToken !== "0x0000000000000000000000000000000000000000";
+       const isSell = data.inputToken !== "ETH" && 
+                     data.inputToken !== "0x0000000000000000000000000000000000000000" &&
+                     data.inputToken?.toLowerCase() !== "0x4200000000000000000000000000000000000006";
        
        if (isSell) {
          const tokenAddr = data.inputToken;
          if (!sellsByToken.has(tokenAddr)) {
            sellsByToken.set(tokenAddr, []);
          }
+         const inputAmount = parseFloat(data.inputAmount || '0');
+         const outputValue = data.outputValue || 0;
          sellsByToken.get(tokenAddr).push({
-           amount: parseFloat(data.inputAmount),
-           value: data.outputValue,
-           timestamp: data.timestamp.toDate().getTime(),
-           price: data.outputValue / parseFloat(data.inputAmount)
+           amount: inputAmount,
+           value: outputValue,
+           timestamp: data.timestamp?.toDate ? data.timestamp.toDate().getTime() : (data.timestamp?.seconds ? data.timestamp.seconds * 1000 : Date.now()),
+           price: inputAmount > 0 ? outputValue / inputAmount : 0
          });
        }
      });
@@ -147,16 +175,18 @@ export async function GET(request: Request) {
                  // Create individual positions for each buy transaction
       for (const doc of filteredDocs) {
         const data = doc.data();
-        // Improved logic: A buy is when someone sends ETH or another base token to the pool
-        // This works for both ETH pairs and non-ETH pairs (like USDC pairs)
-        const isBuy = data.inputToken === "ETH" || data.inputToken === "0x0000000000000000000000000000000000000000";
+        // Improved logic: A buy is when someone sends ETH/WETH or another base token to the pool
+        // Check for both ETH string and WETH address
+        const isBuy = data.inputToken === "ETH" || 
+                     data.inputToken === "0x0000000000000000000000000000000000000000" ||
+                     data.inputToken?.toLowerCase() === "0x4200000000000000000000000000000000000006";
         
         if (isBuy) {
           const tokenAddr = data.outputToken;
-          const amount = parseFloat(data.outputAmount);
-          const value = data.inputValue;
-          const price = value / amount;
-          const timestamp = data.timestamp.toDate().getTime();
+          const amount = parseFloat(data.outputAmount || '0');
+          const value = data.inputValue || 0;
+          const price = amount > 0 ? value / amount : 0;
+          const timestamp = data.timestamp?.toDate ? data.timestamp.toDate().getTime() : (data.timestamp?.seconds ? data.timestamp.seconds * 1000 : Date.now());
           
           // Get current price
           const currentPrice = await getTokenPrice(tokenAddr);
@@ -208,8 +238,9 @@ export async function GET(request: Request) {
          pnlPercentage = price > 0 ? (pnl / (price * amount)) * 100 : 0;
          totalPnL += pnl;
          
-         const tokenSymbol = tokenAddr === "0x0000000000000000000000000000000000000000" ? "ETH" : 
-                            tokenAddr.slice(0, 6) + "...";
+         const tokenSymbol = (tokenAddr === "0x0000000000000000000000000000000000000000" || 
+                             tokenAddr?.toLowerCase() === "0x4200000000000000000000000000000000000006") ? "ETH" : 
+                            (data.tokenSymbol || tokenAddr?.slice(0, 6) + "...");
          
          const position: Position = {
            id: doc.id, // Use transaction ID as position ID

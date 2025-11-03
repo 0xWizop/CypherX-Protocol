@@ -184,79 +184,45 @@ export default function TransactionDetails() {
 
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col">
+    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden">
       <Header />
       
-      <main className="flex-1 container mx-auto px-4 py-6 max-w-7xl">
-        {/* Header Section */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-2xl font-bold text-white mb-1 flex items-center">
-                <FiActivity className="w-5 h-5 mr-2 text-blue-400" />
-                Transaction Details
-              </h1>
-              <p className="text-gray-400 text-sm">Transaction information from Base network</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="p-2 bg-gray-800/50 text-gray-300 hover:bg-gray-700/50 transition-colors border border-gray-700/50"
-                title="Toggle Advanced Details"
-              >
-                <FiSettings className="w-4 h-4" />
-              </button>
-            </div>
+      <main className="flex-1 bg-slate-900 overflow-hidden">
+        <div className="h-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex flex-col">
+          {/* Header */}
+          <div className="text-left mb-4 flex-shrink-0">
+            <h1 className="text-lg font-normal mb-1 text-white">Transaction Details</h1>
+            <p className="text-gray-400 text-xs">Transaction information from Base network</p>
           </div>
-        </motion.div>
 
-        {/* Error Display */}
-        <AnimatePresence>
+          {/* Error Display */}
           {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="bg-red-900/20 border border-red-500/30 p-4 mb-6 text-red-400"
-            >
+            <div className="bg-red-900/20 border border-red-500/30 p-4 mb-6 text-red-400">
               <div className="flex items-center gap-2">
                 <FiAlertCircle className="w-5 h-5" />
                 Error: {error}
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Loading State */}
-        {loading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex items-center justify-center py-16"
-          >
-            <div className="flex flex-col items-center gap-4">
-              <div className="relative">
-                <div className="w-10 h-10 border-3 border-blue-400/20 border-t-blue-400 animate-spin"></div>
-                <div className="absolute inset-0 w-10 h-10 border-3 border-transparent border-r-blue-300/40 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
-              </div>
-              <span className="text-gray-400 text-sm">Loading transaction details...</span>
             </div>
-          </motion.div>
-        )}
+          )}
 
-        {/* Transaction Details */}
-        {!loading && transaction && (
-          <div className="space-y-5">
-            {/* Transaction Overview Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-gray-800/30 backdrop-blur-sm border border-gray-700 p-5"
-            >
+          {/* Loading State */}
+          {loading && (
+            <div className="flex items-center justify-center py-16">
+              <div className="flex flex-col items-center gap-4">
+                <div className="relative">
+                  <div className="w-10 h-10 border-3 border-blue-400/20 border-t-blue-400 animate-spin"></div>
+                  <div className="absolute inset-0 w-10 h-10 border-3 border-transparent border-r-blue-300/40 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+                </div>
+                <span className="text-gray-400 text-sm">Loading transaction details...</span>
+              </div>
+            </div>
+          )}
+
+          {/* Transaction Details */}
+          {!loading && transaction && (
+            <div className="space-y-5">
+              {/* Transaction Overview Card */}
+              <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-5">
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">
                   <FiHash className="w-5 h-5 text-blue-400" />
@@ -378,13 +344,8 @@ export default function TransactionDetails() {
               </div>
             </motion.div>
 
-            {/* Gas Information Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-gray-800/30 backdrop-blur-sm border border-gray-700 p-5"
-            >
+              {/* Gas Information Card */}
+              <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-5">
               <h2 className="text-lg font-bold text-white mb-5 flex items-center gap-2">
                 <FiZap className="w-5 h-5 text-blue-400" />
                 Gas Information
@@ -428,13 +389,8 @@ export default function TransactionDetails() {
               </div>
             </motion.div>
 
-            {/* Advanced Details */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-gray-800/30 backdrop-blur-sm border border-gray-700 p-5"
-            >
+              {/* Advanced Details */}
+              <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-5">
               <h2 className="text-lg font-bold text-white mb-5 flex items-center gap-2">
                 <FiSettings className="w-5 h-5 text-blue-400" />
                 Advanced Details
@@ -551,20 +507,17 @@ export default function TransactionDetails() {
           </div>
         )}
 
-        {/* No Transaction Data */}
-        {!loading && !transaction && !error && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-12"
-          >
-            <FiActivity className="w-16 h-16 text-gray-500 mx-auto mb-4" />
-            <p className="text-gray-400 text-lg">No transaction data available</p>
-            <p className="text-gray-500 text-sm mt-2">Please check the transaction hash or try again later.</p>
-          </motion.div>
-        )}
+          {/* No Transaction Data */}
+          {!loading && !transaction && !error && (
+            <div className="text-center py-12">
+              <FiActivity className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+              <p className="text-gray-400 text-lg">No transaction data available</p>
+              <p className="text-gray-500 text-sm mt-2">Please check the transaction hash or try again later.</p>
+            </div>
+          )}
+        </div>
       </main>
-
+      
       <Footer />
     </div>
   );

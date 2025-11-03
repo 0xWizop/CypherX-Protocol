@@ -16,7 +16,7 @@ const PageLoader: React.FC = () => {
         >
           <div className="relative">
             <div className="w-12 h-12 border-3 border-gray-700 rounded-full"></div>
-            <div className="absolute top-0 left-0 w-12 h-12 border-3 border-transparent border-t-blue-400 rounded-full animate-spin"></div>
+            <div className="absolute top-0 left-0 w-12 h-12 border-3 border-transparent border-t-blue-600 rounded-full animate-spin"></div>
           </div>
         </motion.div>
 
@@ -37,17 +37,17 @@ const PageLoader: React.FC = () => {
           className="flex justify-center space-x-1 mt-3"
         >
           <motion.div
-            className="w-1.5 h-1.5 bg-blue-400 rounded-full"
+            className="w-1.5 h-1.5 bg-blue-600 rounded-full"
             animate={{ scale: [1, 1.2, 1] }}
             transition={{ duration: 0.8, repeat: Infinity, delay: 0 }}
           />
           <motion.div
-            className="w-1.5 h-1.5 bg-blue-400 rounded-full"
+            className="w-1.5 h-1.5 bg-blue-600 rounded-full"
             animate={{ scale: [1, 1.2, 1] }}
             transition={{ duration: 0.8, repeat: Infinity, delay: 0.2 }}
           />
           <motion.div
-            className="w-1.5 h-1.5 bg-blue-400 rounded-full"
+            className="w-1.5 h-1.5 bg-blue-600 rounded-full"
             animate={{ scale: [1, 1.2, 1] }}
             transition={{ duration: 0.8, repeat: Infinity, delay: 0.4 }}
           />

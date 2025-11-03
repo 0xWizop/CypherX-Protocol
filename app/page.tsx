@@ -242,53 +242,6 @@ export default function Page() {
                 </div>
               </motion.div>
 
-              {/* CTA Buttons - Mobile Optimized */}
-              <motion.div
-                variants={itemVariants}
-                className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center items-center mb-8 sm:mb-6 max-w-2xl mx-auto"
-              >
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => window.location.href = '/trade'}
-                  className={`group relative bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border border-blue-500/30 hover:border-blue-400/50 ${
-                    isMobile 
-                      ? 'px-4 py-2.5 rounded-xl text-sm w-full max-w-xs' 
-                      : 'px-6 sm:px-8 py-3 sm:py-4 rounded-2xl w-full sm:w-auto min-w-[160px]'
-                  }`}
-                >
-                  <div className={`absolute inset-0 bg-gradient-to-r from-blue-400/20 to-blue-600/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${
-                    isMobile ? 'rounded-xl' : 'rounded-2xl'
-                  }`}></div>
-                  <span className="relative flex items-center justify-center">
-                    <svg className={`${isMobile ? 'w-4 h-4 mr-1.5' : 'w-5 h-5 mr-2'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    {isMobile ? 'Explore' : 'Explore Tokens'}
-                  </span>
-                </motion.button>
-
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => window.open('https://cypherx.gitbook.io', '_blank')}
-                  className={`group relative bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border border-purple-500/30 hover:border-purple-400/50 ${
-                    isMobile 
-                      ? 'px-4 py-2.5 rounded-xl text-sm w-full max-w-xs' 
-                      : 'px-6 sm:px-8 py-3 sm:py-4 rounded-2xl w-full sm:w-auto min-w-[160px]'
-                  }`}
-                >
-                  <div className={`absolute inset-0 bg-gradient-to-r from-purple-400/20 to-purple-600/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${
-                    isMobile ? 'rounded-xl' : 'rounded-2xl'
-                  }`}></div>
-                  <span className="relative flex items-center justify-center">
-                    <svg className={`${isMobile ? 'w-4 h-4 mr-1.5' : 'w-5 h-5 mr-2'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {isMobile ? 'Docs' : 'Documentation'}
-                  </span>
-                </motion.button>
-              </motion.div>
 
               {/* Enhanced Stats Section */}
               <motion.div
@@ -310,7 +263,7 @@ export default function Page() {
                     delay={500}
                     className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-400 mb-1 sm:mb-2 group-hover:text-blue-300 transition-colors"
                   />
-                  <div className="text-xs sm:text-sm text-gray-400 group-hover:text-gray-300 transition-colors">Active Users</div>
+                  <div className="text-xs text-gray-400 group-hover:text-gray-300 transition-colors">Active Users</div>
                 </motion.div>
                 <motion.div 
                   className="text-center group"
@@ -326,7 +279,7 @@ export default function Page() {
                     suffix="B+"
                     className="text-2xl sm:text-3xl lg:text-4xl font-bold text-purple-400 mb-1 sm:mb-2 group-hover:text-purple-300 transition-colors"
                   />
-                  <div className="text-xs sm:text-sm text-gray-400 group-hover:text-gray-300 transition-colors">Volume Tracked</div>
+                  <div className="text-xs text-gray-400 group-hover:text-gray-300 transition-colors">Volume Tracked</div>
                 </motion.div>
                 <motion.div 
                   className="text-center group"
@@ -342,7 +295,7 @@ export default function Page() {
                     decimals={1}
                   className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-400 mb-1 sm:mb-2 group-hover:text-blue-300 transition-colors"
                   />
-                  <div className="text-xs sm:text-sm text-gray-400 group-hover:text-gray-300 transition-colors">Uptime</div>
+                  <div className="text-xs text-gray-400 group-hover:text-gray-300 transition-colors">Uptime</div>
                 </motion.div>
               </motion.div>
             </div>
@@ -370,7 +323,7 @@ export default function Page() {
                     <p className="text-gray-400 mb-6 text-sm sm:text-base">Discover new tokens and filter by your preferences.</p>
                     
                     {/* CTA Button */}
-                    <Link href="/trade" className="inline-block bg-transparent backdrop-blur-sm border-[0.5px] border-blue-500/30 text-white font-semibold px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg transition-all duration-200 hover:scale-105 hover:bg-white/5 shadow-lg hover:shadow-xl relative text-sm sm:text-base">
+                    <Link href="/explore" className="inline-block bg-transparent backdrop-blur-sm border-[0.5px] border-blue-500/30 text-white font-semibold px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg transition-all duration-200 hover:scale-105 hover:bg-white/5 shadow-lg hover:shadow-xl relative text-sm sm:text-base">
                       <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-blue-600/10 to-blue-500/10"></div>
                       <span className="relative z-10">Start Trading</span>
                     </Link>
@@ -640,7 +593,7 @@ export default function Page() {
                     <div className="text-blue-400 text-sm mb-4 font-medium">[ 02. ]</div>
                     <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white mb-3">Advanced Charts</h2>
                     <p className="text-gray-400 mb-6 text-sm sm:text-base">Professional TradingView charts with advanced indicators and real-time data.</p>
-                    <Link href="/trade" className="inline-block bg-transparent backdrop-blur-sm border-[0.5px] border-blue-500/30 text-white font-semibold px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 lg:py-3 rounded-lg transition-all duration-200 hover:scale-105 hover:bg-white/5 shadow-lg hover:shadow-xl relative text-sm sm:text-base">
+                    <Link href="/explore" className="inline-block bg-transparent backdrop-blur-sm border-[0.5px] border-blue-500/30 text-white font-semibold px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 lg:py-3 rounded-lg transition-all duration-200 hover:scale-105 hover:bg-white/5 shadow-lg hover:shadow-xl relative text-sm sm:text-base">
                       <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-blue-600/10 to-blue-500/10"></div>
                       <span className="relative z-10">View Charts</span>
                     </Link>

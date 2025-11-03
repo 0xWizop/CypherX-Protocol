@@ -517,7 +517,7 @@ export default function RadarPage() {
 
     // Navigate to chart page
     const handleTokenClick = () => {
-      router.push(`/trade/${token.pairAddress || token.address}/chart`);
+      router.push(`/explore/${token.pairAddress || token.address}/chart`);
     };
 
     // Handle quick buy

@@ -94,17 +94,6 @@ interface NewsSearchResult {
   thumbnailUrl?: string;
 }
 
-interface IndexSearchResult {
-  type: "index";
-  indexName: string;
-  tokenAddress: string;
-  tokenSymbol: string;
-  tokenName: string;
-  weight: number;
-  marketCap?: number;
-  priceUsd?: string;
-}
-
 interface CalendarEventSearchResult {
   type: "calendar";
   id: string;
@@ -126,7 +115,6 @@ interface SearchResult {
   transactions: TransactionSearchResult[];
   blocks: BlockSearchResult[];
   news: NewsSearchResult[];
-  indexes: IndexSearchResult[];
   calendar: CalendarEventSearchResult[];
 }
 
@@ -484,46 +472,6 @@ async function searchNews(query: string): Promise<NewsSearchResult[]> {
   return results;
 }
 
-// Search index data
-async function searchIndexes(query: string): Promise<IndexSearchResult[]> {
-  const results: IndexSearchResult[] = [];
-  
-  try {
-    // Search through all available indexes
-    const indexes = ['CDEX', 'BDEX', 'VDEX', 'AIDEX'];
-    
-    for (const indexName of indexes) {
-      try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/tokens?collection=${indexName}&search=${encodeURIComponent(query)}&limit=5`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.tokens && data.tokens.length > 0) {
-            // Only include tokens that are actually in this index and have a weight
-            const validTokens = data.tokens.filter((token: any) => token.weight && token.weight > 0);
-            if (validTokens.length > 0) {
-              results.push(...validTokens.map((token: any) => ({
-                type: "index" as const,
-                indexName,
-                tokenAddress: token.address,
-                tokenSymbol: token.symbol,
-                tokenName: token.name,
-                weight: token.weight || 0,
-                marketCap: token.marketCap,
-                priceUsd: token.priceUsd
-              })));
-            }
-          }
-        }
-      } catch (error) {
-        console.error(`Error searching ${indexName} index:`, error);
-      }
-    }
-  } catch (error) {
-    console.error("Error searching indexes:", error);
-  }
-
-  return results.slice(0, 10);
-}
 
 // Search calendar events
 async function searchCalendarEvents(query: string): Promise<CalendarEventSearchResult[]> {
@@ -682,7 +630,6 @@ export async function GET(request: Request) {
       transactions: [],
       blocks: [],
       news: [],
-      indexes: [],
       calendar: []
     };
 
@@ -721,9 +668,6 @@ export async function GET(request: Request) {
       const newsResults = await searchNews(query);
       results.news.push(...newsResults);
       
-      // Search for index data
-      const indexResults = await searchIndexes(query);
-      results.indexes.push(...indexResults);
       
       // Search for calendar events
       const calendarResults = await searchCalendarEvents(query);
@@ -742,7 +686,7 @@ export async function GET(request: Request) {
       success: true,
       query,
       results,
-      totalResults: results.tokens.length + results.wallets.length + results.transactions.length + results.blocks.length + results.news.length + results.indexes.length + results.calendar.length
+      totalResults: results.tokens.length + results.wallets.length + results.transactions.length + results.blocks.length + results.news.length + results.calendar.length
     });
     
   } catch (error) {

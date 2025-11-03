@@ -793,60 +793,20 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
   }
 
   return (
-    <div className="min-h-screen w-full flex flex-col bg-gray-950">
+    <div className="h-screen w-full flex flex-col bg-slate-900 overflow-hidden">
       <Header />
       
-      {/* Separator line between header and main content */}
-      <div className="border-b border-gray-800/50"></div>
-      
-      <div className="flex-1 w-full flex flex-col">
-                 <div className="flex-1 w-full px-2 sm:px-3 py-3 sm:py-4 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent max-h-[calc(100vh-120px)]">
+      <main className="flex-1 bg-slate-900 overflow-hidden">
+        <div className="h-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex flex-col">
           <div className="w-full">
-            {/* Contract Header */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-2"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <div className="w-5 h-5 bg-pink-500/20 rounded-full flex items-center justify-center">
-                    <svg className="w-3 h-3 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                  </div>
-                  <h1 className="text-base font-bold text-white">Contract {formatAddress(walletAddress)}</h1>
-                  <button
-                    onClick={() => copyToClipboard(walletAddress)}
-                    className="p-1 hover:bg-gray-800/50 rounded transition-colors group"
-                    title="Copy address"
-                  >
-                    {copied ? (
-                      <svg className="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (
-                      <svg className="w-3 h-3 text-gray-400 group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-                
-                {/* API Coming Soon - Inline */}
-                <div className="bg-blue-500/10 border border-blue-500/20 p-1.5">
-                  <div className="flex items-center space-x-2">
-                    <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                    </svg>
-                    <span className="text-blue-400 text-xs font-medium">API Coming Soon</span>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+            {/* Header */}
+            <div className="text-left mb-4 flex-shrink-0">
+              <h1 className="text-lg font-normal mb-1 text-white">Wallet {formatAddress(walletAddress)}</h1>
+              <p className="text-gray-400 text-xs">Wallet information from Base network</p>
+            </div>
 
             {/* Combined Information Card */}
-            <div className="bg-gray-900/50 border border-gray-700/50 p-1.5 sm:p-2 mb-2">
+            <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4 mb-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Overview Section */}
                 <div className="md:border-r border-gray-700/50 md:pr-4">
@@ -942,11 +902,11 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
             </div>
 
             {/* Main Content */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-0">
               {/* Left Column */}
               <div className="lg:col-span-2 space-y-2 sm:space-y-3 lg:space-y-4">
                 {/* Tab Navigation */}
-                <div className="flex bg-gray-800/50 border border-gray-700/50 p-1 mb-2 overflow-x-auto">
+                <div className="flex bg-slate-800/30 border border-slate-700/50 rounded-lg p-1 mb-4 overflow-x-auto">
                   {[
                     { 
                       id: 'tokens', 
@@ -1072,7 +1032,7 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.2 }}
-                    className="bg-gray-900/50 border border-gray-700/50 p-3"
+                    className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4"
                   >
                     {activeTab === 'overview' && (
                       <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
@@ -1229,7 +1189,7 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                         </div>
                         
                         {/* ETH Balance Section */}
-                        <div className="mb-4 p-2 sm:p-3 bg-gray-900/50 border border-gray-700/50">
+                        <div className="mb-4 p-3 bg-slate-800/30 border border-slate-700/50 rounded-lg">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-2 sm:space-x-3">
                               <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gray-500/20 flex items-center justify-center">
@@ -1256,7 +1216,7 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: index * 0.1 }}
-                                className={`flex items-center justify-between p-2 sm:p-3 bg-gray-900/30 ${index > 0 ? 'border-t border-gray-700/50' : ''}`}
+                                className={`flex items-center justify-between p-3 bg-slate-800/30 ${index > 0 ? 'border-t border-slate-700/50' : ''}`}
                               >
                                                                  <div className="flex items-center space-x-2 sm:space-x-3">
                                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden">
@@ -1430,7 +1390,7 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: index * 0.1 }}
-                                className="p-3 bg-gray-900/30"
+                                className="p-3 bg-slate-800/30"
                               >
                                 <div className="flex items-center justify-between mb-2">
                                   <div className="flex items-center space-x-3">
@@ -1623,12 +1583,12 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
               {/* Right Sidebar */}
               <div className="space-y-4 lg:space-y-6">
                 {/* Ad Banner Placement */}
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.2 }}
-                  className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20 p-4 sm:p-6"
-                >
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4 sm:p-6"
+                  >
                   <div className="text-center">
                     <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
                       <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1649,8 +1609,9 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
               </div>
             </div>
           </div>
+          </div>
         </div>
-      </div>
+      </main>
 
       {/* Name Tag Modal */}
       {showNameTagModal && (

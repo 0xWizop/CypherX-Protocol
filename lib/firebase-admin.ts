@@ -25,26 +25,43 @@ const initializeAdmin = () => {
         const serviceAccountFile = fs.readFileSync(serviceAccountPath, 'utf8');
         const serviceAccount = JSON.parse(serviceAccountFile);
         
+        // Normalize private key - ensure proper formatting
+        if (serviceAccount.private_key) {
+          serviceAccount.private_key = serviceAccount.private_key
+            .replace(/\\n/g, '\n')
+            .replace(/\\r/g, '')
+            .trim();
+        }
+        
         console.log("🔧 Service account JSON loaded:", {
           projectId: serviceAccount.project_id,
           clientEmail: serviceAccount.client_email,
-          privateKeyLength: serviceAccount.private_key.length
+          privateKeyLength: serviceAccount.private_key?.length || 0,
+          hasPrivateKey: !!serviceAccount.private_key
         });
         
         if (!admin.apps.length) {
-          admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount),
-            projectId: serviceAccount.project_id
-          });
+          try {
+            admin.initializeApp({
+              credential: admin.credential.cert(serviceAccount),
+              projectId: serviceAccount.project_id,
+            });
+            console.log("✅ Firebase Admin app initialized");
+          } catch (initError) {
+            console.error("❌ Firebase Admin initialization error:", initError);
+            throw initError;
+          }
         }
         
         adminDb = admin.firestore();
+        // Set Firestore settings to avoid authentication issues
+        adminDb.settings({ ignoreUndefinedProperties: true });
         adminStorage = admin.storage();
         isInitialized = true;
         initialized = true;
         console.log("✅ Successfully initialized with service account from JSON file");
       } else {
-        console.log("⚠️  Service account JSON file not found");
+        console.log("⚠️  Service account JSON file not found at:", serviceAccountPath);
       }
     } catch (error) {
       const errorMsg = `Service account JSON failed: ${error instanceof Error ? error.message : 'Unknown error'}`;

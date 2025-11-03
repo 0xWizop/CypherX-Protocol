@@ -104,8 +104,12 @@ export const useUserSettings = () => {
           swapFeeDiscount: data.swapFeeDiscount || 0,
           totalReferrals: data.totalReferrals || 0,
           totalReferralEarnings: data.totalReferralEarnings || 0,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
+          createdAt: (data.createdAt?.toDate && typeof data.createdAt.toDate === 'function') 
+            ? data.createdAt.toDate() 
+            : (data.createdAt instanceof Date ? data.createdAt : new Date()),
+          updatedAt: (data.updatedAt?.toDate && typeof data.updatedAt.toDate === 'function')
+            ? data.updatedAt.toDate()
+            : (data.updatedAt instanceof Date ? data.updatedAt : new Date()),
         });
       }
     });
