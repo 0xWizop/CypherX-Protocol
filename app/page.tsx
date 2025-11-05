@@ -81,6 +81,9 @@ export default function Page() {
   const isMobile = useIsMobile();
   const { scrollYProgress } = useScroll();
   const [showScrollToTop, setShowScrollToTop] = useState(false);
+  const [activeUsers, setActiveUsers] = useState<number>(0);
+  const [totalTokens, setTotalTokens] = useState<number>(0);
+  const [statsLoading, setStatsLoading] = useState(true);
   
   // Parallax effects for background elements
   const backgroundY = useTransform(scrollYProgress, [0, 1], [0, -100]);
@@ -93,6 +96,51 @@ export default function Page() {
     });
     return unsubscribe;
   }, [scrollYProgress]);
+
+  // Fetch stats from APIs
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        // Fetch active users count
+        const usersResponse = await fetch('/api/stats/active-users');
+        if (usersResponse.ok) {
+          const usersData = await usersResponse.json();
+          console.log('Active users API response:', usersData);
+          if (usersData.success) {
+            const count = usersData.activeUsers || 0;
+            console.log('Setting active users to:', count);
+            setActiveUsers(count);
+          } else {
+            console.error('Active users API returned success: false', usersData);
+          }
+        } else {
+          console.error('Active users API failed with status:', usersResponse.status);
+        }
+
+        // Fetch total tokens count
+        const tokensResponse = await fetch('/api/stats/tokens');
+        if (tokensResponse.ok) {
+          const tokensData = await tokensResponse.json();
+          console.log('Tokens API response:', tokensData);
+          if (tokensData.success) {
+            const count = tokensData.totalTokens || 0;
+            console.log('Setting total tokens to:', count);
+            setTotalTokens(count);
+          } else {
+            console.error('Tokens API returned success: false', tokensData);
+          }
+        } else {
+          console.error('Tokens API failed with status:', tokensResponse.status);
+        }
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+      } finally {
+        setStatsLoading(false);
+      }
+    }
+
+    fetchStats();
+  }, []);
 
   return (
       <div className="min-h-screen flex flex-col bg-gray-950 overflow-x-hidden">
@@ -237,7 +285,7 @@ export default function Page() {
                 <div className="flex justify-center mt-2">
                   <span className="text-xs text-gray-500 flex items-center">
                     <span className="w-1.5 h-1.5 bg-green-400 rounded-full mr-1.5 animate-pulse"></span>
-                    Real-time data • 1,247 tokens indexed
+                    Real-time data • {statsLoading ? '...' : totalTokens.toLocaleString()} tokens indexed
                   </span>
                 </div>
               </motion.div>
@@ -258,7 +306,8 @@ export default function Page() {
                   transition={{ duration: 0.3 }}
                 >
                   <CountUp 
-                    end={316}
+                    key={activeUsers} // Force remount when value changes from 0 to real value
+                    end={activeUsers || 0}
                     duration={2500}
                     delay={500}
                     className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-400 mb-1 sm:mb-2 group-hover:text-blue-300 transition-colors"
@@ -277,7 +326,7 @@ export default function Page() {
                     delay={800}
                     prefix="$"
                     suffix="B+"
-                    className="text-2xl sm:text-3xl lg:text-4xl font-bold text-purple-400 mb-1 sm:mb-2 group-hover:text-purple-300 transition-colors"
+                    className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-400 mb-1 sm:mb-2 group-hover:text-blue-300 transition-colors"
                   />
                   <div className="text-xs text-gray-400 group-hover:text-gray-300 transition-colors">Volume Tracked</div>
                 </motion.div>

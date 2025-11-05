@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 interface CountUpProps {
   end: number;
@@ -22,6 +22,53 @@ const CountUp: React.FC<CountUpProps> = ({
   const [count, setCount] = useState(0);
   const [hasStarted, setHasStarted] = useState(false);
   const countRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef(end);
+  const animationFrameRef = useRef<number | null>(null);
+
+  const animateCount = useCallback(() => {
+    // Cancel any existing animation
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+
+    const startTime = Date.now();
+    const startValue = count; // Start from current count instead of 0
+    const targetEnd = endRef.current;
+
+    const updateCount = () => {
+      const currentTime = Date.now();
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Easing function for smooth animation
+      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+      const currentValue = startValue + (targetEnd - startValue) * easeOutQuart;
+
+      setCount(Math.floor(currentValue));
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(updateCount);
+      } else {
+        setCount(targetEnd);
+        animationFrameRef.current = null;
+      }
+    };
+
+    animationFrameRef.current = requestAnimationFrame(updateCount);
+  }, [count, duration]);
+
+  // Update end ref when end prop changes
+  useEffect(() => {
+    endRef.current = end;
+  }, [end]);
+
+  // If end changes significantly after animation started, re-animate
+  useEffect(() => {
+    if (hasStarted && end > 0 && end !== count) {
+      // If we have a real value and it's different from current count, animate to it
+      animateCount();
+    }
+  }, [end, hasStarted, count, animateCount]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -44,33 +91,11 @@ const CountUp: React.FC<CountUpProps> = ({
       if (countRef.current) {
         observer.unobserve(countRef.current);
       }
-    };
-  }, [hasStarted, delay]);
-
-  const animateCount = () => {
-    const startTime = Date.now();
-    const startValue = 0;
-
-    const updateCount = () => {
-      const currentTime = Date.now();
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-
-      // Easing function for smooth animation
-      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
-      const currentValue = startValue + (end - startValue) * easeOutQuart;
-
-      setCount(Math.floor(currentValue));
-
-      if (progress < 1) {
-        requestAnimationFrame(updateCount);
-      } else {
-        setCount(end);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
       }
     };
-
-    requestAnimationFrame(updateCount);
-  };
+  }, [hasStarted, delay, animateCount]);
 
   const formatNumber = (num: number) => {
     if (decimals > 0) {

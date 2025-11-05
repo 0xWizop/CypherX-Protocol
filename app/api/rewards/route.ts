@@ -126,8 +126,9 @@ export async function POST(request: any) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Calculate platform fee (0.06%)
-    const platformFee = swapValue * 0.0006;
+    // Calculate platform fee (0.75%)
+    // Note: 0.15% goes to 0x protocol, remaining 0.60% available for cashback/referrals
+    const platformFee = swapValue * 0.0075;
     
     // Get user's current tier
     const db = adminDb();
@@ -254,7 +255,10 @@ export async function POST(request: any) {
     // Calculate cashback based on tier
     const tier = calculateTier(existingPoints);
     const cashbackRate = getCashbackRate(tier);
-    const cashbackAmount = platformFee * cashbackRate;
+    // Platform fee: 0.75%, 0x protocol fee: 0.15%, remaining: 0.60%
+    const protocolFee = swapValue * 0.0015; // 0.15% for 0x protocol
+    const remainingFee = platformFee - protocolFee; // Fee available for cashback
+    const cashbackAmount = remainingFee * cashbackRate;
 
     // Calculate new points (integrate with existing point system)
     const newPoints = Math.floor(swapValue * 0.1); // 0.1 points per $1 traded
@@ -365,22 +369,24 @@ function generateReferralCode(): string {
 }
 
 function calculateTier(points: number): string {
-  if (points >= 50000) return 'god';
-  if (points >= 15000) return 'legend';
-  if (points >= 5000) return 'whale';
-  if (points >= 1000) return 'degen';
+  if (points >= 50000) return 'titan';
+  if (points >= 20000) return 'mogul';
+  if (points >= 8000) return 'alpha';
+  if (points >= 2000) return 'degen';
   return 'normie';
 }
 
 function getCashbackRate(tier: string): number {
+  // Platform fee: 0.75%, 0x protocol fee: 0.15%, remaining: 0.60%
+  // Cashback is a percentage of the remaining fee (0.60%)
   const rates = {
-    normie: 0.01,
-    degen: 0.015,
-    whale: 0.02,
-    legend: 0.025,
-    god: 0.03
+    normie: 0.05,   // 5% of remaining fee
+    degen: 0.10,    // 10% of remaining fee
+    alpha: 0.15,    // 15% of remaining fee
+    mogul: 0.20,    // 20% of remaining fee
+    titan: 0.25     // 25% of remaining fee
   };
-  return rates[tier as keyof typeof rates] || 0.01;
+  return rates[tier as keyof typeof rates] || 0.05;
 }
 
 async function processReferral(referralCode: string, refereeId: string, platformFee: number) {
@@ -398,8 +404,11 @@ async function processReferral(referralCode: string, refereeId: string, platform
     const referrerId = referrerDoc.id;
     const referrerData = referrerDoc.data();
 
-    // Calculate referral reward (30% of referee's fees)
-    const referralReward = platformFee * 0.3;
+    // Platform fee: 0.75%, 0x protocol fee: 0.15% (20% of platform fee), remaining: 0.60% (80% of platform fee)
+    const protocolFee = platformFee * 0.2; // 0.15% / 0.75% = 20%
+    const remainingFee = platformFee - protocolFee; // Fee available for referrals
+    // Calculate referral reward (30% of remaining fee after 0x protocol fee)
+    const referralReward = remainingFee * 0.3;
 
     // Update referrer's rewards
     await referrerDoc.ref.update({

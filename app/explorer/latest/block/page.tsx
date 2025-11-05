@@ -24,6 +24,7 @@ import {
 } from "react-icons/fi";
 import Header from "../../../components/Header";
 import Footer from "../../../components/Footer";
+import LoadingSpinner from "../../../components/LoadingSpinner";
 
 interface Block {
   number: number;
@@ -234,14 +235,14 @@ export default function CypherScanPage() {
   }, [page]);
 
   return (
-    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden">
+    <div className="h-screen bg-[#0f172a] flex flex-col overflow-hidden">
       <Header />
       
-      <main className="flex-1 bg-slate-900 overflow-hidden">
-        <div className="h-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex flex-col">
+      <main className="flex-1 bg-[#0f172a] overflow-hidden">
+        <div className="h-full max-w-[1280px] mx-auto px-5 lg:px-8 pt-6 pb-0 flex flex-col">
           {/* Header */}
           <div className="text-left mb-4 flex-shrink-0">
-            <h1 className="text-lg font-normal mb-1 text-white">Latest Blocks</h1>
+            <h1 className="text-base font-semibold mb-0.5 text-white">Latest Blocks</h1>
             <p className="text-gray-400 text-xs">Real-time blockchain data from Base network</p>
           </div>
 
@@ -258,12 +259,12 @@ export default function CypherScanPage() {
           )}
 
           {/* Main Content */}
-          <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-0">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {/* Latest Blocks */}
             <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg overflow-hidden">
-              <div className="flex items-center justify-between px-4 pt-4 pb-2">
-                <h2 className="text-lg font-semibold text-white">Latest Blocks</h2>
-                <a href="#" className="text-blue-400 hover:text-blue-300 text-sm">
+              <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-gray-700/50">
+                <h2 className="text-sm font-semibold text-white">Latest Blocks</h2>
+                <a href="/explorer/latest/block" className="text-blue-400 hover:text-blue-300 text-xs">
                   View all
                 </a>
               </div>
@@ -271,13 +272,7 @@ export default function CypherScanPage() {
               {/* Loading State */}
               {loading && (
                 <div className="flex items-center justify-center py-12">
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="relative">
-                      <div className="w-10 h-10 border-3 border-blue-400/20 border-t-blue-400 animate-spin"></div>
-                      <div className="absolute inset-0 w-10 h-10 border-3 border-transparent border-r-blue-300/40 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
-                    </div>
-                    <span className="text-gray-400 text-sm">Loading blocks...</span>
-                  </div>
+                  <LoadingSpinner variant="dots" size="lg" text="Loading blocks..." />
                 </div>
               )}
 

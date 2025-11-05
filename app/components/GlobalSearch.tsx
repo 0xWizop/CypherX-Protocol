@@ -479,18 +479,18 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
               setShowResults(true);
             }
           }}
-          className={`w-full pl-12 pr-12 py-2 text-sm text-gray-100 bg-gray-950 border border-gray-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 placeholder-gray-400 shadow-lg group-hover:border-blue-400 ${
+          className={`w-full pl-10 pr-10 py-1.5 text-sm text-gray-100 bg-gray-950/50 backdrop-blur-sm border border-gray-600 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-gray-500 transition-all duration-300 placeholder-gray-400 shadow-lg group-hover:border-gray-500 ${
             variant === "header" ? "max-w-[580px]" : ""
           }`}
         />
         
         {/* Search Icon */}
-        <div className="absolute left-4 top-1/2 -translate-y-1/2">
-          <MagnifyingGlassIcon className="w-5 h-5 text-gray-400 group-hover:text-blue-400 transition-colors duration-300" />
+        <div className="absolute left-3 top-1/2 -translate-y-1/2">
+          <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-colors duration-300" />
         </div>
         
         {/* Status Indicator */}
-        <div className="absolute right-4 top-1/2 -translate-y-1/2">
+        <div className="absolute right-3 top-1/2 -translate-y-1/2">
           {isLoading ? (
             <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
           ) : query.length >= 2 ? (
@@ -509,7 +509,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
               setSelectedIndex(-1);
               inputRef.current?.focus();
             }}
-            className="absolute right-8 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-300 transition-colors"
+            className="absolute right-7 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-300 transition-colors"
           >
             <XMarkIcon className="w-4 h-4" />
           </button>

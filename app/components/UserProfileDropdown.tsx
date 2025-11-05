@@ -401,7 +401,7 @@ const UserProfileDropdown: React.FC = () => {
         className="flex items-center focus:outline-none focus:ring-2 focus:ring-blue-500/50 rounded-full hover:scale-105 transform transition-all duration-200"
         aria-label={user ? "Account" : "Sign In"}
       >
-        <div className="relative w-9 h-9 rounded-full bg-gray-800/50 backdrop-blur-sm flex items-center justify-center transition-all duration-300 hover:bg-gray-700/50 shadow-lg border border-gray-600/50 hover:border-gray-500 overflow-hidden">
+        <div className="relative w-8 h-8 rounded-full bg-gray-950/50 backdrop-blur-sm flex items-center justify-center transition-all duration-300 hover:bg-gray-900/50 shadow-lg border border-gray-600 hover:border-gray-500 overflow-hidden">
           {profilePicture ? (
             <Image
               src={profilePicture}
@@ -411,7 +411,7 @@ const UserProfileDropdown: React.FC = () => {
               className="w-full h-full object-cover"
             />
           ) : (
-            <FiUser className="w-4 h-4 icon-blue-gradient" />
+            <FiUser className="w-3.5 h-3.5 text-white" />
           )}
           {user && (
             <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-gray-900"></div>
@@ -540,16 +540,6 @@ const UserProfileDropdown: React.FC = () => {
                   className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-800/80 rounded-md transition-all duration-200"
                 >
                   <span className="font-medium text-sm">Vote & Earn</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setShowAccountSettingsModal(true);
-                    setShowAccountModal(false);
-                  }}
-                  className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-800/80 rounded-md transition-all duration-200"
-                >
-                  <span className="font-medium text-sm">Account Settings</span>
                 </button>
 
                 <button

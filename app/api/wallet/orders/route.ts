@@ -97,7 +97,7 @@ export async function GET(request: Request) {
       // If no matches found, do not fallback to all transactions; return empty for strict token filtering
       if (filteredDocs.length === 0) {
         console.log("🔧 Token filter returned 0 results, returning empty orders for this token");
-      }
+       }
      }
     
          if (filteredDocs.length === 0) {

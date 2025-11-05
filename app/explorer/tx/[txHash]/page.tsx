@@ -5,23 +5,14 @@ import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  FiHash,
-  FiClock,
-  FiActivity,
   FiCopy,
   FiCheck,
-  FiExternalLink,
-  FiZap,
-  FiSettings,
-  FiAlertCircle,
-  FiCheckCircle,
-  FiXCircle,
-  FiInfo,
   FiMinus,
   FiPlus,
 } from "react-icons/fi";
 import Header from "../../../components/Header";
 import Footer from "../../../components/Footer";
+import LoadingSpinner from "../../../components/LoadingSpinner";
 
 interface Transaction {
   hash: string;
@@ -76,6 +67,7 @@ export default function TransactionDetails() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [showCopyNotification, setShowCopyNotification] = useState<boolean>(false);
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
   const [showLogs, setShowLogs] = useState<boolean>(false);
   const router = useRouter();
@@ -124,32 +116,40 @@ export default function TransactionDetails() {
     fetchTransaction();
   }, [txHash, router, fetchTransaction]);
 
-  const copyToClipboard = (text: string, field: string) => {
-    navigator.clipboard.writeText(text).then(() => {
+  const copyToClipboard = async (text: string, field: string) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback for browsers that don't support clipboard API
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
       setCopiedField(field);
-      setTimeout(() => setCopiedField(null), 2000);
-    });
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "success":
-        return <FiCheckCircle className="w-5 h-5 text-green-400" />;
-      case "failed":
-        return <FiXCircle className="w-5 h-5 text-red-400" />;
-      case "pending":
-        return <FiClock className="w-5 h-5 text-blue-300" />;
-      default:
-        return <FiInfo className="w-5 h-5 text-gray-400" />;
+      setShowCopyNotification(true);
+      setTimeout(() => {
+        setCopiedField(null);
+        setShowCopyNotification(false);
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to copy text:", err);
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "success":
-        return "bg-green-900/20 text-green-400 border-green-500/30";
+        return "bg-green-900/30 text-green-400 border-green-500/30";
       case "failed":
-        return "bg-red-900/20 text-red-400 border-red-500/30";
+        return "bg-red-900/30 text-red-400 border-red-500/30";
       case "pending":
         return "bg-blue-800/30 text-blue-200 border-blue-400/40";
       default:
@@ -184,22 +184,22 @@ export default function TransactionDetails() {
 
 
   return (
-    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden">
+    <div className="h-screen bg-[#0f172a] flex flex-col overflow-hidden">
       <Header />
       
-      <main className="flex-1 bg-slate-900 overflow-hidden">
-        <div className="h-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex flex-col">
+      <main className="flex-1 bg-[#0f172a] overflow-hidden">
+        <div className="h-full max-w-[1280px] mx-auto px-5 lg:px-8 pt-6 pb-0 flex flex-col">
           {/* Header */}
           <div className="text-left mb-4 flex-shrink-0">
-            <h1 className="text-lg font-normal mb-1 text-white">Transaction Details</h1>
+            <h1 className="text-base mb-0.5 text-white">Transaction Details</h1>
             <p className="text-gray-400 text-xs">Transaction information from Base network</p>
           </div>
 
           {/* Error Display */}
           {error && (
-            <div className="bg-red-900/20 border border-red-500/30 p-4 mb-6 text-red-400">
+            <div className="bg-red-900/20 border border-red-500/30 p-4 mb-6 rounded-lg text-red-400">
               <div className="flex items-center gap-2">
-                <FiAlertCircle className="w-5 h-5" />
+                <div className="w-2 h-2 bg-red-400 animate-pulse rounded-full"></div>
                 Error: {error}
               </div>
             </div>
@@ -208,40 +208,35 @@ export default function TransactionDetails() {
           {/* Loading State */}
           {loading && (
             <div className="flex items-center justify-center py-16">
-              <div className="flex flex-col items-center gap-4">
-                <div className="relative">
-                  <div className="w-10 h-10 border-3 border-blue-400/20 border-t-blue-400 animate-spin"></div>
-                  <div className="absolute inset-0 w-10 h-10 border-3 border-transparent border-r-blue-300/40 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
-                </div>
-                <span className="text-gray-400 text-sm">Loading transaction details...</span>
-              </div>
+              <LoadingSpinner variant="dots" size="lg" text={`Loading Tx ${txHash.slice(0, 10)}...`} />
             </div>
           )}
 
           {/* Transaction Details */}
           {!loading && transaction && (
-            <div className="space-y-5">
+            <div className="space-y-4">
               {/* Transaction Overview Card */}
-              <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-5">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <FiHash className="w-5 h-5 text-blue-400" />
+              <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-700/50">
+                <h2 className="text-sm text-white">
                   Transaction Overview
                 </h2>
-                <div className="flex items-center gap-3">
-                  {getStatusIcon(transaction.status)}
-                  <span className={`inline-flex items-center px-3 py-1 text-sm font-semibold border ${getStatusColor(transaction.status)}`}>
+                <span className={`inline-flex items-center px-3 py-1 text-sm border rounded-full ${getStatusColor(transaction.status)}`}>
+                  <div className={`w-2 h-2 mr-2 rounded-full ${
+                    transaction.status === "success" ? "bg-green-400" :
+                    transaction.status === "failed" ? "bg-red-400" :
+                    "bg-blue-300"
+                  }`}></div>
                     {transaction.status.toUpperCase()}
                   </span>
-                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-400">Transaction Hash</span>
+                    <span className="text-gray-400 text-sm">Transaction Hash</span>
                     <div className="flex items-center gap-2 max-w-xs">
-                      <span className="text-white font-mono text-sm truncate">{transaction.hash}</span>
+                      <span className="text-white text-sm truncate">{transaction.hash}</span>
                       <button
                         onClick={() => copyToClipboard(transaction.hash, "hash")}
                         className="text-blue-400 hover:text-blue-300"
@@ -252,227 +247,210 @@ export default function TransactionDetails() {
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-400">Block Number</span>
+                    <span className="text-gray-400 text-sm">Block Number</span>
                     <div className="flex items-center gap-2">
                       <Link
                         href={`/explorer/latest/block/${transaction.blockNumber}`}
-                        className="text-blue-400 hover:text-blue-300 font-mono font-medium"
+                        className="text-blue-400 hover:text-blue-300 text-sm"
                       >
                         #{transaction.blockNumber.toLocaleString()}
                       </Link>
-                      <a
-                        href={`/explorer/latest/block/${transaction.blockNumber}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => copyToClipboard(transaction.blockNumber.toString(), "blockNumber")}
                         className="text-blue-400 hover:text-blue-300"
                       >
-                        <FiExternalLink className="w-4 h-4" />
-                      </a>
+                        {copiedField === "blockNumber" ? <FiCheck className="w-4 h-4" /> : <FiCopy className="w-4 h-4" />}
+                      </button>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-400">Timestamp</span>
-                    <div className="flex items-center gap-2">
-                      <FiClock className="w-4 h-4 text-gray-400" />
-                      <span className="text-white">{formatTime(transaction.timestamp)}</span>
-                    </div>
+                    <span className="text-gray-400 text-sm">Timestamp</span>
+                    <span className="text-white text-sm">{formatTime(transaction.timestamp)}</span>
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-400">Value</span>
-                    <div className="flex items-center gap-2">
-                      <FiActivity className="w-4 h-4 text-blue-400" />
-                      <span className="text-white font-medium">{formatValue(transaction.value)}</span>
-                    </div>
+                    <span className="text-gray-400 text-sm">Value</span>
+                    <span className="text-white text-sm">{formatValue(transaction.value)}</span>
                   </div>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-400">From Address</span>
+                    <span className="text-gray-400 text-sm">From Address</span>
                     <div className="flex items-center gap-2 max-w-xs">
-                      <span className="text-white font-mono text-sm truncate">{transaction.from}</span>
+                      <Link
+                        href={`/explorer/address/${transaction.from}`}
+                        className="text-blue-400 hover:text-blue-300 text-sm truncate"
+                      >
+                        {transaction.from}
+                      </Link>
                       <button
                         onClick={() => copyToClipboard(transaction.from, "from")}
                         className="text-blue-400 hover:text-blue-300"
                       >
                         {copiedField === "from" ? <FiCheck className="w-4 h-4" /> : <FiCopy className="w-4 h-4" />}
                       </button>
-                      <a
-                        href={`/explorer/address/${transaction.from}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300"
-                      >
-                        <FiExternalLink className="w-4 h-4" />
-                      </a>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-400">To Address</span>
+                    <span className="text-gray-400 text-sm">To Address</span>
                     <div className="flex items-center gap-2 max-w-xs">
-                      <span className="text-white font-mono text-sm truncate">{transaction.to}</span>
+                      <Link
+                        href={`/explorer/address/${transaction.to}`}
+                        className="text-blue-400 hover:text-blue-300 text-sm truncate"
+                      >
+                        {transaction.to}
+                      </Link>
                       <button
                         onClick={() => copyToClipboard(transaction.to, "to")}
                         className="text-blue-400 hover:text-blue-300"
                       >
                         {copiedField === "to" ? <FiCheck className="w-4 h-4" /> : <FiCopy className="w-4 h-4" />}
                       </button>
-                      <a
-                        href={`/explorer/address/${transaction.to}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300"
-                      >
-                        <FiExternalLink className="w-4 h-4" />
-                      </a>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-400">Nonce</span>
-                    <span className="text-white font-mono">{transaction.nonce}</span>
+                    <span className="text-gray-400 text-sm">Nonce</span>
+                    <span className="text-white text-sm">{transaction.nonce}</span>
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-400">Transaction Index</span>
-                    <span className="text-white font-mono">{transaction.transactionIndex}</span>
+                    <span className="text-gray-400 text-sm">Transaction Index</span>
+                    <span className="text-white text-sm">{transaction.transactionIndex}</span>
                   </div>
                 </div>
               </div>
-            </motion.div>
+            </div>
 
               {/* Gas Information Card */}
-              <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-5">
-              <h2 className="text-lg font-bold text-white mb-5 flex items-center gap-2">
-                <FiZap className="w-5 h-5 text-blue-400" />
+              <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-700/50">
+                  <h2 className="text-sm text-white">
                 Gas Information
               </h2>
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <span className="text-gray-400 text-sm font-medium">Gas Used</span>
-                  <p className="text-xl font-bold text-white">{parseInt(transaction.gasUsed).toLocaleString()}</p>
-                </div>
-                <div className="space-y-2">
-                  <span className="text-gray-400 text-sm font-medium">Gas Limit</span>
-                  <p className="text-xl font-bold text-white">{parseInt(transaction.gasLimit).toLocaleString()}</p>
+                    <span className="text-gray-400 text-sm">Gas Used</span>
+                    <p className="text-sm text-white">{parseInt(transaction.gasUsed).toLocaleString()}</p>
                 </div>
                 <div className="space-y-2">
-                  <span className="text-gray-400 text-sm font-medium">Gas Price</span>
-                  <p className="text-lg font-bold text-white">{formatGasPrice(transaction.gasPrice)}</p>
+                    <span className="text-gray-400 text-sm">Gas Limit</span>
+                    <p className="text-sm text-white">{parseInt(transaction.gasLimit).toLocaleString()}</p>
                 </div>
                 <div className="space-y-2">
-                  <span className="text-gray-400 text-sm font-medium">Total Cost</span>
-                  <p className="text-lg font-bold text-white">{transaction.gasFeeEth.toFixed(6)} ETH</p>
-                </div>
-              </div>
-
-              {/* Gas Usage Progress Bar */}
-              <div className="mt-5">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-gray-400 text-sm font-medium">Gas Usage Efficiency</span>
-                  <span className="text-white text-sm font-semibold">
-                    {Math.round((parseInt(transaction.gasUsed) / parseInt(transaction.gasLimit)) * 100)}%
-                  </span>
-                </div>
-                <div className="w-full bg-gray-700/50 h-2">
+                    <span className="text-gray-400 text-sm">Usage</span>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 bg-gray-700 h-2 rounded-full">
                   <div
-                    className="bg-blue-500 h-2 transition-all duration-500"
+                          className="bg-blue-500 h-2 rounded-full transition-all duration-300"
                     style={{ 
                       width: `${Math.min((parseInt(transaction.gasUsed) / parseInt(transaction.gasLimit)) * 100, 100)}%` 
                     }}
                   ></div>
+                      </div>
+                      <span className="text-white text-sm">{Math.round((parseInt(transaction.gasUsed) / parseInt(transaction.gasLimit)) * 100)}%</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </motion.div>
 
               {/* Advanced Details */}
-              <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-5">
-              <h2 className="text-lg font-bold text-white mb-5 flex items-center gap-2">
-                <FiSettings className="w-5 h-5 text-blue-400" />
+              <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-700/50">
+                  <h2 className="text-sm text-white">
                 Advanced Details
               </h2>
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 text-sm">Block Hash</span>
                     <div className="flex items-center gap-2 max-w-xs">
-                      <span className="text-white text-xs truncate">{transaction.blockHash}</span>
+                        <span className="text-white text-sm truncate">{transaction.blockHash}</span>
                       <button
                         onClick={() => copyToClipboard(transaction.blockHash, "blockHash")}
                         className="text-blue-400 hover:text-blue-300"
                       >
-                        {copiedField === "blockHash" ? <FiCheck className="w-3 h-3" /> : <FiCopy className="w-3 h-3" />}
+                          {copiedField === "blockHash" ? <FiCheck className="w-4 h-4" /> : <FiCopy className="w-4 h-4" />}
                       </button>
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 text-sm">Input Data</span>
-                    <span className="text-white text-xs">
+                      <div className="flex items-center gap-2 max-w-xs">
+                        <span className="text-white text-sm truncate">
                       {transaction.inputData === "0x" ? "No Data" : `${transaction.inputData.slice(0, 20)}...`}
                     </span>
+                        {transaction.inputData !== "0x" && (
+                          <button
+                            onClick={() => copyToClipboard(transaction.inputData, "inputData")}
+                            className="text-blue-400 hover:text-blue-300"
+                          >
+                            {copiedField === "inputData" ? <FiCheck className="w-4 h-4" /> : <FiCopy className="w-4 h-4" />}
+                          </button>
+                        )}
+                      </div>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 text-sm">Receipt Status</span>
-                    <span className="text-white text-xs">{transaction.receipt.status}</span>
+                      <span className="text-white text-sm">{transaction.receipt.status}</span>
                   </div>
                   {transaction.contractAddress && (
                     <div className="flex items-center justify-between">
                       <span className="text-gray-400 text-sm">Contract Address</span>
                       <div className="flex items-center gap-2 max-w-xs">
-                        <span className="text-white text-xs truncate">{transaction.contractAddress}</span>
+                          <Link
+                            href={`/explorer/address/${transaction.contractAddress}`}
+                            className="text-blue-400 hover:text-blue-300 text-sm truncate"
+                          >
+                            {transaction.contractAddress}
+                          </Link>
                         <button
                           onClick={() => copyToClipboard(transaction.contractAddress!, "contract")}
                           className="text-blue-400 hover:text-blue-300"
                         >
-                          {copiedField === "contract" ? <FiCheck className="w-3 h-3" /> : <FiCopy className="w-3 h-3" />}
+                            {copiedField === "contract" ? <FiCheck className="w-4 h-4" /> : <FiCopy className="w-4 h-4" />}
                         </button>
-                        <a
-                          href={`/explorer/address/${transaction.contractAddress}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-400 hover:text-blue-300"
-                        >
-                          <FiExternalLink className="w-3 h-3" />
-                        </a>
                       </div>
                     </div>
                   )}
                 </div>
-                <div className="space-y-4">
+                  <div className="space-y-2">
                   {transaction.methodSignature && (
                     <div className="flex items-center justify-between">
                       <span className="text-gray-400 text-sm">Method</span>
-                      <span className="text-white text-xs">{transaction.methodSignature}</span>
+                        <span className="text-white text-sm">{transaction.methodSignature}</span>
                     </div>
                   )}
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 text-sm">ETH Value (USD)</span>
-                    <span className="text-white text-xs">${transaction.ethValueUsd.toFixed(2)}</span>
+                      <span className="text-white text-sm">${transaction.ethValueUsd.toFixed(2)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 text-sm">Gas Fee (USD)</span>
-                    <span className="text-white text-xs">${transaction.gasFeeUsd.toFixed(2)}</span>
+                      <span className="text-white text-sm">${transaction.gasFeeUsd.toFixed(2)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 text-sm">Logs Count</span>
-                    <span className="text-white text-xs">{transaction.receipt.logs.length}</span>
+                      <span className="text-white text-sm">{transaction.receipt.logs.length}</span>
                   </div>
                 </div>
               </div>
 
               {/* Transaction Logs */}
               {transaction.receipt.logs.length > 0 && (
-                <div className="mt-5">
+                <div className="mt-4">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-base font-semibold text-white">Transaction Logs</h3>
+                    <h3 className="text-sm text-white">Transaction Logs</h3>
                     <button
                       onClick={() => setShowLogs(!showLogs)}
-                      className="flex items-center gap-2 px-3 py-1 bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors"
+                      className="flex items-center gap-2 px-3 py-1 bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors rounded-lg"
                     >
                       {showLogs ? <FiMinus className="w-4 h-4" /> : <FiPlus className="w-4 h-4" />}
                       {showLogs ? "Hide" : "Show"} Logs
@@ -488,13 +466,33 @@ export default function TransactionDetails() {
                         className="space-y-2 max-h-40 overflow-y-auto"
                       >
                         {transaction.receipt.logs.map((log, index) => (
-                          <div key={index} className="bg-gray-700/50 p-3 text-sm">
+                          <div key={index} className="bg-gray-700/50 p-3 text-sm rounded-lg">
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-gray-400">Log #{index + 1}</span>
-                              <span className="text-gray-400">Address: {log.address}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-400">Address: </span>
+                                <Link
+                                  href={`/explorer/address/${log.address}`}
+                                  className="text-blue-400 hover:text-blue-300 text-xs truncate max-w-xs"
+                                >
+                                  {log.address}
+                                </Link>
+                                <button
+                                  onClick={() => copyToClipboard(log.address, `logAddress-${index}`)}
+                                  className="text-blue-400 hover:text-blue-300"
+                                >
+                                  {copiedField === `logAddress-${index}` ? <FiCheck className="w-3 h-3" /> : <FiCopy className="w-3 h-3" />}
+                                </button>
+                              </div>
                             </div>
-                            <div className="text-white text-xs break-all">
-                              {log.data}
+                            <div className="flex items-center justify-between">
+                              <span className="text-white text-xs break-all flex-1 mr-2">{log.data}</span>
+                              <button
+                                onClick={() => copyToClipboard(log.data, `logData-${index}`)}
+                                className="text-blue-400 hover:text-blue-300 flex-shrink-0"
+                              >
+                                {copiedField === `logData-${index}` ? <FiCheck className="w-3 h-3" /> : <FiCopy className="w-3 h-3" />}
+                              </button>
                             </div>
                           </div>
                         ))}
@@ -503,14 +501,13 @@ export default function TransactionDetails() {
                   </AnimatePresence>
                 </div>
               )}
-            </motion.div>
+            </div>
           </div>
         )}
 
           {/* No Transaction Data */}
           {!loading && !transaction && !error && (
             <div className="text-center py-12">
-              <FiActivity className="w-16 h-16 text-gray-500 mx-auto mb-4" />
               <p className="text-gray-400 text-lg">No transaction data available</p>
               <p className="text-gray-500 text-sm mt-2">Please check the transaction hash or try again later.</p>
             </div>
@@ -519,6 +516,24 @@ export default function TransactionDetails() {
       </main>
       
       <Footer />
+
+      {/* Copy Notification */}
+      <AnimatePresence>
+        {showCopyNotification && (
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-6 left-6 z-50 bg-slate-800/90 backdrop-blur-sm border border-slate-700/50 rounded-lg px-4 py-3 shadow-lg"
+          >
+            <div className="flex items-center gap-2">
+              <FiCheck className="w-4 h-4 text-green-400" />
+              <span className="text-white text-sm">Address copied to clipboard</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

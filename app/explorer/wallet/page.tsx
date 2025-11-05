@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Header from "../../components/Header";
 import Footer from "../../components/Footer";
+import LoadingSpinner from "../../components/LoadingSpinner";
 
 type Order = {
   id: string;
@@ -127,12 +128,12 @@ export default function WalletDashboardPage() {
   }, [positions]);
 
   return (
-    <div className="h-screen bg-gray-950 text-gray-200 flex flex-col">
+    <div className="h-screen bg-[#0f172a] text-gray-200 flex flex-col">
       <Header />
 
-      <main className="flex-1 container mx-auto px-4 py-4 flex flex-col min-h-0">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-lg font-semibold text-white">Portfolio</h1>
+      <main className="flex-1 max-w-[1280px] mx-auto px-5 lg:px-8 pt-6 pb-0 flex flex-col min-h-0">
+        <div className="text-left mb-4 flex-shrink-0">
+          <h1 className="text-base font-semibold mb-0.5 text-white">Portfolio</h1>
           <div className="text-sm text-gray-400">
             {walletAddress ? (
               <span>Wallet: {walletAddress.slice(0, 6)}…{walletAddress.slice(-4)}</span>
@@ -143,16 +144,16 @@ export default function WalletDashboardPage() {
         </div>
 
         {/* Summary */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-          <div className="bg-gray-900/50 border border-gray-800 p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-4">
+          <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4">
             <div className="text-xs text-gray-400">Open Positions</div>
-            <div className="text-white text-lg font-semibold">{positions.filter(p => p.status === 'open').length}</div>
+            <div className="text-white text-base font-semibold">{positions.filter(p => p.status === 'open').length}</div>
           </div>
-          <div className="bg-gray-900/50 border border-gray-800 p-4">
+          <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4">
             <div className="text-xs text-gray-400">Closed Positions</div>
-            <div className="text-white text-lg font-semibold">{positions.filter(p => p.status === 'closed').length}</div>
+            <div className="text-white text-base font-semibold">{positions.filter(p => p.status === 'closed').length}</div>
           </div>
-          <div className="bg-gray-900/50 border border-gray-800 p-4">
+          <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4">
             <div className="text-xs text-gray-400">PnL (est.)</div>
             <div className={`text-lg font-semibold ${totalPnLSummary.value >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {totalPnLSummary.value >= 0 ? '+' : '-'}${Math.abs(totalPnLSummary.value).toFixed(2)}
@@ -162,7 +163,7 @@ export default function WalletDashboardPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex-shrink-0 border-b border-gray-800 mb-2">
+        <div className="flex-shrink-0 border-b border-gray-700/50 mb-2">
           <div className="flex gap-6 text-sm">
             <button onClick={() => setActiveTab('orders')} className={`pb-2 ${activeTab==='orders' ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-300'}`}>Orders</button>
             <button onClick={() => setActiveTab('positions')} className={`pb-2 ${activeTab==='positions' ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-300'}`}>Positions</button>
@@ -174,13 +175,15 @@ export default function WalletDashboardPage() {
           {activeTab === 'orders' && (
             <div className="h-full flex flex-col">
               {ordersLoading ? (
-                <div className="p-6 text-center text-gray-400">Loading orders...</div>
+                <div className="p-6 text-center flex items-center justify-center">
+                  <LoadingSpinner variant="dots" size="md" text="Loading orders..." />
+                </div>
               ) : orders.length === 0 ? (
                 <div className="p-6 text-center text-gray-400">No orders yet.</div>
               ) : (
                 <div className="flex-1 min-h-0 overflow-y-auto pb-40 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                   <table className="w-full text-sm">
-                    <thead className="text-xs text-gray-400 border-b border-gray-800 sticky top-0 bg-gray-950">
+                    <thead className="text-xs text-gray-400 border-b border-gray-700/50 sticky top-0 bg-slate-800/30">
                       <tr>
                         <th className="text-left py-2 pl-4">Time</th>
                         <th className="text-left py-2">Type</th>
@@ -192,7 +195,7 @@ export default function WalletDashboardPage() {
                     </thead>
                     <tbody>
                       {orders.map((o) => (
-                        <tr key={o.id} className="border-b border-gray-900">
+                        <tr key={o.id} className="border-b border-gray-700/30">
                           <td className="py-2 pl-4 text-gray-300">{formatTimeAgo(o.timestamp)}</td>
                           <td className="py-2"><span className={`font-medium ${o.type==='buy' ? 'text-green-400' : 'text-red-400'}`}>{o.type.toUpperCase()}</span></td>
                           <td className="py-2 text-gray-300">{o.tokenSymbol}</td>
@@ -211,13 +214,15 @@ export default function WalletDashboardPage() {
           {activeTab === 'positions' && (
             <div className="h-full flex flex-col">
               {positionsLoading ? (
-                <div className="p-6 text-center text-gray-400">Loading positions...</div>
+                <div className="p-6 text-center flex items-center justify-center">
+                  <LoadingSpinner variant="dots" size="md" text="Loading positions..." />
+                </div>
               ) : positions.length === 0 ? (
                 <div className="p-6 text-center text-gray-400">No positions yet.</div>
               ) : (
                 <div className="flex-1 min-h-0 overflow-y-auto pb-40 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                   <table className="w-full text-sm">
-                    <thead className="text-xs text-gray-400 border-b border-gray-800 sticky top-0 bg-gray-950">
+                    <thead className="text-xs text-gray-400 border-b border-gray-700/50 sticky top-0 bg-slate-800/30">
                       <tr>
                         <th className="text-left py-2 pl-4">Token</th>
                         <th className="text-left py-2">Amount</th>
@@ -232,7 +237,7 @@ export default function WalletDashboardPage() {
                         const pnlPct = p.pnlPercentage ?? 0;
                         const pnlColor = pnlPct >= 0 ? 'text-green-400' : 'text-red-400';
                         return (
-                          <tr key={p.id} className="border-b border-gray-900">
+                          <tr key={p.id} className="border-b border-gray-700/30">
                             <td className="py-2 pl-4 text-gray-300">{p.tokenSymbol}</td>
                             <td className="py-2 text-gray-300">{parseFloat(p.amount).toLocaleString()}</td>
                             <td className="py-2 text-gray-300">${parseFloat(p.avgPrice).toFixed(6)}</td>

@@ -5,69 +5,59 @@ import { motion, AnimatePresence } from "framer-motion";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import ReferralModal from "../components/ReferralModal";
+import RefereeStatsModal from "../components/RefereeStatsModal";
 import { useAuth } from "../providers";
 import { useRewards } from "../hooks/useRewards";
 import { 
-  FaTrophy, 
   FaUserFriends,
-  FaCoins,
   FaShare,
-  FaCrown,
-  FaGem,
-  FaMedal,
-  FaAward,
   FaEdit,
   FaCheckCircle,
   FaExclamationCircle
 } from "react-icons/fa";
-import { FiTrendingUp, FiX } from "react-icons/fi";
+import { FiX } from "react-icons/fi";
 import { SiEthereum } from "react-icons/si";
 
-// Proper tier definitions with gaming/degen themed names and colors
+// Proper tier definitions matching app/api/tiers/route.ts
 const TIERS = {
   normie: { 
     name: "Normie", 
-    cashback: 0.01, 
+    cashback: 0.05,  // 5% of remaining fee
     color: "text-gray-400", 
     bgColor: "bg-gray-500/10",
     borderColor: "border-gray-500/30",
-    icon: FaMedal, 
     minPoints: 0 
   },
   degen: { 
     name: "Degen", 
-    cashback: 0.015, 
+    cashback: 0.10,  // 10% of remaining fee
     color: "text-orange-500", 
     bgColor: "bg-orange-500/10",
     borderColor: "border-orange-500/30",
-    icon: FaAward, 
-    minPoints: 1000 
+    minPoints: 2000 
   },
-  whale: { 
-    name: "Whale", 
-    cashback: 0.02, 
-    color: "text-blue-500", 
-    bgColor: "bg-blue-500/10",
-    borderColor: "border-blue-500/30",
-    icon: FaTrophy, 
-    minPoints: 5000 
+  alpha: { 
+    name: "Alpha", 
+    cashback: 0.15,  // 15% of remaining fee
+    color: "text-green-500", 
+    bgColor: "bg-green-500/10",
+    borderColor: "border-green-500/30",
+    minPoints: 8000 
   },
-  legend: { 
-    name: "Legend", 
-    cashback: 0.025, 
+  mogul: { 
+    name: "Mogul", 
+    cashback: 0.20,  // 20% of remaining fee
+    color: "text-yellow-500", 
+    bgColor: "bg-yellow-500/10",
+    borderColor: "border-yellow-500/30",
+    minPoints: 20000 
+  },
+  titan: { 
+    name: "Titan", 
+    cashback: 0.25,  // 25% of remaining fee
     color: "text-purple-500", 
     bgColor: "bg-purple-500/10",
     borderColor: "border-purple-500/30",
-    icon: FaGem, 
-    minPoints: 15000 
-  },
-  god: { 
-    name: "God", 
-    cashback: 0.03, 
-    color: "text-yellow-400", 
-    bgColor: "bg-yellow-500/10",
-    borderColor: "border-yellow-500/30",
-    icon: FaCrown, 
     minPoints: 50000 
   }
 };
@@ -87,10 +77,7 @@ const mockUserData = {
   referralBonusEligible: false, // Will be set to true when user uses a referral code
   referralBonusClaimed: false, // Will be set to true after first trade
   referralCodeEdited: false, // Will be set to true after user edits their referral code
-  quests: [
-    { id: 1, title: "Refer 3 people", points: 1500, progress: 0, target: 3, icon: FaUserFriends, color: "text-green-500" },
-    { id: 2, title: "Trade 5 ETH volume", points: 1000, progress: 0, target: 5, icon: FiTrendingUp, color: "text-blue-500" }
-  ]
+  quests: []
 };
 
 function fadeInUp(delay = 0) {
@@ -164,6 +151,7 @@ export default function RewardsPage() {
   const { user } = useAuth();
   const { 
     rewards, 
+    referralData,
     loading, 
     error, 
     claimRewards,
@@ -173,6 +161,8 @@ export default function RewardsPage() {
   
   const [showReferralModal, setShowReferralModal] = useState(false);
   const [showEditReferralModal, setShowEditReferralModal] = useState(false);
+  const [showRefereeStatsModal, setShowRefereeStatsModal] = useState(false);
+  const [selectedRefereeId, setSelectedRefereeId] = useState<string | null>(null);
   const [newReferralCode, setNewReferralCode] = useState('');
   const [editError, setEditError] = useState('');
   
@@ -201,7 +191,7 @@ export default function RewardsPage() {
   const userData = rewards || mockUserData;
   
   // Calculate next tier info
-  const currentTier = TIERS[userData.tier as keyof typeof TIERS];
+  const currentTier = TIERS[userData.tier as keyof typeof TIERS] || TIERS.normie;
   const nextTier = Object.values(TIERS).find(tier => tier.minPoints > userData.points);
   const progressToNextTier = nextTier 
     ? Math.min(100, (userData.points / nextTier.minPoints) * 100)
@@ -280,29 +270,19 @@ export default function RewardsPage() {
                         <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-3">
               {/* Points */}
               <motion.div {...fadeInUp(0.2)} className="bg-gray-900/80 border border-gray-800/50 rounded-lg p-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:border-gray-700/60">
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                    <FaCoins className="w-4 h-4 text-blue-400" />
-                  </div>
-                  <div>
-                    <p className="text-gray-400 text-xs">Total Points</p>
-                    <p className="text-lg font-bold text-gray-200">
-                      {isLoading ? "..." : userData.points.toLocaleString()}
-                    </p>
-                  </div>
+                <div>
+                  <p className="text-gray-400 text-xs mb-1">Total Points</p>
+                  <p className="text-lg font-bold text-gray-200">
+                    {isLoading ? "..." : userData.points.toLocaleString()}
+                  </p>
                 </div>
               </motion.div>
 
                           {/* Tier */}
               <motion.div {...fadeInUp(0.3)} className="bg-gray-900/80 border border-gray-800/50 rounded-lg p-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:border-gray-700/60">
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                    <currentTier.icon className="w-4 h-4 text-blue-400" />
-                  </div>
-                  <div>
-                    <p className="text-gray-400 text-xs">Current Tier</p>
-                    <p className="text-lg font-bold text-gray-200">{currentTier.name}</p>
-                  </div>
+                <div>
+                  <p className="text-gray-400 text-xs mb-1">Current Tier</p>
+                  <p className="text-lg font-bold text-gray-200">{currentTier.name}</p>
                 </div>
               </motion.div>
 
@@ -324,35 +304,17 @@ export default function RewardsPage() {
 
                                                     {/* Referrals */}
                                <motion.div {...fadeInUp(0.5)} className="bg-gray-900/80 border border-gray-800/50 rounded-lg p-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:border-gray-700/60">
-                 <div className="flex items-center space-x-3">
-                   <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                     <FaUserFriends className="w-4 h-4 text-blue-400" />
-                   </div>
-                   <div>
-                     <p className="text-gray-400 text-xs">Referrals</p>
-                     <p className="text-lg font-bold text-gray-200">{userData.referrals}</p>
-                   </div>
+                 <div>
+                   <p className="text-gray-400 text-xs mb-1">Referrals</p>
+                   <p className="text-lg font-bold text-gray-200">{userData.referrals}</p>
                  </div>
                </motion.div>
 
-                           {/* Referral Bonus Status */}
+                           {/* Cashback Rate */}
                <motion.div {...fadeInUp(0.6)} className="bg-gray-900/80 border border-gray-800/50 rounded-lg p-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:border-gray-700/60">
-                 <div className="flex items-center space-x-3">
-                   <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center">
-                     <FaAward className="w-4 h-4 text-green-400" />
-                   </div>
-                   <div>
-                     <p className="text-gray-400 text-xs">Referral Bonus</p>
-                     {userData.referredBy ? (
-                       userData.referralBonusClaimed ? (
-                         <p className="text-lg font-bold text-green-400">Claimed</p>
-                       ) : (
-                         <p className="text-lg font-bold text-gray-200">Available</p>
-                       )
-                     ) : (
-                       <p className="text-lg font-bold text-gray-200">None</p>
-                     )}
-                   </div>
+                 <div>
+                   <p className="text-gray-400 text-xs mb-1">Cashback Rate</p>
+                   <p className="text-lg font-bold text-green-400">{(currentTier.cashback * 100).toFixed(0)}%</p>
                  </div>
                </motion.div>
              </div>
@@ -382,35 +344,36 @@ export default function RewardsPage() {
               )}
             </motion.div>
 
-                         {/* Daily Quests */}
+                         {/* Trading Stats */}
              <motion.div {...fadeInUp(0.7)} className="bg-gray-900/80 border border-gray-800/50 rounded-lg p-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:border-gray-700/60">
-               <h3 className="text-sm font-semibold text-gray-200 mb-3">Daily Quests</h3>
+               <h3 className="text-sm font-semibold text-gray-200 mb-3">Trading Stats</h3>
                <div className="space-y-3">
-                 {userData.quests.map((quest) => (
-                   <div key={quest.id} className="p-3 bg-gray-800/50 rounded-md border border-gray-700/30 hover:bg-gray-800/70 transition-all duration-200 hover:border-gray-600/50">
-                     <div className="flex items-center space-x-3 mb-2">
-                       <div className="w-6 h-6 bg-gray-700 rounded-md flex items-center justify-center">
-                         <quest.icon className="w-3 h-3 text-gray-400" />
-                       </div>
-                                               <div className="flex-1">
-                          <p className="text-xs font-medium text-gray-200">{quest.title}</p>
-                          <p className="text-xs text-blue-400 font-bold flex items-center space-x-1">
-                            <SiEthereum className="w-3 h-3 text-gray-400" />
-                            <span>+{quest.points} pts</span>
-                          </p>
-                        </div>
-                     </div>
-                     <div className="w-full bg-gray-700 rounded-full h-1 overflow-hidden">
-                       <div 
-                         className="bg-blue-500 h-1 rounded-full transition-all duration-500 ease-out"
-                         style={{ width: `${(quest.progress / quest.target) * 100}%` }}
-                       ></div>
-                     </div>
-                     <div className="flex justify-between text-xs text-gray-500 mt-1">
-                       <span>{quest.progress}/{quest.target}</span>
-                     </div>
+                 <div className="p-3 bg-gray-800/50 rounded-md border border-gray-700/30">
+                   <div className="flex justify-between items-center mb-2">
+                     <p className="text-xs text-gray-400">Total Volume</p>
+                     <p className="text-sm font-bold text-gray-200">
+                       ${isLoading ? "..." : userData.volumeTraded?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}
+                     </p>
                    </div>
-                 ))}
+                 </div>
+                 <div className="p-3 bg-gray-800/50 rounded-md border border-gray-700/30">
+                   <div className="flex justify-between items-center mb-2">
+                     <p className="text-xs text-gray-400">Total Transactions</p>
+                     <p className="text-sm font-bold text-gray-200">
+                       {isLoading ? "..." : userData.transactions || 0}
+                     </p>
+                   </div>
+                 </div>
+                 <div className="p-3 bg-gray-800/50 rounded-md border border-gray-700/30">
+                   <div className="flex justify-between items-center mb-2">
+                     <p className="text-xs text-gray-400">Avg. Trade Size</p>
+                     <p className="text-sm font-bold text-gray-200">
+                       ${isLoading ? "..." : userData.transactions > 0 
+                         ? (userData.volumeTraded / userData.transactions).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                         : "0.00"}
+                     </p>
+                   </div>
+                 </div>
                </div>
              </motion.div>
 
@@ -510,11 +473,57 @@ export default function RewardsPage() {
                            {/* Referral List */}
               <div className="space-y-3">
                 <h4 className="text-xs font-medium text-gray-300 mb-3">Recent Referrals</h4>
-                <div className="max-h-32 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
-                  {userData.referrals > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pr-2">
+                <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                  {referralData && referralData.referrals.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-2">
+                      {referralData.referrals.map((referral: any, i: number) => (
+                        <div 
+                          key={referral.id || i} 
+                          onClick={() => {
+                            setSelectedRefereeId(referral.refereeId);
+                            setShowRefereeStatsModal(true);
+                          }}
+                          className="p-3 bg-gray-800 rounded-md border border-gray-700/30 hover:border-blue-500/50 hover:bg-gray-800/70 cursor-pointer transition-all duration-200"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3 flex-1">
+                              <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                                <FaUserFriends className="w-4 h-4 text-blue-400" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-gray-200 truncate">
+                                  {referral.refereeId ? `${referral.refereeId.slice(0, 8)}...${referral.refereeId.slice(-4)}` : `Referral #${i + 1}`}
+                                </p>
+                                <p className="text-xs text-blue-400">
+                                  {referral.timestamp ? new Date(referral.timestamp).toLocaleDateString() : 'Active'}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-gray-400 mb-1">Earned</p>
+                              <p className="text-xs font-bold text-green-400 flex items-center space-x-1">
+                                <SiEthereum className="w-3 h-3 text-gray-400" />
+                                <span>{(referral.referralReward || 0).toFixed(4)}</span>
+                              </p>
+                            </div>
+                          </div>
+                          {referral.swapValueUSD && (
+                            <div className="mt-2 pt-2 border-t border-gray-700/30">
+                              <p className="text-xs text-gray-400">
+                                Volume: ${referral.swapValueUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : userData.referrals > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-2">
                       {Array.from({ length: Math.min(userData.referrals, 6) }, (_, i) => (
-                        <div key={i} className="p-3 bg-gray-800 rounded-md border border-gray-700/30">
+                        <div 
+                          key={i} 
+                          className="p-3 bg-gray-800 rounded-md border border-gray-700/30 hover:border-blue-500/50 hover:bg-gray-800/70 cursor-pointer transition-all duration-200"
+                        >
                           <div className="flex items-center space-x-3">
                             <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
                               <FaUserFriends className="w-4 h-4 text-blue-400" />
@@ -547,15 +556,15 @@ export default function RewardsPage() {
 
                      <div className="flex items-center space-x-2">
                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                       <span>Earn a fee tier based on your level: 0.01% - 0.03% back</span>
+                       <span>Earn up to 0.1% - 0.3% back on trading fees</span>
                      </div>
                      <div className="flex items-center space-x-2">
                        <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
-                       <span>New users that use a code get their first $10 in fees back</span>
+                       <span>Referrers earn 30% of their referee's platform fee</span>
                      </div>
                      <div className="flex items-center space-x-2">
                        <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-                       <span>Referral rewards are paid in ETH on Base chain</span>
+                       <span>All rewards are paid in ETH on Base chain</span>
                      </div>
                    </div>
                  </div>
@@ -571,6 +580,18 @@ export default function RewardsPage() {
         isOpen={showReferralModal} 
         onClose={() => setShowReferralModal(false)} 
       />
+
+      {/* Referee Stats Modal */}
+      {selectedRefereeId && (
+        <RefereeStatsModal
+          isOpen={showRefereeStatsModal}
+          onClose={() => {
+            setShowRefereeStatsModal(false);
+            setSelectedRefereeId(null);
+          }}
+          refereeId={selectedRefereeId}
+        />
+      )}
 
       {/* Edit Referral Code Modal */}
       {showEditReferralModal && (

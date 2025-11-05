@@ -4,9 +4,10 @@ import React, { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { ChevronDownIcon } from "@heroicons/react/24/solid";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { useAuth, useLoginModal } from "@/app/providers";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage } from "@/lib/firebase";
+import { useAuth, useLoginModal, useWalletSystem } from "@/app/providers";
 import { useFavorites } from "@/app/hooks/useFavorites";
 import { useWatchlists } from "@/app/hooks/useWatchlists";
 
@@ -17,7 +18,9 @@ import GlobalSearch from "./GlobalSearch";
 import UserProfileDropdown from "./UserProfileDropdown";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { FiBarChart, FiMenu, FiX, FiStar, FiTrash2, FiUser } from "react-icons/fi";
+import { FiBarChart, FiMenu, FiX, FiStar, FiTrash2, FiUser, FiSettings, FiCheck, FiAlertCircle } from "react-icons/fi";
+import { createPortal } from "react-dom";
+import Image from "next/image";
 
 // Favorite Token Item Component
 const FavoriteTokenItem = ({ poolAddress, onRemove }: { poolAddress: string; onRemove: () => void }) => {
@@ -140,6 +143,7 @@ const Header: React.FC = () => {
   const [showWatchlistsModal, setShowWatchlistsModal] = useState(false);
   const [expandedWatchlist, setExpandedWatchlist] = useState<string | null>(null);
   const [expandedFavorites, setExpandedFavorites] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const { setShowLoginModal, setRedirectTo } = useLoginModal();
 
 
@@ -311,18 +315,28 @@ const Header: React.FC = () => {
                 {/* Action Buttons */}
                 <div className="hidden lg:flex items-center space-x-2">
                   <motion.button
-                    className="relative flex items-center justify-center w-10 h-10 bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-blue-400 rounded-lg transition-all duration-200 border border-gray-700/50 hover:border-blue-500/50"
+                    className="relative flex items-center justify-center w-8 h-8 bg-gray-950/50 backdrop-blur-sm hover:bg-gray-900/50 text-white hover:text-blue-400 rounded-lg transition-all duration-200 border border-gray-600 hover:border-gray-500"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     title="Watchlist"
                     onClick={() => setShowWatchlistsModal(true)}
                   >
-                    <FiStar className="w-4 h-4" />
+                    <FiStar className="w-3.5 h-3.5" />
                     {(favorites.length > 0 || watchlists.length > 0) && (
-                      <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                      <span className="absolute -top-1.5 -right-1.5 bg-blue-500 text-white text-[10px] rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center font-bold leading-none">
                         {favorites.length + watchlists.length > 9 ? '9+' : favorites.length + watchlists.length}
                       </span>
                     )}
+                  </motion.button>
+                  
+                  <motion.button
+                    className="flex items-center justify-center w-8 h-8 bg-gray-950/50 backdrop-blur-sm hover:bg-gray-900/50 text-white hover:text-blue-400 rounded-lg transition-all duration-200 border border-gray-600 hover:border-gray-500"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    title="Settings"
+                    onClick={() => setShowSettingsModal(true)}
+                  >
+                    <FiSettings className="w-3.5 h-3.5" />
                   </motion.button>
                 </div>
 
@@ -344,7 +358,7 @@ const Header: React.FC = () => {
                        setRedirectTo(pathname);
                        setShowLoginModal(true);
                      }}
-                     className="w-10 h-10 rounded-full bg-gray-800 border border-blue-400 flex items-center justify-center hover:bg-gray-700 hover:border-blue-300 transition-all duration-200"
+                     className="w-8 h-8 rounded-full bg-gray-950/50 backdrop-blur-sm border border-gray-600 flex items-center justify-center hover:bg-gray-900/50 hover:border-gray-500 transition-all duration-200"
                    >
                      <FiUser className="w-5 h-5 text-gray-300" />
                    </button>
@@ -682,9 +696,379 @@ const Header: React.FC = () => {
         onClose={() => setShowWalletDropdown(false)}
         walletSystem="self-custodial"
       />
-      
+
+      {/* Settings Modal */}
+      {showSettingsModal && createPortal(
+        <SettingsModal
+          isOpen={showSettingsModal}
+          onClose={() => setShowSettingsModal(false)}
+        />
+      , document.body
+      )}
 
     </>
+  );
+};
+
+// Settings Modal Component
+const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
+  const { user } = useAuth();
+  const { selfCustodialWallet } = useWalletSystem();
+  const walletAddress = selfCustodialWallet?.address;
+  const [profilePicture, setProfilePicture] = useState<string>("");
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [uploadMessage, setUploadMessage] = useState('');
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsStatus, setSettingsStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [settingsMessage, setSettingsMessage] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [notifications, setNotifications] = useState({
+    email: true,
+    push: true,
+    trading: true,
+    news: false
+  });
+  const [privacy, setPrivacy] = useState({
+    showProfile: true,
+    showTrades: true,
+    showBalance: false
+  });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // Fetch user profile data
+  useEffect(() => {
+    if (user || walletAddress) {
+      const fetchProfile = async () => {
+        try {
+          const documentId = walletAddress || user?.uid;
+          if (!documentId) return;
+          
+          const userDocRef = doc(db, "users", documentId);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setProfilePicture(userData.profilePicture || userData.photoURL || "");
+            setDisplayName(userData.displayName || "");
+          }
+        } catch (error) {
+          console.error("Error fetching profile:", error);
+        }
+      };
+      fetchProfile();
+    }
+  }, [user, walletAddress]);
+
+  // Handle click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (isOpen && modalRef.current && !modalRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen, onClose]);
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!file.type.startsWith('image/')) {
+      setUploadStatus('error');
+      setUploadMessage('Please select a valid image file');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadStatus('error');
+      setUploadMessage('Image size must be less than 5MB');
+      return;
+    }
+
+    setUploadingImage(true);
+    setUploadStatus('idle');
+
+    try {
+      const storageRef = ref(storage, `users/${user.uid}/profile/${Date.now()}-${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      setProfilePicture(downloadURL);
+
+      const documentId = user.uid;
+      await updateDoc(doc(db, "users", documentId), {
+        profilePicture: downloadURL,
+        photoURL: downloadURL,
+        updatedAt: new Date(),
+      });
+
+      setUploadStatus('success');
+      setUploadMessage('Profile picture updated!');
+      setTimeout(() => {
+        setUploadStatus('idle');
+        setUploadMessage('');
+      }, 3000);
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      setUploadStatus('error');
+      setUploadMessage('Failed to upload image');
+      setTimeout(() => {
+        setUploadStatus('idle');
+        setUploadMessage('');
+      }, 5000);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    if (!user) return;
+    
+    setSavingSettings(true);
+    setSettingsStatus('idle');
+    
+    try {
+      const documentId = user.uid;
+      await updateDoc(doc(db, "users", documentId), {
+        displayName: displayName.trim(),
+        updatedAt: new Date(),
+      });
+      
+      setSettingsStatus('success');
+      setSettingsMessage('Settings saved successfully!');
+      setTimeout(() => {
+        setSettingsStatus('idle');
+        setSettingsMessage('');
+      }, 3000);
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      setSettingsStatus('error');
+      setSettingsMessage('Failed to save settings');
+      setTimeout(() => {
+        setSettingsStatus('idle');
+        setSettingsMessage('');
+      }, 5000);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      >
+        <motion.div
+          ref={modalRef}
+          className="bg-gray-900 rounded-xl w-full max-w-[500px] flex flex-col border border-gray-700 max-h-[85vh]"
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between p-4 border-b border-gray-700">
+            <h3 className="text-white text-xl font-semibold">Account Settings</h3>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+            >
+              <FiX className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {/* Profile Section */}
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <h4 className="text-white font-medium mb-2">Profile Information</h4>
+              <div className="space-y-2">
+                <div className="flex items-center space-x-4">
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-700 border-2 border-gray-600">
+                      {profilePicture ? (
+                        <Image
+                          src={profilePicture}
+                          alt="Profile"
+                          width={64}
+                          height={64}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <FiUser className="w-8 h-8 text-gray-400" />
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingImage}
+                      className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-full flex items-center justify-center transition-colors"
+                    >
+                      {uploadingImage ? (
+                        <div className="animate-spin rounded-full h-3 w-3 border-b border-white"></div>
+                      ) : (
+                        <FiUser className="w-3 h-3 text-white" />
+                      )}
+                    </button>
+                  </div>
+                  <div className="flex-1">
+                    <h5 className="text-white font-medium text-sm">Profile Picture</h5>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingImage}
+                      className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-xs transition-colors mt-2"
+                    >
+                      {uploadingImage ? 'Uploading...' : 'Upload Image'}
+                    </button>
+                    {uploadStatus !== 'idle' && uploadMessage && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`mt-2 p-2 rounded-lg text-xs flex items-center space-x-2 ${
+                          uploadStatus === 'success' 
+                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                            : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                        }`}
+                      >
+                        {uploadStatus === 'success' ? (
+                          <FiCheck className="w-3 h-3" />
+                        ) : (
+                          <FiAlertCircle className="w-3 h-3" />
+                        )}
+                        <span>{uploadMessage}</span>
+                      </motion.div>
+                    )}
+                  </div>
+                </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+
+                <div>
+                  <label className="block text-gray-300 text-sm mb-1">Display Name</label>
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder="Enter your display name"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Notifications Section */}
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <h4 className="text-white font-medium mb-2">Notifications</h4>
+              <div className="space-y-2">
+                {Object.entries(notifications).map(([key, value]) => (
+                  <label key={key} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors cursor-pointer">
+                    <span className="text-gray-300 text-sm font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={value}
+                        onChange={(e) => setNotifications(prev => ({ ...prev, [key]: e.target.checked }))}
+                        className="sr-only"
+                      />
+                      <div className={`w-10 h-6 rounded-full transition-colors duration-200 flex items-center ${
+                        value ? 'bg-blue-600' : 'bg-gray-600'
+                      }`}>
+                        <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                          value ? 'translate-x-5' : 'translate-x-1'
+                        }`}></div>
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Privacy Section */}
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <h4 className="text-white font-medium mb-2">Privacy</h4>
+              <div className="space-y-2">
+                {Object.entries(privacy).map(([key, value]) => (
+                  <label key={key} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors cursor-pointer">
+                    <span className="text-gray-300 text-sm font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={value}
+                        onChange={(e) => setPrivacy(prev => ({ ...prev, [key]: e.target.checked }))}
+                        className="sr-only"
+                      />
+                      <div className={`w-10 h-6 rounded-full transition-colors duration-200 flex items-center ${
+                        value ? 'bg-blue-600' : 'bg-gray-600'
+                      }`}>
+                        <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                          value ? 'translate-x-5' : 'translate-x-1'
+                        }`}></div>
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Settings Status Messages */}
+            {settingsStatus !== 'idle' && settingsMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`p-3 rounded-lg text-sm flex items-center space-x-2 ${
+                  settingsStatus === 'success' 
+                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                    : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                }`}
+              >
+                {settingsStatus === 'success' ? (
+                  <FiCheck className="w-4 h-4" />
+                ) : (
+                  <FiAlertCircle className="w-4 h-4" />
+                )}
+                <span>{settingsMessage}</span>
+              </motion.div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3 p-4 border-t border-gray-700">
+              <button
+                onClick={onClose}
+                className="flex-1 px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveSettings}
+                disabled={savingSettings}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
+              >
+                {savingSettings ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Changes</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 };
 

@@ -2,12 +2,15 @@
 
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useParams } from "next/navigation";
 import Header from "@/app/components/Header";
 import Footer from "../../../components/Footer";
+import LoadingSpinner from "../../../components/LoadingSpinner";
 import Link from "next/link";
 import Image from "next/image";
 import toast from "react-hot-toast";
 import { SiEthereum } from "react-icons/si";
+import { FiCopy, FiCheck } from "react-icons/fi";
 
 // Types
 interface Token {
@@ -116,17 +119,17 @@ const formatTokenPrice = (price: number) => {
   }
 };
 
-  const formatEthValue = (value: number) => {
-    if (value === 0) {
-      return '0.0000';
-    } else if (value < 0.0001) {
-      return value.toFixed(8);
-    } else if (value < 1) {
-      return value.toFixed(4);
-    } else {
-      return value.toFixed(4);
-    }
-  };
+const formatEthValue = (value: number) => {
+  if (value === 0) {
+    return '0.0000';
+  } else if (value < 0.0001) {
+    return value.toFixed(8);
+  } else if (value < 1) {
+    return value.toFixed(4);
+  } else {
+    return value.toFixed(4);
+  }
+};
 
 const formatTime = (timestamp: number) => {
   const date = new Date(timestamp);
@@ -138,15 +141,20 @@ const getTransactionType = (tx: Transaction) => {
   return "Transfer";
 };
 
-export default function WalletPage({ params }: { params: Promise<{ walletAddress: string }> }) {
-  const [walletAddress, setWalletAddress] = useState<string>("");
+export default function WalletPage() {
+  const params = useParams();
+  const walletAddressParam = (params?.walletAddress as string) || "";
+  // Decode the address in case it's URL encoded
+  const decodedAddress = walletAddressParam ? decodeURIComponent(walletAddressParam) : "";
+  const [walletAddress, setWalletAddress] = useState<string>(decodedAddress);
   const [walletData, setWalletData] = useState<WalletData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [ethPrice, setEthPrice] = useState<number>(0);
 
   const [activeTab, setActiveTab] = useState<'overview' | 'tokens' | 'transactions'>('tokens');
-  const [copied, setCopied] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [showCopyNotification, setShowCopyNotification] = useState<boolean>(false);
   const [tokenLogos, setTokenLogos] = useState<Record<string, string>>({});
   const [logoLoading, setLogoLoading] = useState<Record<string, boolean>>({});
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -187,15 +195,31 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
     return hiddenTokens.has(contractAddress);
   };
 
-  const copyToClipboard = async (text: string) => {
+  const copyToClipboard = async (text: string, field: string) => {
     try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      toast.success('Address copied to clipboard!');
-      setTimeout(() => setCopied(false), 2000);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback for browsers that don't support clipboard API
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      setCopiedField(field);
+      setShowCopyNotification(true);
+      setTimeout(() => {
+        setCopiedField(null);
+        setShowCopyNotification(false);
+      }, 2000);
     } catch (err) {
       console.error('Failed to copy: ', err);
-      toast.error('Failed to copy address');
     }
   };
 
@@ -304,20 +328,47 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
   };
 
   const getWalletAge = (firstTxDate?: number) => {
-    if (!firstTxDate) return 'Unknown';
+    if (!firstTxDate || firstTxDate <= 0) return 'Unknown';
     
     const now = Math.floor(Date.now() / 1000);
-    const diffInSeconds = now - firstTxDate;
+    let diffInSeconds = now - firstTxDate;
+    
+    // Handle edge case where timestamp might be in the future (shouldn't happen, but safety check)
+    if (diffInSeconds < 0) {
+      // If timestamp is in milliseconds, convert it
+      if (firstTxDate > 1e12) {
+        const firstTxDateSeconds = Math.floor(firstTxDate / 1000);
+        diffInSeconds = now - firstTxDateSeconds;
+      } else {
+        return 'Unknown';
+      }
+    }
+    
     const diffInDays = Math.floor(diffInSeconds / (24 * 60 * 60));
     const diffInYears = Math.floor(diffInDays / 365);
     const remainingDays = diffInDays % 365;
     
     if (diffInYears > 0) {
       return `${diffInYears} yr ${remainingDays} days ago`;
-    } else {
+    } else if (diffInDays > 0) {
       return `${diffInDays} days ago`;
+    } else {
+      const diffInHours = Math.floor(diffInSeconds / (60 * 60));
+      if (diffInHours > 0) {
+        return `${diffInHours} hours ago`;
+      } else {
+        const diffInMinutes = Math.floor(diffInSeconds / 60);
+        return diffInMinutes > 0 ? `${diffInMinutes} minutes ago` : 'Just now';
+      }
     }
   };
+
+  // Sync wallet address with route parameter
+  useEffect(() => {
+    if (decodedAddress && decodedAddress !== walletAddress) {
+      setWalletAddress(decodedAddress);
+    }
+  }, [decodedAddress, walletAddress]);
 
   // Fetch ETH price
   useEffect(() => {
@@ -372,28 +423,28 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
 
   // Recalculate wallet data when ETH price changes
   useEffect(() => {
-    console.log('ETH price useEffect triggered - ethPrice:', ethPrice, 'walletData exists:', !!walletData);
-    if (walletData && ethPrice > 0) {
-      console.log('Recalculating wallet data with ETH price:', ethPrice);
-      const ethUsdValue = walletData.ethBalance * ethPrice;
-      const totalTokenValue = walletData.tokens.reduce((sum, token) => sum + (token.usdValue || 0), 0);
-      const totalUsdValue = ethUsdValue + totalTokenValue;
-
-      console.log('ETH Balance:', walletData.ethBalance);
-      console.log('ETH USD Value:', ethUsdValue);
-      console.log('Total Token Value:', totalTokenValue);
-      console.log('Total USD Value:', totalUsdValue);
-
-      const portfolioAllocation = {
-        eth: totalUsdValue > 0 ? (ethUsdValue / totalUsdValue) * 100 : 0,
-        tokens: totalUsdValue > 0 ? (totalTokenValue / totalUsdValue) * 100 : 0
-      };
-
-      console.log('Portfolio allocation:', portfolioAllocation);
-
+    if (ethPrice > 0) {
       setWalletData(prev => {
         if (!prev) return null;
-        console.log('Updating wallet data with new ETH values');
+        
+        // Only recalculate if ETH price has actually changed the values
+        const ethUsdValue = prev.ethBalance * ethPrice;
+        const totalTokenValue = prev.tokens.reduce((sum, token) => sum + (token.usdValue || 0), 0);
+        const totalUsdValue = ethUsdValue + totalTokenValue;
+
+        const portfolioAllocation = {
+          eth: totalUsdValue > 0 ? (ethUsdValue / totalUsdValue) * 100 : 0,
+          tokens: totalUsdValue > 0 ? (totalTokenValue / totalUsdValue) * 100 : 0
+        };
+
+        // Only update if values actually changed to prevent unnecessary re-renders
+        if (prev.ethUsdValue === ethUsdValue && 
+            prev.totalUsdValue === totalUsdValue &&
+            prev.portfolioAllocation?.eth === portfolioAllocation.eth &&
+            prev.portfolioAllocation?.tokens === portfolioAllocation.tokens) {
+          return prev;
+        }
+
         return {
           ...prev,
           ethUsdValue,
@@ -401,17 +452,16 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
           portfolioAllocation
         };
       });
-    } else {
-      console.log('Skipping recalculation - ethPrice:', ethPrice, 'walletData exists:', !!walletData);
     }
-  }, [ethPrice, walletData]);
+  }, [ethPrice]); // Only depend on ethPrice, not walletData
 
   // Fetch wallet data
   useEffect(() => {
     async function fetchData() {
+      if (!decodedAddress) return;
+      
       try {
-        const resolvedParams = await params;
-        const address = resolvedParams.walletAddress;
+        const address = decodedAddress;
         setWalletAddress(address);
         
 
@@ -440,9 +490,9 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
           body: JSON.stringify({ 
             action: 'transactions', 
             address,
-            page: txPage,
-            limit: txLimit,
-            filter: txFilter
+            page: 1,
+            limit: 5,
+            filter: 'all'
           })
         });
         const txResponseData = await txResponse.json();
@@ -486,88 +536,89 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
           pairAddress: ''
         }));
 
-                 // Fetch token prices and images from DEX Screener - using exact same pattern as WalletDropdown
-         const tokenPromises = tokens.map(async (token: Token) => {
-           try {
-             const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${token.contractAddress}`);
-             const data = await response.json();
-             
-             if (data.pairs && data.pairs.length > 0) {
-               // Get the most liquid pair on Base (exact same logic as WalletDropdown)
-               const basePairs = data.pairs.filter((pair: any) => 
-                 pair.chainId === 'base' || pair.dexId === 'uniswap_v3' || pair.dexId === 'aerodrome'
-               );
-               
-               const pair = basePairs.length > 0 ? basePairs[0] : data.pairs[0];
-               
-               // Get logo using the same pattern as alchemy/wallet/route.ts
-               const tokenLogo = pair.info?.imageUrl || 
-                                pair.mediaContent?.previewImage?.small || 
-                                pair.baseToken?.image ||
-                                pair.baseToken?.logoURI ||
-                                pair.quoteToken?.logoURI ||
-                                `https://dexscreener.com/base/${token.contractAddress}/logo.png`;
-               
-               const tokenPrice = parseFloat(pair.priceUsd || "0");
-               const usdValue = parseFloat(token.balance) * tokenPrice;
-               totalTokenValue += usdValue;
-               
-               return { 
-                 ...token, 
-                 usdValue,
-                 priceUsd: tokenPrice,
-                 priceChange24h: parseFloat(pair.priceChange?.h24 || "0"),
-                 liquidity: pair.liquidity?.usd || 0,
-                 tokenImage: tokenLogo,
-                 volume24h: pair.volume?.h24 || 0,
-                 dexId: pair.dexId,
-                 pairAddress: pair.pairAddress
-               };
-             }
-           } catch (error) {
-             console.error(`Error fetching DEX data for ${token.symbol}:`, error);
-           }
-           
-           // Fallback to placeholder price - but mark as no valid logo
-           const tokenPrice = Math.random() * 100;
-           const usdValue = parseFloat(token.balance) * tokenPrice;
-           totalTokenValue += usdValue;
-           return { ...token, usdValue, priceUsd: tokenPrice, tokenImage: '' };
-         });
+        // Fetch token prices and images from DEX Screener - using exact same pattern as WalletDropdown
+        const tokenPromises = tokens.map(async (token: Token) => {
+          try {
+            const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${token.contractAddress}`);
+            const data = await response.json();
+            
+            if (data.pairs && data.pairs.length > 0) {
+              // Get the most liquid pair on Base (exact same logic as WalletDropdown)
+              const basePairs = data.pairs.filter((pair: any) => 
+                pair.chainId === 'base' || pair.dexId === 'uniswap_v3' || pair.dexId === 'aerodrome'
+              );
+              
+              const pair = basePairs.length > 0 ? basePairs[0] : data.pairs[0];
+              
+              // Get logo using the same pattern as alchemy/wallet/route.ts
+              const tokenLogo = pair.info?.imageUrl || 
+                               pair.mediaContent?.previewImage?.small || 
+                               pair.baseToken?.image ||
+                               pair.baseToken?.logoURI ||
+                               pair.quoteToken?.logoURI ||
+                               `https://dexscreener.com/base/${token.contractAddress}/logo.png`;
+              
+              const tokenPrice = parseFloat(pair.priceUsd || "0");
+              const usdValue = parseFloat(token.balance) * tokenPrice;
+              
+              return { 
+                ...token, 
+                usdValue,
+                priceUsd: tokenPrice,
+                priceChange24h: parseFloat(pair.priceChange?.h24 || "0"),
+                liquidity: pair.liquidity?.usd || 0,
+                tokenImage: tokenLogo,
+                volume24h: pair.volume?.h24 || 0,
+                dexId: pair.dexId,
+                pairAddress: pair.pairAddress
+              };
+            }
+          } catch (error) {
+            console.error(`Error fetching DEX data for ${token.symbol}:`, error);
+          }
+          
+          // Fallback to placeholder price - but mark as no valid logo
+          const tokenPrice = Math.random() * 100;
+          const usdValue = parseFloat(token.balance) * tokenPrice;
+          return { ...token, usdValue, priceUsd: tokenPrice, tokenImage: '' };
+        });
         
         // Wait for all token price fetches to complete
         tokens = await Promise.all(tokenPromises);
         
-                 // Filter out tokens with ridiculous values and spam
-         tokens = tokens.filter((token: Token) => {
-           const tokenBalance = parseFloat(token.balance || '0');
-           
-           // Only show tokens that have a valid logo from DexScreener
-           if (!token.tokenImage || 
-               token.tokenImage === '' || 
-               token.tokenImage.includes('placeholder') ||
-               token.tokenImage.includes('dexscreener.com/base') && !token.tokenImage.includes('logo.png')) {
-             return false;
-           }
-           
-           // Filter out tokens with ridiculous token balances (likely spam/meme tokens)
-           if (tokenBalance > 1000000000) return false; // Over 1 billion tokens
-           
-           // Filter out tokens with very long names/symbols (likely spam)
-           if (token.name && token.name.length > 50) return false;
-           if (token.symbol && token.symbol.length > 20) return false;
-           
-           // Filter out tokens with suspicious names (likely spam)
-           const suspiciousKeywords = ['moon', 'doge', 'shib', 'inu', 'elon', 'safe', 'baby', 'rocket', 'moon', 'safe'];
-           const nameLower = token.name?.toLowerCase() || '';
-           const symbolLower = token.symbol?.toLowerCase() || '';
-           
-           if (suspiciousKeywords.some(keyword => nameLower.includes(keyword) || symbolLower.includes(keyword))) {
-             return false;
-           }
-           
-           return true;
-         });
+        // Calculate total token value after all promises resolve
+        totalTokenValue = tokens.reduce((sum, token) => sum + (token.usdValue || 0), 0);
+        
+        // Filter out tokens with ridiculous values and spam
+        tokens = tokens.filter((token: Token) => {
+          const tokenBalance = parseFloat(token.balance || '0');
+          
+          // Only show tokens that have a valid logo from DexScreener
+          if (!token.tokenImage || 
+              token.tokenImage === '' || 
+              token.tokenImage.includes('placeholder') ||
+              (token.tokenImage.includes('dexscreener.com/base') && !token.tokenImage.includes('logo.png'))) {
+            return false;
+          }
+          
+          // Filter out tokens with ridiculous token balances (likely spam/meme tokens)
+          if (tokenBalance > 1000000000) return false; // Over 1 billion tokens
+          
+          // Filter out tokens with very long names/symbols (likely spam)
+          if (token.name && token.name.length > 50) return false;
+          if (token.symbol && token.symbol.length > 20) return false;
+          
+          // Filter out tokens with suspicious names (likely spam)
+          const suspiciousKeywords = ['moon', 'doge', 'shib', 'inu', 'elon', 'safe', 'baby', 'rocket', 'moon', 'safe'];
+          const nameLower = token.name?.toLowerCase() || '';
+          const symbolLower = token.symbol?.toLowerCase() || '';
+          
+          if (suspiciousKeywords.some(keyword => nameLower.includes(keyword) || symbolLower.includes(keyword))) {
+            return false;
+          }
+          
+          return true;
+        });
         console.log('Filtered tokens (removed spam/ridiculous values):', tokens.length);
 
         // Parse basic wallet data from JSON-RPC responses
@@ -591,7 +642,15 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
         if (txData.transactions && txData.transactions.length > 0) {
           // Try to get the earliest transaction timestamp
           const timestamps = txData.transactions
-            .map((tx: any) => tx.timestamp || tx.blockTimestamp || 0)
+            .map((tx: any) => {
+              const timestamp = tx.timestamp || tx.blockTimestamp || 0;
+              if (timestamp > 0) {
+                // If timestamp is in milliseconds (typically > 1e12), convert to seconds
+                // Otherwise assume it's already in seconds
+                return timestamp > 1e12 ? Math.floor(timestamp / 1000) : timestamp;
+              }
+              return 0;
+            })
             .filter((timestamp: number) => timestamp > 0);
           
           if (timestamps.length > 0) {
@@ -631,7 +690,7 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
     }
 
     fetchData();
-  }, [params, ethPrice]);
+  }, [decodedAddress]); // Only depend on decodedAddress, not ethPrice
 
   // Refetch transactions when pagination or filter changes
   useEffect(() => {
@@ -653,10 +712,13 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
         const txResponseData = await txResponse.json();
         const txData = txResponseData.data;
         
-        if (txData && walletData) {
-          setWalletData({
-            ...walletData,
-            txList: txData.transactions || []
+        if (txData) {
+          setWalletData((prevData) => {
+            if (!prevData) return null;
+            return {
+              ...prevData,
+              txList: txData.transactions || []
+            };
           });
           
           setTxPagination({
@@ -678,94 +740,10 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
 
   if (loading) {
     return (
-      <div className="min-h-screen w-full flex flex-col bg-gray-950">
+      <div className="min-h-screen w-full flex flex-col bg-[#0f172a]">
         <Header />
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            {/* Cool Animated Dots */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5 }}
-              className="mb-8"
-            >
-              <div className="flex justify-center space-x-3">
-                <motion.div
-                  className="w-4 h-4 bg-blue-400 rounded-full"
-                  animate={{ 
-                    scale: [1, 1.5, 1],
-                    opacity: [0.5, 1, 0.5]
-                  }}
-                  transition={{ 
-                    duration: 1.5, 
-                    repeat: Infinity, 
-                    ease: "easeInOut",
-                    delay: 0
-                  }}
-                />
-                <motion.div
-                  className="w-4 h-4 bg-cyan-400 rounded-full"
-                  animate={{ 
-                    scale: [1, 1.5, 1],
-                    opacity: [0.5, 1, 0.5]
-                  }}
-                  transition={{ 
-                    duration: 1.5, 
-                    repeat: Infinity, 
-                    ease: "easeInOut",
-                    delay: 0.2
-                  }}
-                />
-                <motion.div
-                  className="w-4 h-4 bg-cyan-400 rounded-full"
-                  animate={{ 
-                    scale: [1, 1.5, 1],
-                    opacity: [0.5, 1, 0.5]
-                  }}
-                  transition={{ 
-                    duration: 1.5, 
-                    repeat: Infinity, 
-                    ease: "easeInOut",
-                    delay: 0.4
-                  }}
-                />
-              </div>
-            </motion.div>
-
-            {/* Cool Loading Text */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6, duration: 0.5 }}
-            >
-              <div className="text-gray-300 text-sm font-medium tracking-wide">
-                <motion.span
-                  animate={{ opacity: [0.5, 1, 0.5] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                >
-                  Loading
-                </motion.span>
-                <motion.span
-                  animate={{ opacity: [0.5, 1, 0.5] }}
-                  transition={{ duration: 2, repeat: Infinity, delay: 0.5 }}
-                >
-                  .
-                </motion.span>
-                <motion.span
-                  animate={{ opacity: [0.5, 1, 0.5] }}
-                  transition={{ duration: 2, repeat: Infinity, delay: 1 }}
-                >
-                  .
-                </motion.span>
-                <motion.span
-                  animate={{ opacity: [0.5, 1, 0.5] }}
-                  transition={{ duration: 2, repeat: Infinity, delay: 1.5 }}
-                >
-                  .
-                </motion.span>
-              </div>
-            </motion.div>
-          </div>
+          <LoadingSpinner variant="dots" size="lg" text={`Loading wallet ${decodedAddress?.slice(0, 10) || '...'}...`} />
         </div>
         <Footer />
       </div>
@@ -774,7 +752,7 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
 
   if (error || !walletData) {
     return (
-      <div className="min-h-screen w-full flex flex-col bg-gray-950">
+      <div className="min-h-screen w-full flex flex-col bg-[#0f172a]">
         <Header />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
@@ -783,7 +761,7 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
               </svg>
             </div>
-            <p className="text-red-400 text-lg font-semibold mb-2">Error Loading Wallet</p>
+            <p className="text-red-400 text-lg mb-2">Error Loading Wallet</p>
             <p className="text-gray-400">{error || 'Unable to load wallet data'}</p>
           </div>
         </div>
@@ -793,38 +771,45 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
   }
 
   return (
-    <div className="h-screen w-full flex flex-col bg-slate-900 overflow-hidden">
+    <div className="h-screen w-full flex flex-col bg-[#0f172a] overflow-hidden">
       <Header />
       
-      <main className="flex-1 bg-slate-900 overflow-hidden">
-        <div className="h-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex flex-col">
-          <div className="w-full">
+      <main className="flex-1 bg-[#0f172a] overflow-hidden">
+        <div className="h-full max-w-[1400px] mx-auto px-4 lg:px-6 pt-4 pb-4 flex flex-col">
+          <div className="flex-1 flex flex-col min-h-0">
             {/* Header */}
-            <div className="text-left mb-4 flex-shrink-0">
-              <h1 className="text-lg font-normal mb-1 text-white">Wallet {formatAddress(walletAddress)}</h1>
+            <div className="text-left mb-3 flex-shrink-0">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-white text-sm">{decodedAddress || walletAddress}</span>
+                  <button
+                    onClick={() => copyToClipboard(decodedAddress || walletAddress, "walletAddress")}
+                    className="text-blue-400 hover:text-blue-300"
+                  >
+                    {copiedField === "walletAddress" ? <FiCheck className="w-4 h-4" /> : <FiCopy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
               <p className="text-gray-400 text-xs">Wallet information from Base network</p>
             </div>
 
             {/* Combined Information Card */}
-            <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4 mb-4">
+            <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-3 mb-3 flex-shrink-0">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Overview Section */}
                 <div className="md:border-r border-gray-700/50 md:pr-4">
-                  <h3 className="text-sm font-semibold text-white mb-2 flex items-center">
-                    <svg className="w-4 h-4 mr-2 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
+                  <h3 className="text-sm text-white mb-4 pb-3 border-b border-gray-700/50">
                     Overview
                   </h3>
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400 text-xs sm:text-sm">ETH BALANCE</span>
-                      <span className="text-white font-mono text-xs sm:text-sm text-right">{walletData.ethBalance.toFixed(18)} ETH</span>
+                      <span className="text-gray-400 text-sm">ETH Balance</span>
+                      <span className="text-white text-sm text-right">{walletData.ethBalance.toFixed(4)} ETH</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400 text-xs sm:text-sm">ETH VALUE</span>
+                      <span className="text-gray-400 text-sm">ETH Value</span>
                       <div className="text-right">
-                        <div className="text-white font-medium text-xs sm:text-sm">
+                        <div className="text-white text-sm">
                           {ethPrice > 0 ? `$${formatNumber(walletData.ethUsdValue)}` : 'Loading...'}
                         </div>
                         <div className="text-gray-500 text-xs">
@@ -833,9 +818,9 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                       </div>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400 text-xs sm:text-sm">TOKEN HOLDINGS</span>
+                      <span className="text-gray-400 text-sm">Token Holdings</span>
                       <div className="text-right">
-                        <div className="text-white font-medium text-xs sm:text-sm">${formatNumber(walletData.tokens.reduce((sum, t) => sum + (t.usdValue || 0), 0))}</div>
+                        <div className="text-white text-sm">${formatNumber(walletData.tokens.reduce((sum, t) => sum + (t.usdValue || 0), 0))}</div>
                         <div className="text-gray-500 text-xs">{walletData.tokens.length} Tokens</div>
                       </div>
                     </div>
@@ -844,36 +829,32 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
 
                 {/* Chain Info Section */}
                 <div className="md:border-r border-gray-700/50 md:pr-4">
-                  <h3 className="text-sm font-semibold text-white mb-2 flex items-center">
-                    <svg className="w-4 h-4 mr-2 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+                  <h3 className="text-sm text-white mb-4 pb-3 border-b border-gray-700/50">
                     Chain Info
                   </h3>
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400 text-xs sm:text-sm">PRIVATE NAME TAGS</span>
+                      <span className="text-gray-400 text-sm">Private Name Tags</span>
                       {isLoggedIn ? (
                         <button 
                           onClick={() => setShowNameTagModal(true)}
-                          className="text-blue-400 hover:text-blue-300 text-xs font-medium transition-colors"
+                          className="text-blue-400 hover:text-blue-300 text-sm transition-colors"
                         >
                           + Add
                         </button>
                       ) : (
                         <button 
                           onClick={() => toast.error('Please log in to add name tags')}
-                          className="text-gray-500 hover:text-gray-400 text-xs"
+                          className="text-gray-500 hover:text-gray-400 text-sm"
                         >
                           + Add
                         </button>
                       )}
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400 text-xs sm:text-sm">WALLET AGE</span>
+                      <span className="text-gray-400 text-sm">Wallet Age</span>
                       <div className="text-right">
-                        <div className="text-white font-mono text-xs">{formatAddress(walletAddress)}</div>
-                        <div className="text-gray-500 text-xs">{getWalletAge(walletData.firstTxDate)}</div>
+                        <div className="text-white text-sm">{getWalletAge(walletData.firstTxDate)}</div>
                       </div>
                     </div>
                   </div>
@@ -881,20 +862,17 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
 
                 {/* Multichain Info Section */}
                 <div>
-                  <h3 className="text-sm font-semibold text-white mb-2 flex items-center">
-                    <svg className="w-4 h-4 mr-2 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
+                  <h3 className="text-sm text-white mb-4 pb-3 border-b border-gray-700/50">
                     Multichain Info
                   </h3>
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400 text-xs sm:text-sm">TOTAL VALUE</span>
-                      <span className="text-white font-medium text-xs sm:text-sm">${formatNumber(walletData.totalUsdValue)}</span>
+                      <span className="text-gray-400 text-sm">Total Value</span>
+                      <span className="text-white text-sm">${formatNumber(walletData.totalUsdValue)}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400 text-xs sm:text-sm">ADDRESSES</span>
-                      <span className="text-white text-xs sm:text-sm">1 address found</span>
+                      <span className="text-gray-400 text-sm">Addresses</span>
+                      <span className="text-white text-sm">1 address found</span>
                     </div>
                   </div>
                 </div>
@@ -902,11 +880,10 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-0">
-              {/* Left Column */}
-              <div className="lg:col-span-2 space-y-2 sm:space-y-3 lg:space-y-4">
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 flex flex-col space-y-2 sm:space-y-3 lg:space-y-4 min-h-0">
                 {/* Tab Navigation */}
-                <div className="flex bg-slate-800/30 border border-slate-700/50 rounded-lg p-1 mb-4 overflow-x-auto">
+                <div className="flex bg-slate-800/30 border border-slate-700/50 rounded-lg p-1 mb-3 overflow-x-auto flex-shrink-0">
                   {[
                     { 
                       id: 'tokens', 
@@ -927,9 +904,9 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id as 'overview' | 'tokens' | 'transactions')}
-                      className={`flex-1 py-2 px-2 sm:px-3 text-sm font-medium transition-all flex items-center justify-center space-x-1 whitespace-nowrap min-w-0 ${
+                      className={`flex-1 py-2 px-2 sm:px-3 text-sm transition-all flex items-center justify-center space-x-1 whitespace-nowrap min-w-0 rounded-lg ${
                         activeTab === tab.id
-                          ? 'bg-gray-700 text-white border-b-2 border-blue-400'
+                          ? 'bg-gray-700 text-white'
                           : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
                       }`}
                     >
@@ -946,12 +923,9 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                 </div>
 
                 {/* Transaction Info Bar */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 space-y-2 sm:space-y-0">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 space-y-2 sm:space-y-0 flex-shrink-0">
                   <div className="flex items-center space-x-2">
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <span className="text-gray-400 text-xs sm:text-sm">
+                    <span className="text-gray-400 text-sm">
                       Latest {walletData.txList.length} from a total of {walletData.txList.length} transactions
                     </span>
                   </div>
@@ -972,7 +946,7 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="bg-gray-900/50 border border-gray-700/50 p-4 mb-4"
+                    className="bg-gray-900/50 border border-gray-700/50 rounded-lg p-3 mb-3"
                   >
                     <h4 className="text-white font-medium mb-3">Advanced Filter Options</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
@@ -1031,35 +1005,34 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.2 }}
-                    className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4"
+                    transition={{ duration: 0.2 }}
+                    className="flex-1 flex flex-col bg-slate-800/30 border border-slate-700/50 rounded-lg p-3 min-h-0"
                   >
                     {activeTab === 'overview' && (
-                      <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
-                        <h3 className="text-lg font-bold text-white mb-3">Portfolio Overview</h3>
+                      <div className="flex-1 space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent pr-2">
+                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-700/50 flex-shrink-0">
+                          <h3 className="text-sm text-white">Portfolio Overview</h3>
+                        </div>
                         
                         {/* Enhanced Portfolio Stats */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {/* Portfolio Allocation */}
-                          <div className="bg-gray-900/50 border border-gray-700/50 p-1.5 sm:p-2">
-                            <h4 className="text-lg font-semibold text-white mb-3 flex items-center">
-                              <svg className="w-4 h-4 mr-2 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                              </svg>
+                          <div className="bg-gray-900/50 border border-gray-700/50 rounded-lg p-3">
+                            <h4 className="text-sm text-white mb-3 pb-2 border-b border-gray-700/50">
                               Portfolio Allocation
                             </h4>
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                               <div className="flex justify-between items-center">
-                                <span className="text-gray-300">ETH</span>
-                                <span className="text-white font-medium">{walletData.portfolioAllocation?.eth.toFixed(1)}%</span>
+                                <span className="text-gray-400 text-sm">ETH</span>
+                                <span className="text-white text-sm">{walletData.portfolioAllocation?.eth.toFixed(1)}%</span>
                               </div>
                               <div className="flex justify-between items-center">
-                                <span className="text-gray-300">Tokens</span>
-                                <span className="text-white font-medium">{walletData.portfolioAllocation?.tokens.toFixed(1)}%</span>
+                                <span className="text-gray-400 text-sm">Tokens</span>
+                                <span className="text-white text-sm">{walletData.portfolioAllocation?.tokens.toFixed(1)}%</span>
                               </div>
                               <div className="w-full bg-gray-700 rounded-full h-2">
                                 <div 
-                                  className="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full" 
+                                  className="bg-blue-500 h-2 rounded-full" 
                                   style={{ width: `${walletData.portfolioAllocation?.eth || 0}%` }}
                                 ></div>
                               </div>
@@ -1067,50 +1040,40 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                           </div>
 
                           {/* Wallet Stats */}
-                          <div className="bg-gray-900/50 border border-gray-700/50 p-1.5 sm:p-2">
-                            <h4 className="text-lg font-semibold text-white mb-3 flex items-center">
-                              <svg className="w-4 h-4 mr-2 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                              </svg>
+                          <div className="bg-gray-900/50 border border-gray-700/50 rounded-lg p-3">
+                            <h4 className="text-sm text-white mb-3 pb-2 border-b border-gray-700/50">
                               Wallet Stats
                             </h4>
                             <div className="space-y-2">
                               <div className="flex justify-between items-center">
-                                <span className="text-gray-300">Total Value</span>
-                                <span className="text-blue-400 font-medium">${formatNumber(walletData.totalUsdValue)}</span>
+                                <span className="text-gray-400 text-sm">Total Value</span>
+                                <span className="text-blue-400 text-sm">${formatNumber(walletData.totalUsdValue)}</span>
                               </div>
                               <div className="flex justify-between items-center">
-                                <span className="text-gray-300">ETH Balance</span>
-                                <span className="text-white font-medium">{formatEthValue(walletData.ethBalance)} ETH</span>
+                                <span className="text-gray-400 text-sm">ETH Balance</span>
+                                <span className="text-white text-sm">{formatEthValue(walletData.ethBalance)} ETH</span>
                               </div>
                               <div className="flex justify-between items-center">
-                                <span className="text-gray-300">Token Count</span>
-                                <span className="text-white font-medium">{walletData.tokens.filter(token => !isTokenHidden(token.contractAddress)).length}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-gray-300">Transaction Count</span>
-                                <span className="text-white font-medium">{walletData.txList.length}</span>
+                                <span className="text-gray-400 text-sm">Transaction Count</span>
+                                <span className="text-white text-sm">{walletData.txList.length}</span>
                               </div>
                             </div>
                           </div>
                         </div>
 
                         {/* Top Tokens by Value */}
-                        <div className="bg-gray-900/50 border border-gray-700/50 p-1.5 sm:p-2">
-                          <h4 className="text-lg font-semibold text-white mb-3 flex items-center">
-                            <svg className="w-5 h-5 mr-2 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                            </svg>
+                        <div className="bg-gray-900/50 border border-gray-700/50 rounded-lg p-3">
+                          <h4 className="text-sm text-white mb-3 pb-2 border-b border-gray-700/50">
                             Top Tokens by Value
                           </h4>
                           <div className="space-y-2">
                             {/* ETH as #1 */}
-                            <div className="flex items-center justify-between p-2 bg-gray-900/30 rounded">
+                            <div className="flex items-center justify-between p-2 bg-gray-900/30 rounded-lg">
                               <div className="flex items-center space-x-2">
                                 <span className="text-gray-400 text-sm">#1</span>
-                                <span className="text-white font-medium">ETH</span>
+                                <span className="text-white text-sm">ETH</span>
                               </div>
-                              <span className="text-blue-400 font-medium">${formatNumber(walletData.ethUsdValue)}</span>
+                              <span className="text-blue-400 text-sm">${formatNumber(walletData.ethUsdValue)}</span>
                             </div>
                             {/* Top tokens */}
                             {walletData.tokens
@@ -1118,44 +1081,42 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                               .sort((a, b) => b.usdValue - a.usdValue)
                               .slice(0, 2)
                               .map((token, index) => (
-                                <div key={index} className="flex items-center justify-between p-2 bg-gray-900/30 rounded">
+                                <div key={index} className="flex items-center justify-between p-2 bg-gray-900/30 rounded-lg">
                                   <div className="flex items-center space-x-2">
                                     <span className="text-gray-400 text-sm">#{index + 2}</span>
-                                    <span className="text-white font-medium">{token.symbol}</span>
+                                    <span className="text-white text-sm">{token.symbol}</span>
                                   </div>
-                                  <span className="text-blue-400 font-medium">${formatNumber(token.usdValue)}</span>
+                                  <span className="text-blue-400 text-sm">${formatNumber(token.usdValue)}</span>
                                 </div>
                               ))}
                           </div>
                         </div>
 
                         {/* Recent Activity */}
-                        <div className="bg-gray-900/50 border border-gray-700/50 p-1.5 sm:p-2">
-                          <h4 className="text-lg font-semibold text-white mb-3 flex items-center">
-                            <svg className="w-5 h-5 mr-2 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                            </svg>
+                        <div className="bg-gray-900/50 border border-gray-700/50 rounded-lg p-3">
+                          <h4 className="text-sm text-white mb-3 pb-2 border-b border-gray-700/50">
                             Recent Activity
                           </h4>
                           <div className="space-y-2">
                             {walletData.txList.slice(0, 3).map((tx) => (
-                              <div key={tx.hash} className="flex items-center justify-between p-2 bg-gray-900/30 rounded">
+                              <div key={tx.hash} className="flex items-center justify-between p-2 bg-gray-900/30 rounded-lg">
                                 <div className="flex items-center space-x-2">
-                                  <div className="w-6 h-6 bg-blue-500/20 rounded-full flex items-center justify-center">
-                                    <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                                    </svg>
-                                  </div>
                                   <div>
                                     <p className="text-white text-sm">{getTransactionType(tx)}</p>
-                                    <Link 
-                                      href={`/explorer/tx/${tx.hash}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-blue-400 text-xs hover:underline"
-                                    >
-                                      {formatAddress(tx.hash)}
-                                    </Link>
+                                    <div className="flex items-center gap-2">
+                                      <Link 
+                                        href={`/explorer/tx/${tx.hash}`}
+                                        className="text-blue-400 text-xs hover:underline"
+                                      >
+                                        {formatAddress(tx.hash)}
+                                      </Link>
+                                      <button
+                                        onClick={() => copyToClipboard(tx.hash, `txHash-${tx.hash}`)}
+                                        className="text-blue-400 hover:text-blue-300"
+                                      >
+                                        {copiedField === `txHash-${tx.hash}` ? <FiCheck className="w-3 h-3" /> : <FiCopy className="w-3 h-3" />}
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
                                 <div className="text-right">
@@ -1172,9 +1133,9 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                     )}
 
                     {activeTab === 'tokens' && (
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className="text-lg font-bold text-white">Token Holdings</h3>
+                      <div className="flex-1 flex flex-col min-h-0">
+                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-700/50 flex-shrink-0">
+                          <h3 className="text-sm text-white">Token Holdings</h3>
                           <div className="flex items-center space-x-2 text-sm text-gray-400">
                             <span>Showing {walletData.tokens.filter(token => !isTokenHidden(token.contractAddress)).length} of {walletData.tokens.length} tokens</span>
                             {hiddenTokens.size > 0 && (
@@ -1207,7 +1168,7 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                           </div>
                         </div>
                         {walletData.tokens.length > 0 ? (
-                          <div className="space-y-0 max-h-[calc(100vh-300px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                          <div className="flex-1 space-y-0 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent pr-2">
                             {walletData.tokens
                               .filter(token => !isTokenHidden(token.contractAddress))
                               .map((token, index) => (
@@ -1246,25 +1207,28 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                                      )}
                                    </div>
                                    <div className="flex-1 min-w-0">
-                                     <p className="text-white font-medium text-sm sm:text-base truncate">{token.symbol}</p>
-                                     <p className="text-gray-400 text-xs sm:text-sm truncate">{token.name}</p>
+                                     <p className="text-white text-sm truncate">{token.symbol}</p>
+                                     <p className="text-gray-400 text-sm truncate">{token.name}</p>
                                      <div className="flex items-center space-x-2 mt-1">
-                                       <span className="text-xs text-gray-500 font-mono">{formatAddress(token.contractAddress)}</span>
+                                       <Link
+                                         href={`/explorer/address/${token.contractAddress}`}
+                                         className="text-xs text-blue-400 hover:text-blue-300 truncate"
+                                       >
+                                         {formatAddress(token.contractAddress)}
+                                       </Link>
                                        <button
-                                         onClick={() => copyToClipboard(token.contractAddress)}
+                                         onClick={() => copyToClipboard(token.contractAddress, `token-${token.contractAddress}`)}
                                          className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
                                          title="Copy address"
                                        >
-                                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                         </svg>
+                                         {copiedField === `token-${token.contractAddress}` ? <FiCheck className="w-3 h-3" /> : <FiCopy className="w-3 h-3" />}
                                        </button>
                                      </div>
                                    </div>
                                  </div>
                                 <div className="text-right min-w-0">
-                                  <p className="text-white font-medium text-sm sm:text-base">{parseFloat(token.balance).toFixed(4)}</p>
-                                  <p className="text-gray-400 text-xs sm:text-sm">${formatNumber(token.usdValue)}</p>
+                                  <p className="text-white text-sm">{parseFloat(token.balance).toFixed(4)}</p>
+                                  <p className="text-gray-400 text-sm">${formatNumber(token.usdValue)}</p>
                                   {token.priceUsd && token.symbol !== 'ETH' && (
                                     <p className={`text-xs ${token.priceChange24h && token.priceChange24h < 0 ? 'text-red-400' : 'text-green-400'}`}>
                                       {formatTokenPrice(token.priceUsd)}
@@ -1288,12 +1252,7 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                           </div>
                         ) : (
                           <div className="text-center py-8">
-                            <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
-                              <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                              </svg>
-                            </div>
-                            <p className="text-gray-400 text-lg font-semibold mb-2">No Tokens Found</p>
+                            <p className="text-gray-400 text-lg mb-2">No Tokens Found</p>
                             <p className="text-gray-500">This wallet doesn&apos;t hold any tokens yet.</p>
                           </div>
                         )}
@@ -1302,7 +1261,7 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                         {hiddenTokens.size > 0 && (
                           <div className="mt-6">
                             <div className="flex items-center justify-between mb-4">
-                              <h4 className="text-lg font-semibold text-gray-400">Hidden Tokens ({hiddenTokens.size})</h4>
+                              <h4 className="text-sm text-gray-400">Hidden Tokens ({hiddenTokens.size})</h4>
                               <button
                                 onClick={() => setHiddenTokens(new Set())}
                                 className="text-blue-400 hover:text-blue-300 transition-colors text-sm"
@@ -1332,8 +1291,8 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                                         )}
                                       </div>
                                       <div>
-                                        <p className="text-gray-400 font-medium">{token.symbol}</p>
-                                        <p className="text-gray-500 text-xs">{token.name}</p>
+                                        <p className="text-gray-400 text-sm">{token.symbol}</p>
+                                        <p className="text-gray-500 text-sm">{token.name}</p>
                                       </div>
                                     </div>
                                     <div className="flex items-center space-x-2">
@@ -1358,9 +1317,9 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                     )}
 
                     {activeTab === 'transactions' && (
-                      <div>
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
-                          <h3 className="text-lg font-bold text-white mb-3 sm:mb-0">Transaction History</h3>
+                      <div className="flex-1 flex flex-col min-h-0">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 pb-2 border-b border-gray-700/50 flex-shrink-0">
+                          <h3 className="text-sm text-white mb-2 sm:mb-0">Transaction History</h3>
                           
                           {/* Filter Controls */}
                           <div className="flex flex-wrap gap-2">
@@ -1383,41 +1342,54 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                         </div>
                         
                         {walletData.txList.length > 0 ? (
-                          <div className="space-y-2 max-h-[calc(100vh-300px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                          <div className="flex-1 space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent pr-2">
                             {walletData.txList.map((tx, index) => (
                               <motion.div
                                 key={tx.hash}
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: index * 0.1 }}
-                                className="p-3 bg-slate-800/30"
+                                className="p-3 bg-slate-800/30 rounded-lg"
                               >
                                 <div className="flex items-center justify-between mb-2">
                                   <div className="flex items-center space-x-3">
-                                    <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center">
-                                      <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                      </svg>
-                                    </div>
                                     <div>
-                                      <p className="text-white font-medium">{tx.description || getTransactionType(tx)}</p>
-                                      <Link 
-                                        href={`/explorer/tx/${tx.hash}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-400 text-sm hover:underline"
-                                      >
-                                        {formatAddress(tx.hash)}
-                                      </Link>
+                                      <p className="text-white text-sm">{tx.description || getTransactionType(tx)}</p>
+                                      <div className="flex items-center gap-2">
+                                        <Link 
+                                          href={`/explorer/tx/${tx.hash}`}
+                                          className="text-blue-400 text-sm hover:underline"
+                                        >
+                                          {formatAddress(tx.hash)}
+                                        </Link>
+                                        <button
+                                          onClick={() => copyToClipboard(tx.hash, `txHash-${tx.hash}`)}
+                                          className="text-blue-400 hover:text-blue-300"
+                                        >
+                                          {copiedField === `txHash-${tx.hash}` ? <FiCheck className="w-4 h-4" /> : <FiCopy className="w-4 h-4" />}
+                                        </button>
+                                      </div>
                                       {tx.contractAddress && (
-                                        <p className="text-gray-500 text-xs">
-                                          Contract: {formatAddress(tx.contractAddress)}
-                                        </p>
+                                        <div className="flex items-center gap-2 mt-1">
+                                          <span className="text-gray-500 text-xs">Contract: </span>
+                                          <Link
+                                            href={`/explorer/address/${tx.contractAddress}`}
+                                            className="text-blue-400 text-xs hover:underline"
+                                          >
+                                            {formatAddress(tx.contractAddress)}
+                                          </Link>
+                                          <button
+                                            onClick={() => copyToClipboard(tx.contractAddress!, `contract-${tx.contractAddress}`)}
+                                            className="text-blue-400 hover:text-blue-300"
+                                          >
+                                            {copiedField === `contract-${tx.contractAddress}` ? <FiCheck className="w-3 h-3" /> : <FiCopy className="w-3 h-3" />}
+                                          </button>
+                                        </div>
                                       )}
                                     </div>
                                   </div>
                                   <div className="text-right">
-                                    <p className="text-white font-medium">
+                                    <p className="text-white text-sm">
                                       {tx.amount ? `${tx.amount} ${tx.asset}` : 
                                         parseFloat(tx.value) > 0 
                                           ? `${formatEthValue(parseFloat(tx.value) / 1e18)} ETH`
@@ -1447,13 +1419,21 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 text-xs text-gray-400">
                                   <div>
-                                    <span className="text-gray-500">From:</span> 
-                                    <Link 
-                                      href={`/explorer/address/${tx.from}`}
-                                      className="hover:text-blue-400 transition-colors ml-1"
-                                    >
-                                      {formatAddress(tx.from)}
-                                    </Link>
+                                    <span className="text-gray-500 text-xs">From: </span>
+                                    <div className="flex items-center gap-1">
+                                      <Link 
+                                        href={`/explorer/address/${tx.from}`}
+                                        className="text-blue-400 hover:text-blue-300 text-xs transition-colors"
+                                      >
+                                        {formatAddress(tx.from)}
+                                      </Link>
+                                      <button
+                                        onClick={() => copyToClipboard(tx.from, `from-${tx.hash}`)}
+                                        className="text-blue-400 hover:text-blue-300"
+                                      >
+                                        {copiedField === `from-${tx.hash}` ? <FiCheck className="w-3 h-3" /> : <FiCopy className="w-3 h-3" />}
+                                      </button>
+                                    </div>
                                     {tx.fromName && (
                                       <div className="text-gray-500 text-xs mt-1">
                                         {tx.fromName}
@@ -1461,13 +1441,21 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                                     )}
                                   </div>
                                   <div>
-                                    <span className="text-gray-500">To:</span> 
-                                    <Link 
-                                      href={`/explorer/address/${tx.to}`}
-                                      className="hover:text-blue-400 transition-colors ml-1"
-                                    >
-                                      {formatAddress(tx.to)}
-                                    </Link>
+                                    <span className="text-gray-500 text-xs">To: </span>
+                                    <div className="flex items-center gap-1">
+                                      <Link 
+                                        href={`/explorer/address/${tx.to}`}
+                                        className="text-blue-400 hover:text-blue-300 text-xs transition-colors"
+                                      >
+                                        {formatAddress(tx.to)}
+                                      </Link>
+                                      <button
+                                        onClick={() => copyToClipboard(tx.to, `to-${tx.hash}`)}
+                                        className="text-blue-400 hover:text-blue-300"
+                                      >
+                                        {copiedField === `to-${tx.hash}` ? <FiCheck className="w-3 h-3" /> : <FiCopy className="w-3 h-3" />}
+                                      </button>
+                                    </div>
                                     {tx.toName && (
                                       <div className="text-gray-500 text-xs mt-1">
                                         {tx.toName}
@@ -1565,50 +1553,16 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
                           </div>
                         ) : (
                           <div className="text-center py-8">
-                            <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
-                              <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                            </div>
-                            <p className="text-gray-400 text-lg font-semibold mb-2">No Transactions Found</p>
+                            <p className="text-gray-400 text-lg mb-2">No Transactions Found</p>
                             <p className="text-gray-500">This wallet hasn&apos;t made any transactions yet.</p>
                           </div>
                         )}
                       </div>
                     )}
                   </motion.div>
-      </AnimatePresence>
-              </div>
-
-              {/* Right Sidebar */}
-              <div className="space-y-4 lg:space-y-6">
-                {/* Ad Banner Placement */}
-                  <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.2 }}
-                    className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4 sm:p-6"
-                  >
-                  <div className="text-center">
-                    <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
-                      </svg>
-                    </div>
-                    <h3 className="text-white font-semibold mb-2">Ad Space Available</h3>
-                    <p className="text-gray-400 text-sm mb-4">Perfect placement for your brand</p>
-                    <div className="bg-gray-800/50 p-3 border border-gray-700/50">
-                      <div className="w-full h-32 bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
-                        <span className="text-gray-500 text-xs">Your Ad Here</span>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-
+                </AnimatePresence>
               </div>
             </div>
-          </div>
           </div>
         </div>
       </main>
@@ -1664,6 +1618,24 @@ export default function WalletPage({ params }: { params: Promise<{ walletAddress
         </div>
       </div>
       )}
+
+      {/* Copy Notification */}
+      <AnimatePresence>
+        {showCopyNotification && (
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-6 left-6 z-50 bg-slate-800/90 backdrop-blur-sm border border-slate-700/50 rounded-lg px-4 py-3 shadow-lg"
+          >
+            <div className="flex items-center gap-2">
+              <FiCheck className="w-4 h-4 text-green-400" />
+              <span className="text-white text-sm">Address copied to clipboard</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       <Footer />
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, auth } from "../../../../../lib/firebase.ts";
@@ -18,6 +19,7 @@ import {
 } from "react-icons/fi";
 import Header from "../../../../components/Header";
 import Footer from "../../../../components/Footer";
+import LoadingSpinner from "../../../../components/LoadingSpinner";
 
 interface Transaction {
   hash: string;
@@ -50,6 +52,7 @@ export default function BlockDetails() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [showCopyNotification, setShowCopyNotification] = useState<boolean>(false);
   const router = useRouter();
   const params = useParams();
   const blockNumber = params.blockNumber as string;
@@ -163,24 +166,43 @@ export default function BlockDetails() {
     fetchBlock();
   }, [blockNumber, router, fetchBlock]);
 
-  const copyToClipboard = (text: string, field: string) => {
-    navigator.clipboard.writeText(text).then(() => {
+  const copyToClipboard = async (text: string, field: string) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback for browsers that don't support clipboard API
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        textArea.remove();
+      }
       setCopiedField(field);
-      setTimeout(() => setCopiedField(null), 2000);
-    });
+      setShowCopyNotification(true);
+      setTimeout(() => {
+        setCopiedField(null);
+        setShowCopyNotification(false);
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to copy text:", err);
+    }
   };
 
   const gasUsedPercentage = block ? Math.round((parseInt(block.gasUsed) / parseInt(block.gasLimit)) * 100) : 0;
 
   return (
-    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden">
+    <div className="h-screen bg-[#0f172a] flex flex-col overflow-hidden">
       <Header />
       
-      <main className="flex-1 bg-slate-900 overflow-hidden">
-        <div className="h-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex flex-col">
+      <main className="flex-1 bg-[#0f172a] overflow-hidden">
+        <div className="h-full max-w-[1280px] mx-auto px-5 lg:px-8 pt-6 pb-0 flex flex-col">
           {/* Header */}
           <div className="text-left mb-4 flex-shrink-0">
-            <h1 className="text-lg font-normal mb-1 text-white">Block #{blockNumber}</h1>
+            <h1 className="text-base font-semibold mb-0.5 text-white">Block #{blockNumber}</h1>
             <p className="text-gray-400 text-xs">Detailed block information from Base network</p>
           </div>
 
@@ -197,13 +219,7 @@ export default function BlockDetails() {
           {/* Loading State */}
           {loading && (
             <div className="flex items-center justify-center py-12">
-              <div className="flex flex-col items-center gap-4">
-                <div className="relative">
-                  <div className="w-10 h-10 border-3 border-blue-400/20 border-t-blue-400 animate-spin"></div>
-                  <div className="absolute inset-0 w-10 h-10 border-3 border-transparent border-r-blue-300/40 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
-                </div>
-                <span className="text-gray-400 text-sm">Loading block details...</span>
-              </div>
+              <LoadingSpinner variant="dots" size="lg" text={`Loading Block ${blockNumber}...`} />
             </div>
           )}
 
@@ -212,13 +228,12 @@ export default function BlockDetails() {
             <div className="space-y-4">
               {/* Block Overview Card */}
               <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                  <FiHash className="w-5 h-5 text-blue-400" />
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-700/50">
+                <h2 className="text-sm text-white">
                   Block Overview
                 </h2>
-                <span className="inline-flex items-center px-3 py-1 text-sm font-medium bg-green-900/30 text-green-400 border border-green-500/30">
-                  <div className="w-2 h-2 bg-green-400 mr-2"></div>
+                <span className="inline-flex items-center px-3 py-1 text-sm font-medium bg-green-900/30 text-green-400 border border-green-500/30 rounded-full">
+                  <div className="w-2 h-2 bg-green-400 mr-2 rounded-full"></div>
                   {block.status}
                 </span>
               </div>
@@ -227,33 +242,17 @@ export default function BlockDetails() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400">Block Number</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-white font-medium">#{block.number.toLocaleString()}</span>
-                      <a
-                        href={`/explorer/latest/block/${block.number}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300"
-                      >
-                        <FiExternalLink className="w-4 h-4" />
-                      </a>
-                    </div>
+                    <span className="text-white font-medium">#{block.number.toLocaleString()}</span>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400">Timestamp</span>
-                    <div className="flex items-center gap-2">
-                      <FiClock className="w-4 h-4 text-gray-400" />
-                      <span className="text-white">{block.timestamp}</span>
-                    </div>
+                    <span className="text-white">{block.timestamp}</span>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400">Transactions</span>
-                    <div className="flex items-center gap-2">
-                      <FiActivity className="w-4 h-4 text-gray-400" />
-                      <span className="text-white font-medium">{block.transactions}</span>
-                    </div>
+                    <span className="text-white font-medium">{block.transactions}</span>
                   </div>
                 </div>
 
@@ -286,64 +285,59 @@ export default function BlockDetails() {
 
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400">Miner</span>
-                    <div className="flex items-center gap-2 max-w-xs">
-                      <span className="text-white text-sm truncate">{block.miner}</span>
-                      <a
-                        href={`/explorer/address/${block.miner}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300"
-                      >
-                        <FiExternalLink className="w-4 h-4" />
-                      </a>
-                    </div>
+                    <a
+                      href={`/explorer/address/${block.miner}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:text-blue-300 text-sm truncate max-w-xs"
+                    >
+                      {block.miner}
+                    </a>
                   </div>
                 </div>
               </div>
-            </motion.div>
+              </div>
 
               {/* Gas Information Card */}
               <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4">
-              <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-                <FiZap className="w-5 h-5 text-blue-400" />
-                Gas Information
-              </h2>
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-700/50">
+                  <h2 className="text-sm text-white">
+                    Gas Information
+                  </h2>
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <span className="text-gray-400 text-sm">Gas Used</span>
-                  <p className="text-lg font-bold text-white">{parseInt(block.gasUsed).toLocaleString()}</p>
+                  <p className="text-lg text-white">{parseInt(block.gasUsed).toLocaleString()}</p>
                 </div>
                 <div className="space-y-2">
                   <span className="text-gray-400 text-sm">Gas Limit</span>
-                  <p className="text-lg font-bold text-white">{parseInt(block.gasLimit).toLocaleString()}</p>
+                  <p className="text-lg text-white">{parseInt(block.gasLimit).toLocaleString()}</p>
                 </div>
                 <div className="space-y-2">
                   <span className="text-gray-400 text-sm">Usage</span>
                   <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-gray-700 h-2">
+                    <div className="flex-1 bg-gray-700 h-2 rounded-full">
                       <div
-                        className="bg-blue-500 h-2 transition-all duration-300"
+                        className="bg-blue-500 h-2 rounded-full transition-all duration-300"
                         style={{ width: `${gasUsedPercentage}%` }}
                       ></div>
                     </div>
                     <span className="text-white font-medium">{gasUsedPercentage}%</span>
                   </div>
                 </div>
+                </div>
               </div>
-            </motion.div>
-
 
               {/* Transactions Card */}
               <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg overflow-hidden">
-              <div className="px-4 py-2 border-b border-gray-700">
+              <div className="px-4 pt-3 pb-2 border-b border-gray-700/50">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                    <FiActivity className="w-5 h-5 text-blue-400" />
+                  <h2 className="text-sm text-white">
                     Transactions ({block.transactions})
                   </h2>
-                  <div className="flex items-center gap-2 text-sm text-gray-400">
-                    <FiEye className="w-4 h-4" />
+                  <div className="text-sm text-gray-400">
                     {block.transactionList?.length || 0} loaded
                   </div>
                 </div>
@@ -357,7 +351,6 @@ export default function BlockDetails() {
                         <th className="px-4 py-2 text-left font-medium">Hash</th>
                         <th className="px-4 py-2 text-left font-medium">From</th>
                         <th className="px-4 py-2 text-left font-medium">To</th>
-                        <th className="px-4 py-2 text-left font-medium">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -371,14 +364,12 @@ export default function BlockDetails() {
                             className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors"
                           >
                             <td className="px-4 py-2">
-                              <a
+                              <Link
                                 href={`/explorer/tx/${tx.hash}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
                                 className="text-blue-400 hover:text-blue-300 text-sm truncate block max-w-xs"
                               >
                                 {tx.hash}
-                              </a>
+                              </Link>
                             </td>
                             <td className="px-4 py-2">
                               <a
@@ -400,28 +391,6 @@ export default function BlockDetails() {
                                 {tx.to}
                               </a>
                             </td>
-                            <td className="px-4 py-2">
-                              <div className="flex items-center gap-2">
-                                <a
-                                  href={`/explorer/tx/${tx.hash}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 px-2 py-1 bg-gray-700 hover:bg-gray-600 text-xs text-gray-300 transition-colors"
-                                >
-                                  <FiEye className="w-3 h-3" />
-                                  View
-                                </a>
-                                <a
-                                  href={`/explorer/tx/${tx.hash}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 px-2 py-1 bg-gray-600 hover:bg-gray-500 text-xs text-white transition-colors"
-                                >
-                                  <FiExternalLink className="w-3 h-3" />
-                                  Explorer
-                                </a>
-                              </div>
-                            </td>
                           </motion.tr>
                         ))}
                       </AnimatePresence>
@@ -430,18 +399,16 @@ export default function BlockDetails() {
                 </div>
               ) : (
                 <div className="px-4 py-4 text-center">
-                  <FiActivity className="w-12 h-12 text-gray-500 mx-auto mb-4" />
                   <p className="text-gray-400">No transactions in this block</p>
                 </div>
               )}
-            </motion.div>
-          </div>
-        )}
+              </div>
+            </div>
+          )}
 
           {/* No Block Data */}
           {!loading && !block && !error && (
             <div className="text-center py-12">
-              <FiBox className="w-16 h-16 text-gray-500 mx-auto mb-4" />
               <p className="text-gray-400 text-lg">No block data available</p>
               <p className="text-gray-500 text-sm mt-2">Please check the block number or try again later.</p>
             </div>
@@ -450,6 +417,24 @@ export default function BlockDetails() {
       </main>
       
       <Footer />
+
+      {/* Copy Notification */}
+      <AnimatePresence>
+        {showCopyNotification && (
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-6 left-6 z-50 bg-slate-800/90 backdrop-blur-sm border border-slate-700/50 rounded-lg px-4 py-3 shadow-lg"
+          >
+            <div className="flex items-center gap-2">
+              <FiCheck className="w-4 h-4 text-green-400" />
+              <span className="text-white text-sm">Address copied to clipboard</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

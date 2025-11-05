@@ -160,14 +160,32 @@ const SelfCustodialWallet: React.FC = () => {
         return;
       }
 
-      // Update user document with wallet address
-      const userDocRef = doc(db, "users", currentUser.uid);
-      await updateDoc(userDocRef, {
-        walletAddress: walletAddress,
-        lastUpdated: serverTimestamp()
-      });
+      // Use the new wallet linking API
+      try {
+        const response = await fetch('/api/wallet/link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            walletAddress: walletAddress,
+            userId: currentUser.uid
+          })
+        });
 
-      console.log("✅ Wallet address synced to database:", walletAddress);
+        if (response.ok) {
+          console.log("✅ Wallet linked to user account:", walletAddress);
+        } else {
+          console.error("Failed to link wallet:", await response.text());
+        }
+      } catch (error) {
+        console.error("Error linking wallet:", error);
+        // Fallback to direct update if API fails
+        const userDocRef = doc(db, "users", currentUser.uid);
+        await updateDoc(userDocRef, {
+          walletAddress: walletAddress,
+          lastUpdated: serverTimestamp()
+        });
+        console.log("✅ Wallet address synced to database (fallback):", walletAddress);
+      }
     } catch (error) {
       console.error("Error syncing wallet address to database:", error);
     }

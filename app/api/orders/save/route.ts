@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { WalletOrder, WalletPosition, WalletTransaction } from "@/types/firestore";
+import { 
+  getUserByWalletAddress, 
+  calculateCashback, 
+  calculateTier, 
+  processReferralReward, 
+  updateUserRewards 
+} from "@/lib/rewards-utils";
 
 export async function POST(request: Request) {
   try {
@@ -267,10 +274,68 @@ export async function POST(request: Request) {
       }
     }
 
+    // Process rewards (cashback and referrals) if user account exists
+    let rewardsProcessed = false;
+    let cashbackAmount = 0;
+    let referralReward = 0;
+
+    try {
+      // Get user by wallet address
+      const { userId, userData } = await getUserByWalletAddress(walletAddress);
+
+      if (userId && userData) {
+        // Calculate swap value in USD (use outputValue as it represents the token received value)
+        const swapValueUSD = outputValue || inputValue || 0;
+        
+        if (swapValueUSD > 0) {
+          // Calculate platform fee (0.75% of swap value)
+          // Note: 0.15% goes to 0x protocol, remaining 0.60% available for cashback/referrals
+          const platformFee = swapValueUSD * 0.0075;
+
+          // Get user's tier
+          const userPoints = userData.points || 0;
+          const tier = calculateTier(userPoints);
+
+          // Calculate cashback
+          cashbackAmount = calculateCashback(swapValueUSD, tier);
+
+          // Update user rewards
+          await updateUserRewards(userId, swapValueUSD, cashbackAmount, platformFee);
+
+          // Process referral rewards if user was referred
+          if (userData.referredBy) {
+            const referralResult = await processReferralReward(userId, swapValueUSD, platformFee);
+            referralReward = referralResult.referralReward;
+          }
+
+          rewardsProcessed = true;
+          console.log(`✅ Rewards processed for user ${userId}:`, {
+            cashback: cashbackAmount,
+            referralReward,
+            tier,
+            swapValueUSD
+          });
+        }
+      } else {
+        console.log(`ℹ️  No user account found for wallet ${walletAddress}, skipping rewards`);
+      }
+    } catch (error) {
+      console.error('❌ Error processing rewards:', error);
+      // Don't fail the order save if rewards fail
+    }
+
     return NextResponse.json({
       success: true,
       orderId: orderRef.id,
       message: 'Order and position saved successfully',
+      rewards: rewardsProcessed ? {
+        cashbackAmount,
+        referralReward,
+        processed: true
+      } : {
+        processed: false,
+        message: 'No user account linked to wallet'
+      }
     });
   } catch (error: any) {
     console.error('Error saving order:', error);

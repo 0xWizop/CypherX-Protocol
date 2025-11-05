@@ -144,7 +144,7 @@ export async function GET(request: Request) {
       // If no matches found, keep empty to strictly scope positions to the requested token
       if (filteredDocs.length === 0) {
         console.log("🔧 Positions - Token filter returned 0, returning empty positions for this token");
-      }
+       }
      }
      
      // First, collect all sell transactions

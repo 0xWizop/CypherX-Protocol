@@ -147,9 +147,14 @@ export async function GET(request: any) {
     }
 
     const token = authHeader.split('Bearer ')[1];
-    // For now, we'll use a simple token validation
-    // In production, you'd want to verify the Firebase ID token
-    const userId = token; // Simplified for now
+    let userId: string;
+    try {
+      const decodedToken = await auth().verifyIdToken(token);
+      userId = decodedToken.uid;
+    } catch (error) {
+      console.error('Token verification failed:', error);
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
 
     const db = adminDb();
 

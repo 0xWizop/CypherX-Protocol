@@ -13,10 +13,10 @@ const chains = [base] as const;
 
 // Configure connectors
 const connectors = [
-  metaMask({ dappMetadata: { name: "Homebase" } }),
+  metaMask({ dappMetadata: { name: "CypherX" } }),
   coinbaseWallet({ 
-    appName: "Homebase",
-    appLogoUrl: "https://homebase.com/icon.png",
+    appName: "CypherX",
+    appLogoUrl: "https://i.imgur.com/gpsJaUw.png",
   }),
   injected({
     target: "phantom",
@@ -38,10 +38,10 @@ const connectors = [
   walletConnect({
     projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "your_project_id",
     metadata: {
-      name: "Homebase",
-      description: "Homebase Trading Platform on Base",
-      url: "https://homebase.com",
-      icons: ["https://homebase.com/icon.png"],
+      name: "CypherX",
+      description: "CypherX Trading Platform on Base",
+      url: "https://cypherx.com",
+      icons: ["https://i.imgur.com/gpsJaUw.png"],
     },
   }),
   safe(),
