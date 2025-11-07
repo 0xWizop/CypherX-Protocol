@@ -22,6 +22,18 @@ import { FiBarChart, FiMenu, FiX, FiStar, FiTrash2, FiUser, FiSettings, FiCheck,
 import { createPortal } from "react-dom";
 import Image from "next/image";
 
+const MobileChainBadge: React.FC = () => (
+  <div className="lg:hidden flex items-center justify-center w-8 h-8 rounded-lg border border-gray-700/60 bg-gray-900/40">
+    <Image
+      src="https://i.imgur.com/k4HafXg.png"
+      alt="Base Chain"
+      width={24}
+      height={24}
+      className="w-4 h-4"
+    />
+  </div>
+);
+
 // Favorite Token Item Component
 const FavoriteTokenItem = ({ poolAddress, onRemove }: { poolAddress: string; onRemove: () => void }) => {
   const [tokenData, setTokenData] = useState<any>(null);
@@ -208,30 +220,80 @@ const Header: React.FC = () => {
 
   return (
     <>
-             <header className="bg-gray-950 border-b border-gray-800/20 sticky top-0 z-50">
+            <header className="bg-gray-950 border-b border-gray-800/20 sticky top-0 z-50">
         <div className="w-full">
                      <div className="flex items-center justify-between px-4 py-3 lg:px-6 lg:py-4">
-             {/* Left Side - Logo & Navigation */}
-             <div className="flex items-center space-x-8">
-               {/* Logo */}
-               <div className="flex-shrink-0">
-                 <Link href="/" className="flex items-center group">
-                   <motion.div
-                     whileHover={{ scale: 1.05 }}
-                     transition={{ duration: 0.2 }}
-                   >
-                     <span className="text-lg sm:text-xl font-cypherx-gradient">
-                       CYPHERX
-                     </span>
-                   </motion.div>
-                 </Link>
-               </div>
+            {/* Left Side - Menu, Logo & Navigation */}
+            <div className="flex items-center space-x-3 lg:space-x-8 lg:pl-0 xl:-ml-4 2xl:-ml-8">
+              {/* Mobile Menu Button */}
+              <motion.button
+                data-mobile-menu-button
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className="lg:hidden flex items-center justify-center w-10 h-10 rounded-lg text-gray-300 transition-all duration-200"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <AnimatePresence mode="wait">
+                  {isMenuOpen ? (
+                    <motion.div
+                      key="close"
+                      initial={{ rotate: -90, opacity: 0 }}
+                      animate={{ rotate: 0, opacity: 1 }}
+                      exit={{ rotate: 90, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <FiX className="w-5 h-5 text-gray-300" />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="menu"
+                      initial={{ rotate: 90, opacity: 0 }}
+                      animate={{ rotate: 0, opacity: 1 }}
+                      exit={{ rotate: -90, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <FiMenu className="w-5 h-5 text-gray-300" />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.button>
 
-                               {/* Desktop Navigation */}
-                <nav className="hidden lg:flex items-center space-x-8">
+              {/* Logo */}
+              <div className="flex-shrink-0 lg:-ml-4 xl:-ml-6 2xl:-ml-10">
+                <Link href="/" className="flex items-center group">
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    transition={{ duration: 0.2 }}
+                    className="flex items-center"
+                  >
+                    <Image
+                      src="https://i.imgur.com/b9l8Ndl.png"
+                      alt="CypherX"
+                      width={160}
+                      height={40}
+                      className="h-9 w-auto lg:hidden"
+                    />
+                    <div className="hidden lg:flex items-center space-x-2">
+                      <Image
+                        src="https://i.imgur.com/d2OCO6H.png"
+                        alt="CypherX"
+                        width={32}
+                        height={32}
+                        className="w-8 h-8"
+                      />
+                      <span className="text-lg text-white font-semibold" style={{ fontFamily: "'Poppins', sans-serif", letterSpacing: '0.02em' }}>
+                        CYPHERX
+                      </span>
+                    </div>
+                  </motion.div>
+                </Link>
+              </div>
+
+                              {/* Desktop Navigation */}
+               <nav className="hidden lg:flex items-center space-x-8">
                  <Link
                    href="/explore"
-                   className="text-gray-100 text-sm font-medium hover:text-blue-300 transition-all duration-200 group"
+                   className="text-white text-sm font-normal hover:text-blue-300 transition-all duration-200 group"
                    prefetch={true}
                  >
                    <span className="relative">
@@ -242,7 +304,7 @@ const Header: React.FC = () => {
 
                  <Link
                    href="/radar"
-                   className="text-gray-100 text-sm font-medium hover:text-blue-300 transition-all duration-200 group"
+                   className="text-white text-sm font-normal hover:text-blue-300 transition-all duration-200 group"
                    prefetch={true}
                  >
                    <span className="relative">
@@ -253,7 +315,7 @@ const Header: React.FC = () => {
 
                                    <Link
                     href="/events"
-                    className="text-gray-100 text-sm font-medium hover:text-blue-300 transition-all duration-200 group"
+                    className="text-white text-sm font-normal hover:text-blue-300 transition-all duration-200 group"
                     prefetch={true}
                   >
                     <span className="relative">
@@ -264,7 +326,7 @@ const Header: React.FC = () => {
 
                   <Link
                     href="/rewards"
-                    className="text-gray-100 text-sm font-medium hover:text-blue-300 transition-all duration-200 group"
+                    className="text-white text-sm font-normal hover:text-blue-300 transition-all duration-200 group"
                     prefetch={true}
                   >
                     <span className="relative">
@@ -276,7 +338,7 @@ const Header: React.FC = () => {
 
                  <Link
                    href="/insights"
-                   className="text-gray-100 text-sm font-medium hover:text-blue-300 transition-all duration-200 group"
+                   className="text-white text-sm font-normal hover:text-blue-300 transition-all duration-200 group"
                    prefetch={true}
                  >
                    <span className="relative">
@@ -287,7 +349,7 @@ const Header: React.FC = () => {
 
                  <Link
                    href="/explorer"
-                   className="text-gray-100 text-sm font-medium hover:text-blue-300 transition-all duration-200 group"
+                   className="text-white text-sm font-normal hover:text-blue-300 transition-all duration-200 group"
                    prefetch={true}
                  >
                    <span className="relative">
@@ -340,6 +402,23 @@ const Header: React.FC = () => {
                   </motion.button>
                 </div>
 
+                {/* Mobile Quick Actions */}
+                <div className="flex items-center space-x-2 lg:hidden">
+                  <MobileChainBadge />
+                  <motion.button
+                    onClick={() => setShowSettingsModal(true)}
+                    className="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-700/60 bg-gray-900/40 text-gray-300 hover:text-white hover:border-gray-500 transition-all duration-200"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    aria-label="Settings"
+                  >
+                    <FiSettings className="w-3 h-3" />
+                  </motion.button>
+                  <div className="lg:hidden">
+                    <UserProfileDropdown variant="rounded" />
+                  </div>
+                </div>
+
                 {/* Wallet Display & Dropdown */}
                 <div className="relative" ref={walletDropdownRef}>
                   <WalletDisplay
@@ -348,8 +427,8 @@ const Header: React.FC = () => {
                   />
                 </div>
                
-               {/* Profile Button or Login Button - Hidden on mobile */}
-               <div className="relative hidden lg:block">
+              {/* Profile Button or Login Button - Hidden on mobile */}
+              <div className="relative hidden lg:block">
                  {user ? (
                    <UserProfileDropdown />
                  ) : (
@@ -365,38 +444,6 @@ const Header: React.FC = () => {
                  )}
                </div>
 
-               {/* Mobile Menu Button */}
-               <motion.button
-                 data-mobile-menu-button
-                 onClick={() => setIsMenuOpen(!isMenuOpen)}
-                 className="lg:hidden flex items-center justify-center w-10 h-10 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-200"
-                 whileHover={{ scale: 1.05 }}
-                 whileTap={{ scale: 0.95 }}
-               >
-                 <AnimatePresence mode="wait">
-                   {isMenuOpen ? (
-                     <motion.div
-                       key="close"
-                       initial={{ rotate: -90, opacity: 0 }}
-                       animate={{ rotate: 0, opacity: 1 }}
-                       exit={{ rotate: 90, opacity: 0 }}
-                       transition={{ duration: 0.2 }}
-                     >
-                       <FiX className="w-5 h-5 text-gray-300" />
-                     </motion.div>
-                   ) : (
-                     <motion.div
-                       key="menu"
-                       initial={{ rotate: 90, opacity: 0 }}
-                       animate={{ rotate: 0, opacity: 1 }}
-                       exit={{ rotate: -90, opacity: 0 }}
-                       transition={{ duration: 0.2 }}
-                     >
-                       <FiMenu className="w-5 h-5 text-gray-300" />
-                     </motion.div>
-                   )}
-                 </AnimatePresence>
-               </motion.button>
              </div>
            </div>
 
@@ -421,105 +468,49 @@ const Header: React.FC = () => {
                   </div>
 
                   {/* Mobile Navigation Links */}
-                  <div className="space-y-1">
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.1 }}
-                    >
-                      <Link href="/explore" className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-700/30 transition-all duration-200 group" prefetch={true}>
-                        <span className="text-gray-200 text-sm font-medium">Trade</span>
-                      </Link>
-                    </motion.div>
-                    
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.15 }}
-                    >
-                      <Link href="/radar" className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-700/30 transition-all duration-200 group" prefetch={true}>
-                        <span className="text-gray-200 text-sm font-medium">Radar</span>
-                      </Link>
-                    </motion.div>
-                    
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.2 }}
-                    >
-                                          <Link href="/events" className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-700/30 transition-all duration-200 group" prefetch={true}>
-                      <span className="text-gray-200 text-sm font-medium">Events</span>
-                    </Link>
-                    
-                    <Link href="/rewards" className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-700/30 transition-all duration-200 group" prefetch={true}>
-                      <span className="text-gray-200 text-sm font-medium">Rewards</span>
-                    </Link>
-                    </motion.div>
-                    
-                    {/* Mobile Login Button */}
-                    {!user && (
+                  <div className="space-y-3">
+                    {[{
+                      href: "/explore",
+                      label: "Explore",
+                      delay: 0.1
+                    }, {
+                      href: "/radar",
+                      label: "Radar",
+                      delay: 0.15
+                    }, {
+                      href: "/events",
+                      label: "Events",
+                      delay: 0.2
+                    }, {
+                      href: "/rewards",
+                      label: "Rewards",
+                      delay: 0.25
+                    }, {
+                      href: "/insights",
+                      label: "Insights",
+                      delay: 0.3
+                    }, {
+                      href: "/explorer",
+                      label: "Explorer",
+                      delay: 0.35
+                    }].map(({ href, label, delay }, index) => (
                       <motion.div
+                        key={href}
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.25 }}
+                        transition={{ delay }}
                       >
-                        <button
-                          onClick={() => {
-                            setRedirectTo(pathname);
-                            setShowLoginModal(true);
-                            setIsMenuOpen(false);
-                          }}
-                          className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-700/30 transition-all duration-200 group w-full text-left"
+                        <Link
+                          href={href}
+                          className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-gray-700/30 transition-all duration-200"
+                          prefetch={true}
+                          onClick={() => setIsMenuOpen(false)}
                         >
-                          <FiUser className="w-4 h-4 text-gray-400 group-hover:text-blue-400" />
-                          <span className="text-gray-200 text-sm font-medium">Login</span>
-                        </button>
+                          <span className="text-white text-sm font-normal">{label}</span>
+                        </Link>
+                        {index < 5 && <div className="h-px bg-gray-800/60 mt-1" />}
                       </motion.div>
-                    )}
-                    
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.25 }}
-                    >
-                      <Link href="/insights" className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-700/30 transition-all duration-200 group" prefetch={true}>
-                        <span className="text-gray-200 text-sm font-medium">Insights</span>
-                      </Link>
-                    </motion.div>
-                    
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.3 }}
-                    >
-                      <Link href="/explorer" className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-700/30 transition-all duration-200 group" prefetch={true}>
-                        <span className="text-gray-200 text-sm font-medium">Explorer</span>
-                      </Link>
-                    </motion.div>
-                  </div>
-
-                  {/* Mobile Favorites & Watchlist */}
-                  <div className="space-y-1">
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.35 }}
-                    >
-                      <button 
-                        onClick={() => setShowWatchlistsModal(true)}
-                        className="flex items-center justify-between w-full p-2 rounded-lg hover:bg-gray-700/30 transition-all duration-200 group"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <FiStar className="w-4 h-4 text-yellow-400" />
-                          <span className="text-gray-200 text-sm font-medium">My Watchlists</span>
-                        </div>
-                        {(favorites.length > 0 || watchlists.length > 0) && (
-                          <span className="bg-blue-500 text-white text-xs rounded-full px-2 py-1 font-bold">
-                            {favorites.length + watchlists.length > 9 ? '9+' : favorites.length + watchlists.length}
-                          </span>
-                        )}
-                      </button>
-                    </motion.div>
+                    ))}
                   </div>
 
                   {/* Mobile Dropdowns */}

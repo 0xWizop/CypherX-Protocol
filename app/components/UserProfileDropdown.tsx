@@ -17,9 +17,13 @@ import { createPortal } from "react-dom";
 import TierProgressionModal from "./TierProgressionModal";
 import PointsHistoryModal from "./PointsHistoryModal";
 
+type UserProfileDropdownProps = {
+  variant?: "circle" | "rounded";
+};
+
 const auth: Auth = firebaseAuth as Auth;
 
-const UserProfileDropdown: React.FC = () => {
+const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "circle" }) => {
   const router = useRouter();
   const { user } = useAuth();
   const { selfCustodialWallet } = useWalletSystem();
@@ -390,6 +394,157 @@ const UserProfileDropdown: React.FC = () => {
   };
 
   const [buttonRef, setButtonRef] = useState<HTMLButtonElement | null>(null);
+  const isInlineDropdown = variant !== "rounded";
+
+  const renderProfileContent = () => (
+    <>
+      {/* Header with gradient background */}
+      <div className={`bg-gradient-to-r ${getTierGradient(tier)} p-4 relative overflow-hidden`}>
+        <div className="absolute inset-0 bg-black/20"></div>
+        <div className="relative z-10">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-10 h-10 rounded-full bg-blue-400/20 backdrop-blur-sm flex items-center justify-center overflow-hidden">
+                {profilePicture ? (
+                  <Image
+                    src={profilePicture}
+                    alt="Profile"
+                    width={40}
+                    height={40}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <FiUser className="w-5 h-5 text-blue-400" />
+                )}
+              </div>
+              <div>
+                <h3 className="text-white font-semibold text-base">
+                  {user ? 'My Profile' : 'Welcome'}
+                </h3>
+                <p className="text-white/80 text-xs capitalize">
+                  {tier} • {points !== null ? `${points.toLocaleString()} pts` : "—"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div 
+                className="w-3 h-3 rounded-full shadow-lg"
+                style={{ backgroundColor: getTierColor(tier) }}
+              ></div>
+            </div>
+          </div>
+
+          {/* Progress to next tier */}
+          {nextTier && (
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-white/90 text-xs font-medium">Progress to {nextTier}</span>
+                <span className="text-white/90 text-xs font-semibold">{progress}%</span>
+              </div>
+              <div className="w-full bg-white/20 rounded-full h-1.5 overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progress}%` }}
+                  transition={{ duration: 0.8, ease: "easeOut" }}
+                  className="bg-white h-1.5 rounded-full shadow-sm"
+                ></motion.div>
+              </div>
+              <p className="text-white/70 text-xs mt-1.5">
+                {pointsToNextTier} points to next tier
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="p-4 space-y-4">
+        {/* Quick Stats */}
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-400">Points</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-white font-medium">{points !== null ? points.toLocaleString() : "—"}</span>
+            <button
+              onClick={() => setShowTierModal(true)}
+              className="p-0.5 hover:bg-blue-500/20 rounded transition-colors"
+              title="View Tier Progression"
+            >
+              <FiInfo className="w-3 h-3 text-blue-400" />
+            </button>
+          </div>
+        </div>
+
+        {/* Navigation Links */}
+        <div className="space-y-1 pt-2">
+          <button
+            onClick={() => {
+              setShowPointsHistory(true);
+              setShowAccountModal(false);
+            }}
+            className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-800/80 rounded-md transition-all duration-200"
+          >
+            <span className="font-medium text-sm">Points History</span>
+          </button>
+
+          {isAuthor && (
+            <button
+              onClick={() => {
+                setShowAuthorDashboardModal(true);
+                setShowAccountModal(false);
+              }}
+              className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-800/80 rounded-md transition-all duration-200"
+            >
+              <span className="font-medium text-sm">Author Dashboard</span>
+            </button>
+          )}
+
+          <button
+            onClick={handleVoteAndEarn}
+            className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-800/80 rounded-md transition-all duration-200"
+          >
+            <span className="font-medium text-sm">Vote & Earn</span>
+          </button>
+
+          <button
+            onClick={() => setShowAliasModal(true)}
+            className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-800/80 rounded-md transition-all duration-200"
+          >
+            <span className="font-medium text-sm">Set Alias</span>
+          </button>
+
+          <Link
+            href="/rewards"
+            className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-800/80 rounded-md transition-all duration-200"
+            onClick={() => setShowAccountModal(false)}
+          >
+            <span className="font-medium text-sm">Rewards & Referrals</span>
+          </Link>
+        </div>
+
+        {/* Logout Section */}
+        <div className="pt-3 border-t border-gray-700/50">
+          {user ? (
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleSignOut}
+              className="flex items-center w-full p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-md transition-all duration-200"
+            >
+              <span className="font-medium text-sm">Sign Out</span>
+            </motion.button>
+          ) : (
+            <Link
+              href="/login"
+              className="flex items-center w-full p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-md transition-all duration-200"
+              onClick={() => setShowAccountModal(false)}
+            >
+              <span className="font-medium text-sm">Sign In</span>
+            </Link>
+          )}
+        </div>
+      </div>
+    </>
+  );
 
   return (
     <div className="relative">
@@ -398,10 +553,12 @@ const UserProfileDropdown: React.FC = () => {
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setShowAccountModal((prev) => !prev)}
-        className="flex items-center focus:outline-none focus:ring-2 focus:ring-blue-500/50 rounded-full hover:scale-105 transform transition-all duration-200"
+        className={`flex items-center focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${variant === "circle" ? "rounded-full" : "rounded-lg"} hover:scale-105 transform transition-all duration-200`}
         aria-label={user ? "Account" : "Sign In"}
       >
-        <div className="relative w-8 h-8 rounded-full bg-gray-950/50 backdrop-blur-sm flex items-center justify-center transition-all duration-300 hover:bg-gray-900/50 shadow-lg border border-gray-600 hover:border-gray-500 overflow-hidden">
+        <div
+          className={`relative w-8 h-8 ${variant === "circle" ? "rounded-full bg-gray-950/50 border border-gray-600 hover:bg-gray-900/50" : "rounded-lg bg-gray-900/40 border border-gray-700/60 hover:bg-gray-900/60"} backdrop-blur-sm flex items-center justify-center transition-all duration-300 shadow-lg hover:border-gray-500 overflow-hidden`}
+        >
           {profilePicture ? (
             <Image
               src={profilePicture}
@@ -419,171 +576,59 @@ const UserProfileDropdown: React.FC = () => {
         </div>
       </motion.button>
 
-      {showAccountModal && buttonRef && createPortal(
+      {showAccountModal && createPortal(
         <AnimatePresence>
-          <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.98 }}
-            transition={{ duration: 0.15, ease: "easeOut" }}
-            ref={modalRef}
-            className="fixed w-80 bg-gray-900/95 backdrop-blur-sm rounded-lg border border-gray-700/60 shadow-2xl overflow-hidden z-[9999]"
-            style={{
-              top: buttonRef.getBoundingClientRect().bottom + 16,
-              right: window.innerWidth - buttonRef.getBoundingClientRect().right,
-            }}
-          >
-            {/* Header with gradient background */}
-            <div className={`bg-gradient-to-r ${getTierGradient(tier)} p-4 relative overflow-hidden`}>
-              <div className="absolute inset-0 bg-black/20"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center space-x-2.5">
-                    <div className="w-10 h-10 rounded-full bg-blue-400/20 backdrop-blur-sm flex items-center justify-center overflow-hidden">
-                      {profilePicture ? (
-                        <Image
-                          src={profilePicture}
-                          alt="Profile"
-                          width={40}
-                          height={40}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <FiUser className="w-5 h-5 text-blue-400" />
-                      )}
-                    </div>
-                    <div>
-                      <h3 className="text-white font-semibold text-base">
-                        {user ? 'My Profile' : 'Welcome'}
-                      </h3>
-                      <p className="text-white/80 text-xs capitalize">
-                        {tier} • {points !== null ? `${points.toLocaleString()} pts` : "—"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div 
-                      className="w-3 h-3 rounded-full shadow-lg"
-                      style={{ backgroundColor: getTierColor(tier) }}
-                    ></div>
-                  </div>
-                </div>
-
-                {/* Progress to next tier */}
-                {nextTier && (
-                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-white/90 text-xs font-medium">Progress to {nextTier}</span>
-                      <span className="text-white/90 text-xs font-semibold">{progress}%</span>
-                    </div>
-                    <div className="w-full bg-white/20 rounded-full h-1.5 overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${progress}%` }}
-                        transition={{ duration: 0.8, ease: "easeOut" }}
-                        className="bg-white h-1.5 rounded-full shadow-sm"
-                      ></motion.div>
-                    </div>
-                    <p className="text-white/70 text-xs mt-1.5">
-                      {pointsToNextTier} points to next tier
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-                        {/* Content */}
-            <div className="p-4 space-y-4">
-              {/* Quick Stats */}
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-400">Points</span>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-white font-medium">{points !== null ? points.toLocaleString() : "—"}</span>
-                  <button
-                    onClick={() => setShowTierModal(true)}
-                    className="p-0.5 hover:bg-blue-500/20 rounded transition-colors"
-                    title="View Tier Progression"
-                  >
-                    <FiInfo className="w-3 h-3 text-blue-400" />
-                  </button>
-                </div>
-              </div>
-              
-
-
-              {/* Navigation Links */}
-              <div className="space-y-1 pt-2">
-                <button
-                  onClick={() => {
-                    setShowPointsHistory(true);
-                    setShowAccountModal(false);
+          {showAccountModal && (
+            isInlineDropdown ? (
+              buttonRef && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
+                  ref={modalRef}
+                  className="fixed w-80 bg-gray-900/95 backdrop-blur-sm rounded-lg border border-gray-700/60 shadow-2xl overflow-hidden z-[9999]"
+                  style={{
+                    top: buttonRef.getBoundingClientRect().bottom + 16,
+                    right: window.innerWidth - buttonRef.getBoundingClientRect().right,
                   }}
-                  className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-800/80 rounded-md transition-all duration-200"
                 >
-                  <span className="font-medium text-sm">Points History</span>
-                </button>
-
-                {isAuthor && (
-                  <button
-                    onClick={() => {
-                      setShowAuthorDashboardModal(true);
-                      setShowAccountModal(false);
-                    }}
-                    className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-800/80 rounded-md transition-all duration-200"
-                  >
-                    <span className="font-medium text-sm">Author Dashboard</span>
-                  </button>
-                )}
-
-                <button
-                  onClick={handleVoteAndEarn}
-                  className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-800/80 rounded-md transition-all duration-200"
-                >
-                  <span className="font-medium text-sm">Vote & Earn</span>
-                </button>
-
-                <button
-                  onClick={() => setShowAliasModal(true)}
-                  className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-800/80 rounded-md transition-all duration-200"
-                >
-                  <span className="font-medium text-sm">Set Alias</span>
-                </button>
-
-                <Link
-                  href="/rewards"
-                  className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-800/80 rounded-md transition-all duration-200"
+                  {renderProfileContent()}
+                </motion.div>
+              )
+            ) : (
+              <>
+                <motion.div
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9998]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
                   onClick={() => setShowAccountModal(false)}
+                />
+                <motion.div
+                  className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
                 >
-                  <span className="font-medium text-sm">Rewards & Referrals</span>
-                </Link>
-              </div>
-
-              {/* Logout Section */}
-              <div className="pt-3 border-t border-gray-700/50">
-                {user ? (
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleSignOut}
-                    className="flex items-center w-full p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-md transition-all duration-200"
+                  <motion.div
+                    ref={modalRef}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 16 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="w-full max-w-sm bg-gray-900 rounded-none border border-gray-700 shadow-2xl overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <span className="font-medium text-sm">Sign Out</span>
-                  </motion.button>
-                ) : (
-                  <Link
-                    href="/login"
-                    className="flex items-center w-full p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-md transition-all duration-200"
-                    onClick={() => setShowAccountModal(false)}
-                  >
-                    <span className="font-medium text-sm">Sign In</span>
-                  </Link>
-                )}
-              </div>
-            </div>
-           </motion.div>
-         </AnimatePresence>
-               , document.body
-        )}
+                    {renderProfileContent()}
+                  </motion.div>
+                </motion.div>
+              </>
+            )
+          )}
+        </AnimatePresence>
+      , document.body
+      )}
       
       {/* Tier Progression Modal */}
       {showTierModal && createPortal(

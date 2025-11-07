@@ -96,3 +96,9 @@ After price fetching works:
 
 
 
+
+
+
+
+
+

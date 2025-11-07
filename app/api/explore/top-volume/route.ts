@@ -13,17 +13,18 @@ async function sleep(ms: number) {
 async function fetchWithBackoff(url: string, init?: RequestInit, maxRetries = 3) {
   let attempt = 0;
   let delay = 500; // ms
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  while (attempt < maxRetries) {
     const res = await fetch(url, { cache: "no-store", ...init });
     if (res.status !== 429 && res.ok) return res;
     attempt += 1;
-    if (attempt > maxRetries) return res;
+    if (attempt >= maxRetries) return res;
     const retryAfter = Number(res.headers.get("retry-after")) || 0;
     const wait = Math.max(retryAfter * 1000, delay);
     await sleep(wait);
     delay *= 2; // exponential backoff
   }
+  // Fallback return (should never reach here, but TypeScript needs it)
+  return new Response(null, { status: 500 });
 }
 
 // Fetch top volume pairs on Base from Dexscreener

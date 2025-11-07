@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { db } from "../../../../lib/firebase.ts";
 import { doc, getDoc, setDoc, query, where, getDocs, collection } from "firebase/firestore";
@@ -264,9 +265,9 @@ export default function CypherScanPage() {
             <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg overflow-hidden">
               <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-gray-700/50">
                 <h2 className="text-sm font-semibold text-white">Latest Blocks</h2>
-                <a href="/explorer/latest/block" className="text-blue-400 hover:text-blue-300 text-xs">
+                <Link href="/explorer/latest/block" className="text-blue-400 hover:text-blue-300 text-xs">
                   View all
-                </a>
+                </Link>
               </div>
 
               {/* Loading State */}

@@ -139,9 +139,9 @@ export async function GET(request: Request) {
       if (adminDatabase) {
         console.log("📊 Fetching from Cypherscope collection...");
         
-        // Get tokens ordered by score (highest first) and then by recency
+        // Get tokens ordered by lastUpdated (most recent first) to avoid index requirement
+        // Note: If you need score-based sorting, create the composite index in Firebase Console
         const snapshot = await adminDatabase.collection("Cypherscope")
-          .orderBy("score", "desc")
           .orderBy("lastUpdated", "desc")
           .limit(100) // Get more tokens for better selection
           .get();
@@ -188,11 +188,95 @@ export async function GET(request: Request) {
       console.log("❌ Cypherscope collection fetch failed:", error);
     }
 
-    // 2. Fetch from main tokens collection (screener data)
+    // 2. Fetch from Zora and Clanker APIs (new launchpad sources)
     try {
-      console.log("📊 Fetching from main tokens collection...");
+      console.log("📊 Fetching from Zora and Clanker...");
+      
+      // Import route handlers directly to avoid HTTP calls
+      const zoraModule = await import('../tokens/zora/route');
+      const clankerModule = await import('../tokens/clanker/route');
+      const getZoraTokens = zoraModule.GET;
+      const getClankerTokens = clankerModule.GET;
+      
+      // Fetch from Zora - get more tokens to catch all new pairs
+      try {
+        const zoraRequest = new Request(
+          new URL('/api/tokens/zora?limit=50', process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000')
+        );
+        const zoraResponse = await getZoraTokens(zoraRequest);
+        if (zoraResponse.ok) {
+          const zoraData = await zoraResponse.json();
+          if (zoraData.success && zoraData.tokens && Array.isArray(zoraData.tokens)) {
+            tokens = [...tokens, ...zoraData.tokens];
+            console.log(`✅ Fetched ${zoraData.tokens.length} tokens from Zora`);
+            
+            // Auto-save Zora tokens to Firebase for explore page
+            try {
+              const saveModule = await import('../tokens/save/route');
+              const saveTokens = saveModule.POST;
+              const saveRequest = new Request(
+                new URL('/api/tokens/save', process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'),
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ tokens: zoraData.tokens, source: 'zora' }),
+                }
+              );
+              await saveTokens(saveRequest);
+              console.log(`💾 Auto-saved ${zoraData.tokens.length} Zora tokens to Firebase`);
+            } catch (saveError) {
+              console.warn('⚠️ Failed to auto-save Zora tokens:', saveError);
+            }
+          }
+        }
+      } catch (zoraError) {
+        console.log("❌ Zora fetch failed:", zoraError);
+      }
+
+      // Fetch from Clanker - get more tokens to catch all new pairs
+      try {
+        const clankerRequest = new Request(
+          new URL('/api/tokens/clanker?limit=20', process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000')
+        );
+        const clankerResponse = await getClankerTokens(clankerRequest);
+        if (clankerResponse.ok) {
+          const clankerData = await clankerResponse.json();
+          if (clankerData.success && clankerData.tokens && Array.isArray(clankerData.tokens)) {
+            tokens = [...tokens, ...clankerData.tokens];
+            console.log(`✅ Fetched ${clankerData.tokens.length} tokens from Clanker`);
+            
+            // Auto-save Clanker tokens to Firebase for explore page
+            try {
+              const saveModule = await import('../tokens/save/route');
+              const saveTokens = saveModule.POST;
+              const saveRequest = new Request(
+                new URL('/api/tokens/save', process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'),
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ tokens: clankerData.tokens, source: 'clanker' }),
+                }
+              );
+              await saveTokens(saveRequest);
+              console.log(`💾 Auto-saved ${clankerData.tokens.length} Clanker tokens to Firebase`);
+            } catch (saveError) {
+              console.warn('⚠️ Failed to auto-save Clanker tokens:', saveError);
+            }
+          }
+        }
+      } catch (clankerError) {
+        console.log("❌ Clanker fetch failed:", clankerError);
+      }
+    } catch (error) {
+      console.log("❌ Launchpad sources fetch failed:", error);
+    }
+
+    // 3. Fetch from main tokens collection (screener data)
+    try {
+      console.log("📊 Fetching from main tokens collection (screener)...");
       const tokensRef = collection(db, "tokens");
-      let tokensQuery = query(tokensRef, orderBy("createdAt", "desc"), limit(50));
+      // Fetch more tokens from screener - no limit to get all
+      let tokensQuery = query(tokensRef, orderBy("createdAt", "desc"), limit(500));
       
       const snapshot = await getDocs(tokensQuery);
       
@@ -309,7 +393,7 @@ export async function GET(request: Request) {
       console.log("❌ Main tokens collection fetch failed:", error);
     }
 
-    // 3. Load local Zora tokens as fallback
+    // 4. Load local Zora tokens as fallback
     if (fs.existsSync(DB_FILE)) {
       try {
         console.log("📊 Loading from local Zora file...");
@@ -329,7 +413,7 @@ export async function GET(request: Request) {
       console.log("⚠️ Local Zora file not found");
     }
 
-    // 4. Add sample tokens if we have no real data
+    // 5. Add sample tokens if we have no real data
     if (tokens.length === 0) {
       console.log("⚠️ No tokens found, adding sample data...");
       tokens = [...tokens, ...sampleTokens];
@@ -398,13 +482,17 @@ export async function GET(request: Request) {
       // Add source tag
       tags.push(token.source.toUpperCase());
       
-      // NEW tag - if created in last 10 days
+      // NEW tag - if created in last 10 days (always check, even if tags exist)
       if (token.createdAt) {
-        const created = new Date(token.createdAt);
-        const now = new Date();
-        const daysDiff = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
-        if (daysDiff <= 10) {
-          tags.push('NEW');
+        try {
+          const created = new Date(token.createdAt);
+          const now = new Date();
+          const daysDiff = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
+          if (daysDiff <= 10 && daysDiff >= 0 && !tags.includes('NEW')) {
+            tags.push('NEW');
+          }
+        } catch (dateError) {
+          // Invalid date, skip NEW tag
         }
       }
       
@@ -498,11 +586,13 @@ export async function GET(request: Request) {
     return new Response(JSON.stringify({
       tokens: tokensWithTags,
       total: tokensWithTags.length,
-      sources: ['cypherscope', 'screener', 'zora-local', 'sample'],
+      sources: ['cypherscope', 'zora', 'clanker', 'screener', 'zora-local', 'sample'],
       debug: {
-        cypherscopeCount: tokens.filter(t => t.source === 'zora').length,
+        cypherscopeCount: tokens.filter(t => t.source === 'zora' && t.id).length,
+        zoraCount: tokens.filter(t => t.source === 'zora' && !t.id).length,
+        clankerCount: tokens.filter(t => t.source === 'clanker').length,
         screenerCount: tokens.filter(t => t.source === 'screener').length,
-        zoraLocalCount: tokens.filter(t => t.source === 'zora' && !t.id).length,
+        zoraLocalCount: tokens.filter(t => t.source === 'zora' && !t.id && !t.source).length,
         sampleCount: tokens.filter(t => t.source === 'sample').length
       }
     }), {

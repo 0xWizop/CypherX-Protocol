@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import Header from "../../../components/Header";
 import Footer from "../../../components/Footer";
 import LightweightChart, { type LightweightChartHandle } from "./LightweightChart.tsx";
@@ -48,13 +49,13 @@ export default function ChartV2Page() {
   const poolAddress = params?.poolAddress as string | undefined;
   const router = useRouter();
 
-  const [, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [, setError] = useState<string | null>(null);
   const [pair, setPair] = useState<DexPairResponse["pair"] | null>(null);
   const [candles, setCandles] = useState<Array<{ time: number; open: number; high: number; low: number; close: number }>>([]);
   const [activeDataTab, setActiveDataTab] = useState<"orders" | "positions">("orders");
   const [activeMiddleTab, setActiveMiddleTab] = useState<"trades" | "holders">("trades");
-  const [transactions, setTransactions] = useState<Array<{ hash: string; timestamp: number; tokenAmount: number; tokenSymbol?: string }>>([]);
+  const [transactions, setTransactions] = useState<Array<{ hash: string; timestamp: number; tokenAmount: number; tokenSymbol?: string; tokenAddress?: string; isBuy?: boolean }>>([]);
   const [timeframe, setTimeframe] = useState<string>("1d");
   const chartRef = React.useRef<LightweightChartHandle | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -1150,82 +1151,262 @@ export default function ChartV2Page() {
     };
   }, [poolAddress, pair?.baseToken?.symbol]);
 
-  // Load recent trades (Alchemy like v1)
+  // Load recent trades using Alchemy Transfers API
   useEffect(() => {
     let cancelled = false;
-    const transactionLimit = 50;
-    async function fetchTransactions(pairAddress: string) {
+    const transactionLimit = 100;
+    
+    // Cache for token decimals to avoid repeated API calls
+    const decimalsCache = new Map<string, number>();
+    
+    async function getCachedTokenDecimals(tokenAddress: string): Promise<number> {
+      if (decimalsCache.has(tokenAddress)) {
+        return decimalsCache.get(tokenAddress)!;
+      }
+      const decimals = await getTokenDecimals(tokenAddress);
+      decimalsCache.set(tokenAddress, decimals);
+      return decimals;
+    }
+    
+    async function fetchTransactions() {
+      if (!poolAddress || !pair?.baseToken?.address || !pair?.quoteToken?.address) {
+        return;
+      }
+
       try {
         const ALCHEMY_API_URL =
           process.env.NEXT_PUBLIC_ALCHEMY_API_URL ||
           "https://base-mainnet.g.alchemy.com/v2/8KR6qwxbLlIISgrMCZfsrYeMmn6-S-bN";
-        const requestBody = {
+        
+        const poolAddressLower = poolAddress.toString().toLowerCase();
+        const baseTokenAddress = pair.baseToken.address.toLowerCase();
+        const quoteTokenAddress = pair.quoteToken.address.toLowerCase();
+        const wethAddress = WETH_ADDRESS.toLowerCase();
+        const isWethQuote = quoteTokenAddress === wethAddress;
+        
+        // Fetch transfers TO the pool
+        const toPoolRequest = {
           id: 1,
           jsonrpc: "2.0",
           method: "alchemy_getAssetTransfers",
-          params: [
-            {
-              fromBlock: "0x0",
-              toBlock: "latest",
-              toAddress: pairAddress,
-              category: ["external", "erc20"],
-              withMetadata: true,
-              maxCount: "0x" + transactionLimit.toString(16),
-              order: "desc",
-            },
-          ],
+          params: [{
+            fromBlock: "0x0",
+            toBlock: "latest",
+            category: ["external", "erc20"],
+            withMetadata: true,
+            maxCount: "0x" + transactionLimit.toString(16),
+            order: "desc",
+            toAddress: poolAddressLower,
+          }],
         };
-        const response = await fetch(ALCHEMY_API_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody),
-        });
-        if (!response.ok) throw new Error("Failed to fetch transactions from Alchemy");
-        const data = await response.json();
-        const transfers = data?.result?.transfers || [];
-        const filtered = transfers.filter(
-          (t: any) => t.from?.toLowerCase() !== t.to?.toLowerCase()
-        );
-        const mapped = await Promise.all(filtered.map(async (t: any) => {
-          const isErc20 = t.category === "erc20";
-          let tokenAmount = 0;
-          let tokenAddress = t.rawContract?.address?.toLowerCase();
+
+        // Fetch transfers FROM the pool
+        const fromPoolRequest = {
+          id: 2,
+          jsonrpc: "2.0",
+          method: "alchemy_getAssetTransfers",
+          params: [{
+            fromBlock: "0x0",
+            toBlock: "latest",
+            category: ["external", "erc20"],
+            withMetadata: true,
+            maxCount: "0x" + transactionLimit.toString(16),
+            order: "desc",
+            fromAddress: poolAddressLower,
+          }],
+        };
+
+        const [toResponse, fromResponse] = await Promise.all([
+          fetch(ALCHEMY_API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(toPoolRequest),
+          }),
+          fetch(ALCHEMY_API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(fromPoolRequest),
+          }),
+        ]);
+
+        if (!toResponse.ok || !fromResponse.ok) {
+          throw new Error("Failed to fetch transactions from Alchemy");
+        }
+
+        const toData = await toResponse.json();
+        const fromData = await fromResponse.json();
+        const transfers = [...(toData?.result?.transfers || []), ...(fromData?.result?.transfers || [])];
+        
+        // Filter transfers involving base or quote tokens, and group by transaction hash
+        const transfersByTx = new Map<string, any[]>();
+        
+        for (const transfer of transfers) {
+          // Skip self-transfers
+          if (transfer.from?.toLowerCase() === transfer.to?.toLowerCase()) continue;
           
+          const tokenAddress = transfer.rawContract?.address?.toLowerCase();
+          const isBase = tokenAddress === baseTokenAddress;
+          const isQuote = tokenAddress === quoteTokenAddress || 
+                        (transfer.category === "external" && isWethQuote);
+          
+          if (isBase || isQuote) {
+            const txHash = transfer.hash?.toLowerCase();
+            if (txHash) {
+              if (!transfersByTx.has(txHash)) {
+                transfersByTx.set(txHash, []);
+              }
+              transfersByTx.get(txHash)!.push(transfer);
+            }
+          }
+        }
+
+        // Process each transaction to identify swaps and calculate amounts
+        const trades: Array<{
+          hash: string;
+          timestamp: number;
+          tokenAmount: number;
+          tokenSymbol?: string;
+          tokenAddress?: string;
+          isBuy: boolean;
+        }> = [];
+
+        for (const [txHash, txTransfers] of transfersByTx.entries()) {
           try {
-            if (t.value != null) {
-              // Alchemy returns raw values for ERC20, human-readable for ETH
-              if (isErc20 && tokenAddress) {
-                // Get correct decimals for ERC20 token
-                const decimals = await getTokenDecimals(tokenAddress);
-                tokenAmount = parseFloat(t.value) / Math.pow(10, decimals);
-              } else {
-                // External transfers (ETH) are already human-readable
-                tokenAmount = parseFloat(t.value) || 0;
+            // Find base token and quote token transfers in this transaction
+            let baseTransfer: any = null;
+            let quoteTransfer: any = null;
+            
+            for (const transfer of txTransfers) {
+              const tokenAddress = transfer.rawContract?.address?.toLowerCase();
+              if (tokenAddress === baseTokenAddress) {
+                baseTransfer = transfer;
+              } else if (tokenAddress === quoteTokenAddress || 
+                        (transfer.category === "external" && isWethQuote)) {
+                quoteTransfer = transfer;
               }
             }
-          } catch (_) {
-            tokenAmount = 0;
+
+            // Determine swap type and calculate base token amount
+            let baseTokenAmount = 0;
+            let isBuy = false;
+            let timestamp = 0;
+
+            if (baseTransfer) {
+              // Base token transfer found - use it directly
+              // Alchemy returns rawContract.value as hex string for ERC20, value as number for external
+              let baseTokenAmountRaw = 0;
+              if (baseTransfer.category === "erc20" && baseTransfer.rawContract?.value) {
+                // ERC20: rawContract.value is hex string
+                const decimals = await getCachedTokenDecimals(baseTokenAddress);
+                const rawValue = parseInt(baseTransfer.rawContract.value, 16);
+                baseTokenAmountRaw = rawValue / Math.pow(10, decimals);
+              } else if (baseTransfer.category === "external" && baseTransfer.value != null) {
+                // External ETH: value is already in ETH (human-readable)
+                baseTokenAmountRaw = parseFloat(baseTransfer.value.toString());
+              } else if (baseTransfer.rawContract?.value) {
+                // Fallback: try to parse rawContract.value
+                const decimals = baseTokenAddress === wethAddress ? 18 : 
+                                await getCachedTokenDecimals(baseTokenAddress);
+                const rawValue = parseInt(baseTransfer.rawContract.value, 16);
+                baseTokenAmountRaw = rawValue / Math.pow(10, decimals);
+              }
+              
+              baseTokenAmount = baseTokenAmountRaw;
+              
+              // Base token FROM pool = BUY (pool sending tokens to user)
+              // Base token TO pool = SELL (user sending tokens to pool)
+              isBuy = baseTransfer.from?.toLowerCase() === poolAddressLower;
+              timestamp = baseTransfer.metadata?.blockTimestamp 
+                ? new Date(baseTransfer.metadata.blockTimestamp).getTime() 
+                : Date.now();
+            } else if (quoteTransfer && pair?.priceUsd && parseFloat(pair.priceUsd) > 0) {
+              // Only quote token transfer - convert to base token amount
+              // Alchemy returns rawContract.value as hex string for ERC20, value as number for external
+              let quoteAmount = 0;
+              if (quoteTransfer.category === "erc20" && quoteTransfer.rawContract?.value) {
+                // ERC20: rawContract.value is hex string
+                const decimals = await getCachedTokenDecimals(quoteTokenAddress);
+                const rawValue = parseInt(quoteTransfer.rawContract.value, 16);
+                quoteAmount = rawValue / Math.pow(10, decimals);
+              } else if (quoteTransfer.category === "external" && quoteTransfer.value != null) {
+                // External ETH: value is already in ETH (human-readable)
+                quoteAmount = parseFloat(quoteTransfer.value.toString());
+              } else if (quoteTransfer.rawContract?.value) {
+                // Fallback: try to parse rawContract.value
+                const decimals = quoteTransfer.category === "external" ? 18 : 
+                                await getCachedTokenDecimals(quoteTokenAddress);
+                const rawValue = parseInt(quoteTransfer.rawContract.value, 16);
+                quoteAmount = rawValue / Math.pow(10, decimals);
+              }
+              
+              // Get quote token price in USD
+              const quoteSymbol = pair.quoteToken.symbol?.toUpperCase();
+              let quotePriceUSD = 1;
+              if (quoteSymbol === "USDC" || quoteSymbol === "USDT" || quoteSymbol === "DAI") {
+                quotePriceUSD = 1;
+              } else if (quoteSymbol === "WETH" || quoteSymbol === "ETH") {
+                quotePriceUSD = pair.priceNative ? parseFloat(pair.priceNative) : 3000;
+              } else {
+                quotePriceUSD = pair.priceNative ? parseFloat(pair.priceNative) : 1;
+              }
+              
+              // Convert quote amount to base token amount
+              const baseTokenPriceUSD = parseFloat(pair.priceUsd);
+              const quoteValueUSD = quoteAmount * quotePriceUSD;
+              baseTokenAmount = quoteValueUSD / baseTokenPriceUSD;
+              
+              // Quote token TO pool = BUY (user sending quote to pool, receiving base)
+              // Quote token FROM pool = SELL (pool sending quote to user, receiving base)
+              isBuy = quoteTransfer.to?.toLowerCase() === poolAddressLower;
+              timestamp = quoteTransfer.metadata?.blockTimestamp 
+                ? new Date(quoteTransfer.metadata.blockTimestamp).getTime() 
+                : Date.now();
+            } else {
+              // Can't determine swap without base transfer or price data
+              continue;
+            }
+
+            // Filter out dust and add to trades
+            if (baseTokenAmount > 0.000001 && pair?.baseToken?.symbol) {
+              trades.push({
+                hash: txHash,
+                timestamp,
+                tokenAmount: baseTokenAmount,
+                tokenSymbol: pair.baseToken.symbol,
+                tokenAddress: baseTokenAddress,
+                isBuy,
+              });
+            }
+          } catch (e) {
+            console.error(`Error processing transaction ${txHash}:`, e);
           }
-          
-          return {
-            hash: t.hash,
-            timestamp: new Date(t.metadata.blockTimestamp).getTime(),
-            tokenAmount,
-            tokenSymbol: t.asset || "ETH",
-            tokenAddress: tokenAddress,
-          };
-        }));
-        if (!cancelled) setTransactions(mapped);
+        }
+
+        // Sort by timestamp (newest first) and limit to 50
+        const validTrades = trades
+          .sort((a, b) => b.timestamp - a.timestamp)
+          .slice(0, 50);
+
+        if (!cancelled) {
+          console.log(`✅ Fetched ${validTrades.length} trades`);
+          setTransactions(validTrades);
+        }
       } catch (e) {
+        console.error("Error fetching transactions:", e);
         if (!cancelled) setTransactions([]);
       }
     }
-    if (poolAddress) fetchTransactions(poolAddress.toString());
-    const interval = setInterval(() => {
-      if (poolAddress) fetchTransactions(poolAddress.toString());
-    }, 15000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [poolAddress]);
+    
+    if (poolAddress && pair?.baseToken?.address && pair?.quoteToken?.address) {
+      fetchTransactions();
+      const interval = setInterval(() => {
+        if (poolAddress && pair?.baseToken?.address && pair?.quoteToken?.address && !cancelled) {
+          fetchTransactions();
+        }
+      }, 15000);
+      return () => { cancelled = true; clearInterval(interval); };
+    }
+  }, [poolAddress, pair?.baseToken?.address, pair?.quoteToken?.address, pair?.priceUsd, pair?.priceNative]);
 
   const title = useMemo(() => {
     const base = pair?.baseToken?.symbol || "TOKEN";
@@ -1243,59 +1424,65 @@ export default function ChartV2Page() {
   };
 
   // For table rendering, memoize and color-categorize
+  // tokenAmount is already in base token units from the fetch function
   const augmentedTransactions = useMemo(() => {
     if (!transactions.length) return [];
-    // Calculate max USD for relative sizing (used for sizing calculations if needed)
-    // const maxUsd = Math.max(...transactions.map(tx => {
-    //   const usd = pair?.priceUsd ? (tx.tokenAmount * parseFloat(pair.priceUsd)) : 0;
-    //   return usd;
-    // }), 1);
 
     return transactions.map(tx => {
-      const involvesBase = tx.tokenSymbol === pair?.baseToken?.symbol;
-      const isBuy = !involvesBase;
-      const isSell = involvesBase;
-      
-      // For buys: tokenAmount is quote token (WETH/USDC), USD = quoteTokenAmount × quoteTokenPrice
-      // For sells: tokenAmount is base token, USD = baseTokenAmount × baseTokenPrice
-      let usd = 0;
-      if (isBuy) {
-        // Buy: quote token amount × quote token price
-        const quoteSymbol = pair?.quoteToken?.symbol?.toUpperCase();
-        if (quoteSymbol === "USDC" || quoteSymbol === "USDT") {
-          usd = tx.tokenAmount; // USDC/USDT = $1 each
-        } else if (quoteSymbol === "WETH" || quoteSymbol === "ETH") {
-          // WETH: use ETH price (~$3000) or priceNative if available
-          const ethPrice = pair?.priceNative ? parseFloat(pair.priceNative) : 3000;
-          usd = tx.tokenAmount * ethPrice;
-        } else {
-          // Other quote tokens: use quote token amount (already in USD if stablecoin-like)
-          // For virtual pairs, this might need adjustment
-          usd = tx.tokenAmount * (pair?.priceUsd ? parseFloat(pair.priceUsd) : 0);
-        }
-      } else {
-        // Sell: base token amount × base token price
-        usd = pair?.priceUsd ? (tx.tokenAmount * parseFloat(pair.priceUsd)) : 0;
-      }
-
+      // tokenAmount is already in base token units
+      // USD = baseTokenAmount × baseTokenPriceUSD
+      const baseTokenPriceUSD = pair?.priceUsd ? parseFloat(pair.priceUsd) : 0;
+      const usd = tx.tokenAmount * baseTokenPriceUSD;
       const usdLabel = abbrev(usd, true);
 
-      // Eased fill calculation to make values near $5k visually closer to full width
-      // - <$100 → 22%
-      // - $100–$5k → 25%–100% with ease-out
-      // - ≥$5k → 100%
+      // Fill calculation for visual bar sizing with aggressive scaling after $1K
+      // Strategy: Minimum fill covers text, minimal scaling $100-$1K, then very aggressive scaling $1K-$5K
+      // - Minimum fill: 65% to ensure full text coverage (including $, decimals, K/M suffixes)
+      // - <$100: 65% minimum (covers text)
+      // - $100-$1K: Minimal scaling from 65% to 67% (keep small orders very similar)
+      // - $1K-$5K: Extremely aggressive scaling from 67% to 100% (big jump for $1K+ orders)
+      // - ≥$5K: 100% (full width)
+      const MIN_FILL = 65; // Minimum to cover full text including suffixes and decimals
+      const MID_FILL = 67; // Fill at $1K - keep it very close to minimum to maximize contrast
+      
       let fill = 0;
       if (usd < 100) {
-        fill = 22;
+        // Below $100: Always use minimum to cover text
+        fill = MIN_FILL;
+      } else if (usd < 1000) {
+        // $100-$1K: Minimal linear scaling from 65% to 67% (keep small orders very similar)
+        const linear = (usd - 100) / (1000 - 100);
+        fill = MIN_FILL + (linear * (MID_FILL - MIN_FILL)); // 65% to 67%
+        // Example: $185 → 65.19%, $500 → 66.11%, $1000 → 67%
       } else if (usd >= 5000) {
+        // $5K+: Full width
         fill = 100;
       } else {
-        const linear = (usd - 100) / (5000 - 100);
-        const eased = Math.pow(Math.min(Math.max(linear, 0), 1), 0.6);
-        fill = 25 + (eased * 75);
+        // $1K–$5K: Extremely aggressive scaling from 67% to 95% (not 100% - that's reserved for $5K+)
+        // Use compressed exponential with very high power for extremely fast growth
+        // Compress the range to $3K for faster scaling, but cap at 95% until $5K
+        const compressedMax = 3000; // Compress from $5K to $3K for faster scaling
+        const linear = Math.min(1, (usd - 1000) / (compressedMax - 1000));
+        // Compressed exponential: 1 - (1-x)^3.5 gives extremely fast initial growth
+        // Scale from 67% to 95% (not 100%)
+        const compressed = 1 - Math.pow(1 - linear, 3.5);
+        const maxFillBefore5K = 95; // Cap at 95% for orders below $5K
+        fill = MID_FILL + (compressed * (maxFillBefore5K - MID_FILL)); // 67% to 95%
+        // $1.24K (linear=0.12) → compressed≈0.42 → fill≈79%
+        // $1.5K (linear=0.25) → compressed≈0.65 → fill≈85%
+        // $2K (linear=0.5) → compressed≈0.87 → fill≈91%
+        // $3K+ but <$5K (linear=1.0) → compressed=1.0 → fill=95%
       }
 
-      return { ...tx, isBuy, isSell, usd, usdLabel, fill };
+      const isBuy = (tx as any).isBuy !== undefined ? (tx as any).isBuy : true;
+      return { 
+        ...tx, 
+        isBuy,
+        isSell: !isBuy, 
+        usd, 
+        usdLabel, 
+        fill 
+      };
     });
   }, [transactions, pair]);
 
@@ -1303,6 +1490,23 @@ export default function ChartV2Page() {
   const ExternalLinkIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 20 20"><rect x="3" y="7" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6"/><path d="M9 11l7-7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><path d="M13.9 3.8h2.3c.5 0 .8.4.8.8v2.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
   );
+
+  // Get token name for loading screen - try to get from pair if available, otherwise use pool address
+  const tokenName = pair?.baseToken?.symbol || pair?.baseToken?.name || poolAddress?.slice(0, 8) || 'Token';
+
+  if (loading || !pair) {
+    return (
+      <div className="h-screen bg-gray-950 text-gray-200 flex flex-col">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-2xl font-semibold text-white mb-2">Loading</div>
+            <div className="text-lg text-gray-400">{tokenName}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen bg-gray-950 text-gray-200 flex flex-col">
@@ -1721,20 +1925,22 @@ export default function ChartV2Page() {
                         </span>
                       </td>
                       <td className="px-2 py-2.5 text-center text-white">
-                        {tx.tokenAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        {tx.tokenAmount > 0 ? (
+                          tx.tokenAmount >= 1 
+                            ? tx.tokenAmount.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 0 })
+                            : tx.tokenAmount.toLocaleString(undefined, { maximumFractionDigits: 6, minimumFractionDigits: 0 })
+                        ) : '0'}
                       </td>
                       <td className="px-3 py-2.5 text-center">
-                        <a
-                          href={`https://basescan.org/tx/${tx.hash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <Link
+                          href={`/explorer/tx/${tx.hash}`}
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
                           className="text-white hover:text-gray-300 hover:underline transition-colors"
                           title={tx.hash}
                         >
                           {dayjs(tx.timestamp).format('HH:mm:ss')}
                           <ExternalLinkIcon />
-                        </a>
+                        </Link>
                       </td>
                     </tr>
                   ))}

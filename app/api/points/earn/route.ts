@@ -46,6 +46,9 @@ const POINT_RULES = {
   token_review: { points: 15 },
   create_watchlist: { points: 10 },
   
+  // Events
+  event_proposal_approved: { points: 50 },
+  
   // Author rewards for engagement
   receive_comment: { points: 3 },
   receive_like: { points: 1 },

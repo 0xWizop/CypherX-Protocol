@@ -14,6 +14,8 @@ import "@rainbow-me/rainbowkit/styles.css";
 import { LoadingProvider } from "./components/LoadingProvider";
 import { Toaster } from "react-hot-toast";
 import LoginModal from "./components/LoginModal";
+import CookieBanner from "./components/CookieBanner";
+import Footer from "./components/Footer";
 
 // Create a new query client
 const queryClient = new QueryClient();
@@ -258,7 +260,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
                       setRedirectTo
                     }}
                   >
-                    {children}
+                    <div className="flex min-h-screen flex-col">
+                      <main className="flex-1 pb-24 sm:pb-20">
+                        {children}
+                      </main>
+                      <Footer />
+                    </div>
                     <LoginModal
                       isOpen={showLoginModal}
                       onClose={() => setShowLoginModal(false)}
@@ -272,6 +279,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                         },
                       }}
                     />
+                    <CookieBanner />
                   </LoginModalContext.Provider>
                 </VotingModalContext.Provider>
               </WalletSystemContext.Provider>

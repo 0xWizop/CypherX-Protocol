@@ -11,7 +11,6 @@ import {
   FiPlus,
 } from "react-icons/fi";
 import Header from "../../../components/Header";
-import Footer from "../../../components/Footer";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 
 interface Transaction {
@@ -184,15 +183,15 @@ export default function TransactionDetails() {
 
 
   return (
-    <div className="h-screen bg-[#0f172a] flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-[#0f172a] flex flex-col">
       <Header />
-      
-      <main className="flex-1 bg-[#0f172a] overflow-hidden">
-        <div className="h-full max-w-[1280px] mx-auto px-5 lg:px-8 pt-6 pb-0 flex flex-col">
+
+      <main className="flex-1 overflow-hidden">
+        <div className="h-full w-full max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-24 flex flex-col gap-4 sm:gap-5">
           {/* Header */}
-          <div className="text-left mb-4 flex-shrink-0">
-            <h1 className="text-base mb-0.5 text-white">Transaction Details</h1>
-            <p className="text-gray-400 text-xs">Transaction information from Base network</p>
+          <div className="flex flex-col gap-1 flex-none">
+            <h1 className="text-base font-normal text-white sm:text-lg">Transaction Details</h1>
+            <p className="text-gray-400 text-xs sm:text-sm">Transaction information from Base network</p>
           </div>
 
           {/* Error Display */}

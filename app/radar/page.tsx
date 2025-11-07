@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { useLoading, PageLoader } from "../components/LoadingProvider";
-import { FiPlus, FiTrendingUp, FiZap, FiSettings } from "react-icons/fi";
+import { FiSettings } from "react-icons/fi";
 import { SiEthereum } from "react-icons/si";
 import { useWatchlists } from "../hooks/useWatchlists";
 
@@ -28,12 +28,8 @@ function getTokenTags(token: {
   createdAt?: string;
   tags?: string[];
 }) {
-  const tags: string[] = [];
-  
-  // If token already has tags from API, use them
-  if (token.tags && token.tags.length > 0) {
-    return token.tags;
-  }
+  // Start with existing tags if they exist, otherwise empty array
+  const tags: string[] = token.tags ? [...token.tags] : [];
   
   const marketCap = typeof token.marketCap === 'string' ? parseFloat(token.marketCap) : (token.marketCap || 0);
   const volume = typeof token.volume24h === 'string' ? parseFloat(token.volume24h) : (token.volume24h || 0);
@@ -41,13 +37,20 @@ function getTokenTags(token: {
   const liquidity = typeof token.liquidity?.usd === 'string' ? parseFloat(token.liquidity.usd) : (token.liquidity?.usd || 0);
   const marketCapDelta24h = typeof token.marketCapDelta24h === 'string' ? parseFloat(token.marketCapDelta24h) : (token.marketCapDelta24h || 0);
   
-  // NEW tag - if created in last 10 days
+  // NEW tag - if created in last 10 days (always check, even if tags exist)
   if (token.createdAt) {
-    const created = new Date(token.createdAt);
-    const now = new Date();
-    const daysDiff = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
-    if (daysDiff <= 10) {
-      tags.push("NEW");
+    try {
+      const created = new Date(token.createdAt);
+      const now = new Date();
+      const daysDiff = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
+      if (daysDiff <= 10 && daysDiff >= 0) {
+        if (!tags.includes("NEW")) {
+          tags.push("NEW");
+        }
+      }
+    } catch (dateError) {
+      // Invalid date, skip NEW tag
+      console.warn("Invalid createdAt date for token:", token.address, token.createdAt);
     }
   }
   
@@ -318,40 +321,124 @@ export default function RadarPage() {
     }
   };
 
+  // Real-time fetching with smooth updates
   useEffect(() => {
-    async function fetchTokens() {
-      setLoading(true);
+    let isMounted = true;
+    let fetchTimeout: NodeJS.Timeout;
+    
+    async function fetchTokens(silent = false) {
+      if (!silent) setLoading(true);
       setError(null);
       try {
-        // Add cache-busting parameter to ensure fresh data
+        // Fetch fresh tokens
         const res = await fetch(`/api/cypherscope-tokens?t=${Date.now()}`);
         const data = await res.json();
+        
+        if (!isMounted) return;
+        
         console.log("🔍 API Response:", data);
         console.log("🔍 Tokens from API:", data.tokens?.length || 0);
         
+        // Process tokens with proper stats extraction
         const tokensWithTags = (data.tokens || []).map((token: any) => {
-          const tags = getTokenTags(token);
-          return {
+          // Ensure we extract stats properly from nested structures
+          const processedToken = {
             ...token,
+            // Extract volume from nested structure if needed
+            volume24h: token.volume24h || token.volume?.h24 || 0,
+            // Extract marketCap
+            marketCap: token.marketCap || 0,
+            // Extract priceChange
+            priceChange: token.priceChange || {
+              m5: 0,
+              h1: 0,
+              h6: 0,
+              h24: 0,
+            },
+            // Extract liquidity
+            liquidity: token.liquidity || { usd: 0 },
+            // Extract uniqueHolders
+            uniqueHolders: token.uniqueHolders || token.holders || 0,
+            // Extract priceUsd
+            priceUsd: token.priceUsd || '0',
+            // Extract txns
+            txns: token.txns || {
+              m5: { buys: 0, sells: 0 },
+              h1: { buys: 0, sells: 0 },
+              h6: { buys: 0, sells: 0 },
+              h24: { buys: 0, sells: 0 },
+            },
+          };
+          
+          const tags = getTokenTags(processedToken);
+          return {
+            ...processedToken,
             tags: tags
           };
         });
         
         console.log("🔍 Final tokens with tags:", tokensWithTags.length);
-        setTokens(tokensWithTags);
+        console.log("🔍 Sample token stats:", tokensWithTags[0] ? {
+          name: tokensWithTags[0].name,
+          marketCap: tokensWithTags[0].marketCap,
+          volume24h: tokensWithTags[0].volume24h,
+          priceChange: tokensWithTags[0].priceChange,
+        } : 'No tokens');
+        
+        // Smooth update - only update if data changed
+        setTokens(prevTokens => {
+          // Check if we have new tokens or updated data
+          const hasNewTokens = tokensWithTags.length > prevTokens.length;
+          const hasUpdatedData = tokensWithTags.some((newToken: any) => {
+            const oldToken = prevTokens.find((t: any) => t.address === newToken.address);
+            if (!oldToken) return true;
+            // Check if stats changed
+            return (
+              oldToken.marketCap !== newToken.marketCap ||
+              oldToken.volume24h !== newToken.volume24h ||
+              oldToken.priceChange?.h24 !== newToken.priceChange?.h24
+            );
+          });
+          
+          if (hasNewTokens || hasUpdatedData) {
+            return tokensWithTags;
+          }
+          return prevTokens;
+        });
       } catch (error) {
         console.error("❌ Fetch error:", error);
-        setError("Failed to fetch tokens.");
+        if (!silent) setError("Failed to fetch tokens.");
       } finally {
-        setLoading(false);
+        if (!silent) setLoading(false);
       }
     }
+    
+    // Initial fetch
     fetchTokens();
     
-    // Refresh data every 5 minutes
-    const interval = setInterval(fetchTokens, 5 * 60 * 1000);
+    // Real-time polling every 30 seconds for new pairs and stats updates
+    const pollInterval = setInterval(() => {
+      fetchTokens(true); // Silent fetch
+    }, 30 * 1000);
     
-    return () => clearInterval(interval);
+    // Background sync every 2 minutes to save new tokens
+    const syncInterval = setInterval(async () => {
+      try {
+        await fetch('/api/tokens/sync', { method: 'GET' });
+        console.log('🔄 Background token sync completed');
+        // Refresh tokens after sync
+        fetchTokens(true);
+      } catch (error) {
+        console.warn('⚠️ Background sync failed:', error);
+      }
+    }, 2 * 60 * 1000);
+    
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+      clearInterval(syncInterval);
+      if (fetchTimeout) clearTimeout(fetchTimeout);
+    };
   }, []);
 
   // Filtering and sorting
@@ -406,76 +493,104 @@ export default function RadarPage() {
       }
     });
 
-  // Categorize tokens for 3-column layout - ensure each column has at least 5 tokens
-  let newTokens = filteredAndSortedTokens.filter(token => 
-    token.tags?.includes("NEW")
-  );
+  // Helper function to check if token is NEW (created within last 10 days)
+  const isNewToken = (token: any) => {
+    if (!token.createdAt) return false;
+    const created = new Date(token.createdAt);
+    const now = new Date();
+    const daysDiff = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
+    return daysDiff <= 10;
+  };
 
-  // Get surging tokens based on actual surging behavior
-  let surgingTokens = filteredAndSortedTokens
-    .filter(token => {
-      // Exclude new pairs from surging section
-      if (token.tags?.includes("NEW")) return false;
-      
-      // Must have SURGING tag from API
-      if (token.tags?.includes("SURGING")) return true;
-      
-      // OR must meet strict surging criteria:
-      // 1. Significant positive price movement (15-100% gain)
-      const hasGoodGain = token.priceChange?.h24 && token.priceChange.h24 >= 15 && token.priceChange.h24 <= 100;
-      
-      // 2. High volume relative to market cap (indicating real activity)
-      const hasHighActivity = token.volume24h && token.marketCap && 
-        (parseFloat(String(token.volume24h)) / parseFloat(String(token.marketCap))) > 0.2;
-      
-      // 3. Recent activity (not old stagnant tokens)
-      const isRecent = token.createdAt && 
-        ((Date.now() - new Date(token.createdAt).getTime()) / (1000 * 60 * 60 * 24)) < 14;
-      
-      return hasGoodGain && hasHighActivity && isRecent;
-    })
+  // Helper function to check if token is SURGING
+  const isSurgingToken = (token: any) => {
+    // Must have SURGING tag from API
+    if (token.tags?.includes("SURGING")) return true;
+    
+    // OR must meet surging criteria:
+    // 1. Significant positive price movement (10%+ gain in 24h)
+    const priceChange24h = token.priceChange?.h24 || 0;
+    const hasGoodGain = priceChange24h >= 10;
+    
+    // 2. High volume (at least $10K in 24h)
+    const volume24h = typeof token.volume24h === 'string' ? parseFloat(token.volume24h) : (token.volume24h || 0);
+    const hasVolume = volume24h >= 10000;
+    
+    // 3. Recent activity (created within last 30 days)
+    const isRecent = token.createdAt && 
+      ((Date.now() - new Date(token.createdAt).getTime()) / (1000 * 60 * 60 * 24)) < 30;
+    
+    return hasGoodGain && hasVolume && isRecent;
+  };
+
+  // Helper function to check if token is a GAINER
+  const isGainerToken = (token: any) => {
+    // Must have positive 24h price change (any positive gain)
+    const priceChange24h = token.priceChange?.h24 || 0;
+    return priceChange24h > 0;
+  };
+
+  // Categorize tokens for 3-column layout
+  // NEW PAIRS: Tokens created in last 10 days (regardless of other metrics)
+  let newTokens = filteredAndSortedTokens
+    .filter(token => isNewToken(token))
     .sort((a, b) => {
-      // Primary sort: Volume to market cap ratio (activity level)
-      const aVolumeMC = a.volume24h && a.marketCap ? parseFloat(String(a.volume24h)) / parseFloat(String(a.marketCap)) : 0;
-      const bVolumeMC = b.volume24h && b.marketCap ? parseFloat(String(b.volume24h)) / parseFloat(String(b.marketCap)) : 0;
-      
-      if (Math.abs(aVolumeMC - bVolumeMC) > 0.1) {
-        return bVolumeMC - aVolumeMC; // Sort by activity level first
-      }
-      
-      // Secondary sort: Recent price momentum (but not extreme gains)
-      const aChange = a.priceChange?.h24 || 0;
-      const bChange = b.priceChange?.h24 || 0;
-      
-      // Prefer moderate gains over extreme ones for "surging"
-      const aScore = aChange > 50 ? aChange * 0.5 : aChange; // Penalize extreme gains
-      const bScore = bChange > 50 ? bChange * 0.5 : bChange;
-      
-      return bScore - aScore;
+      // Sort by creation date (newest first)
+      const aDate = new Date(a.createdAt || 0).getTime();
+      const bDate = new Date(b.createdAt || 0).getTime();
+      return bDate - aDate;
     });
 
-  // Get top gainers based on actual 24h price changes from screener data
+  // SURGING: Tokens with significant momentum and activity
+  // Show ALL tokens that meet surging criteria (can include NEW tokens)
+  let surgingTokens = filteredAndSortedTokens
+    .filter(token => isSurgingToken(token))
+    .sort((a, b) => {
+      // Sort by price change (highest first)
+      const aChange = a.priceChange?.h24 || 0;
+      const bChange = b.priceChange?.h24 || 0;
+      return bChange - aChange;
+    });
+
+  // TOP GAINERS: ALL tokens with positive 24h price increases, sorted by highest gains
   let gainerTokens = filteredAndSortedTokens
-    .filter(token => token.priceChange?.h24 !== undefined && token.priceChange.h24 > 0) // Only positive gains
+    .filter(token => isGainerToken(token))
     .sort((a, b) => {
       const aChange = a.priceChange?.h24 || 0;
       const bChange = b.priceChange?.h24 || 0;
       return bChange - aChange; // Sort by highest gains first
     });
 
-  // Ensure surging column always has at least 5 tokens by filling with best performers
-  if (surgingTokens.length < 5) {
-    const remainingTokens = filteredAndSortedTokens.filter(token => 
-      !newTokens.includes(token) && !surgingTokens.includes(token) && !gainerTokens.includes(token)
-    );
-    const needed = 5 - surgingTokens.length;
-    surgingTokens = [...surgingTokens, ...remainingTokens.slice(0, needed)];
+  // Ensure sections always have at least one token (use placeholder if needed)
+  // Show ALL tokens, not limited
+  if (newTokens.length === 0 && filteredAndSortedTokens.length > 0) {
+    // If no new tokens, show the most recent token as placeholder
+    newTokens = [filteredAndSortedTokens.sort((a, b) => {
+      const aDate = new Date(a.createdAt || 0).getTime();
+      const bDate = new Date(b.createdAt || 0).getTime();
+      return bDate - aDate;
+    })[0]];
   }
   
-  // Cap each column at 10 tokens for better UX
-  newTokens = newTokens.slice(0, 10);
-  surgingTokens = surgingTokens.slice(0, 10);
-  gainerTokens = gainerTokens.slice(0, 10);
+  if (surgingTokens.length === 0 && filteredAndSortedTokens.length > 0) {
+    // If no surging tokens, show token with highest volume
+    surgingTokens = [filteredAndSortedTokens.sort((a, b) => {
+      const aVol = typeof a.volume24h === 'string' ? parseFloat(a.volume24h) : (a.volume24h || 0);
+      const bVol = typeof b.volume24h === 'string' ? parseFloat(b.volume24h) : (b.volume24h || 0);
+      return bVol - aVol;
+    })[0]];
+  }
+  
+  if (gainerTokens.length === 0 && filteredAndSortedTokens.length > 0) {
+    // If no gainer tokens, show token with highest market cap
+    gainerTokens = [filteredAndSortedTokens.sort((a, b) => {
+      const aMC = typeof a.marketCap === 'string' ? parseFloat(a.marketCap) : (a.marketCap || 0);
+      const bMC = typeof b.marketCap === 'string' ? parseFloat(b.marketCap) : (b.marketCap || 0);
+      return bMC - aMC;
+    })[0]];
+  }
+  
+  // Show ALL tokens - no limit
 
   // Debug categorization
   console.log("🔍 Categorization Debug:");
@@ -491,7 +606,7 @@ export default function RadarPage() {
 
 
 
-  const TokenCard = ({ token }: { token: any }) => {
+  const TokenCard = ({ token, index }: { token: any; index: number }) => {
     // Helper function to format price change with color
     const formatPriceChange = (change: number | undefined) => {
       if (change === undefined || change === null) return { text: "-", color: "text-gray-400" };
@@ -512,8 +627,43 @@ export default function RadarPage() {
       return { text: `${buyPercentage.toFixed(0)}%`, color };
     };
 
-    const priceChange24h = formatPriceChange(token.priceChange?.h24);
+    // Extract stats with fallbacks
+    const priceChange24h = formatPriceChange(
+      token.priceChange?.h24 !== undefined 
+        ? token.priceChange.h24 
+        : token.priceChange24h
+    );
     const buyPercentage = getBuyPercentage();
+    
+    // Extract market cap properly - handle all possible formats and validate
+    let marketCap = 0;
+    if (token.marketCap !== undefined && token.marketCap !== null) {
+      if (typeof token.marketCap === 'string') {
+        marketCap = parseFloat(token.marketCap);
+      } else if (typeof token.marketCap === 'number') {
+        marketCap = token.marketCap;
+      }
+    }
+    // Validate market cap - if it's unreasonably small (< $100) or large (> $1e15), it's probably wrong
+    if (isNaN(marketCap) || marketCap < 100 || marketCap > 1e15) {
+      marketCap = 0;
+    }
+    
+    // Extract volume properly
+    let volume24h = 0;
+    if (token.volume24h !== undefined && token.volume24h !== null) {
+      if (typeof token.volume24h === 'string') {
+        volume24h = parseFloat(token.volume24h);
+      } else if (typeof token.volume24h === 'number') {
+        volume24h = token.volume24h;
+      }
+    }
+    // Also check nested volume structure
+    if (!volume24h && token.volume?.h24) {
+      volume24h = typeof token.volume.h24 === 'string' ? parseFloat(token.volume.h24) : (token.volume.h24 || 0);
+    }
+    
+    const priceUsd = token.priceUsd || '0';
 
     // Navigate to chart page
     const handleTokenClick = () => {
@@ -528,8 +678,11 @@ export default function RadarPage() {
 
     return (
       <div
-        className="bg-gray-800/30 border-b border-gray-700/50 p-2 md:p-2.5 hover:bg-gray-700/30 transition-all duration-200 cursor-pointer group"
-        style={{ minHeight: '70px' }}
+        className="bg-gray-800/30 border-b border-gray-700/50 p-2 md:p-2.5 hover:bg-gray-700/30 transition-all duration-300 cursor-pointer group animate-slide-in"
+        style={{ 
+          minHeight: '70px',
+          animationDelay: `${index * 50}ms`,
+        }}
         onClick={handleTokenClick}
       >
         <div className="flex items-center gap-3 mb-2">
@@ -549,11 +702,11 @@ export default function RadarPage() {
                             </div>
             <div className="text-xs text-gray-400 truncate">{token.symbol}</div>
             {/* Price and 24h change */}
-            {token.priceUsd && (
+            {priceUsd && priceUsd !== '0' && (
               <div className="flex items-center gap-2 text-xs">
-                <span className="text-gray-300">${parseFloat(token.priceUsd).toFixed(6)}</span>
+                <span className="text-gray-300">${parseFloat(priceUsd).toFixed(6)}</span>
                 <span className={priceChange24h.color}>{priceChange24h.text}</span>
-                          </div>
+              </div>
             )}
                         </div>
                         <button
@@ -574,12 +727,16 @@ export default function RadarPage() {
         <div className="grid grid-cols-2 gap-1 md:gap-2 text-xs mb-2">
           <div>
             <span className="text-gray-400">MC:</span>
-            <span className="text-gray-200 ml-1">{formatNumber(token.marketCap)}</span>
-                        </div>
+            <span className="text-gray-200 ml-1">
+              {marketCap > 0 ? formatNumber(marketCap) : '-'}
+            </span>
+          </div>
           <div>
             <span className="text-gray-400">Vol:</span>
-            <span className="text-gray-200 ml-1">{formatNumber(token.volume24h)}</span>
-                          </div>
+            <span className="text-gray-200 ml-1">
+              {volume24h > 0 ? formatNumber(volume24h) : '-'}
+            </span>
+          </div>
           <div>
             <span className="text-gray-400">Buy:</span>
             <span className={`ml-1 ${buyPercentage.color}`}>{buyPercentage.text}</span>
@@ -625,25 +782,23 @@ export default function RadarPage() {
     );
   };
 
-  const ColumnHeader = ({ title, count, icon, filterValue, onFilterChange, filterAmount, onFilterAmountChange }: { 
+  const ColumnHeader = ({ title, count, filterValue, onFilterChange, filterAmount, onFilterAmountChange }: { 
     title: string; 
     count: number; 
-    icon: React.ReactNode;
     filterValue: string;
     onFilterChange: (value: string) => void;
     filterAmount: string;
     onFilterAmountChange: (value: string) => void;
   }) => (
-    <div className="p-3 bg-gray-800/50 border-b border-gray-700/50">
-      <div className="flex items-center justify-between">
+    <div className="p-3 bg-gray-800/50 border-b border-gray-700/50 h-[60px] flex items-center">
+      <div className="flex items-center justify-between w-full">
         <div className="flex items-center gap-3">
-          {icon}
-          <h2 className="text-lg font-bold text-gray-200">{title}</h2>
+          <h2 className="text-lg font-normal text-gray-200 font-sans uppercase">{title}</h2>
           <div className="flex items-center gap-2">
             <select
               value={filterValue}
               onChange={(e) => onFilterChange(e.target.value)}
-              className="bg-gray-700/50 border border-gray-600/50 rounded-lg px-2 py-1 text-xs text-gray-200 focus:border-blue-400 focus:outline-none w-20"
+              className="bg-gray-900/50 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-200 focus:border-blue-500/50 focus:outline-none hover:bg-gray-800/50 transition-colors font-sans uppercase"
             >
               <option value="">All</option>
               <option value="age">Age</option>
@@ -658,16 +813,17 @@ export default function RadarPage() {
                 type="number"
                 value={filterAmount}
                 onChange={(e) => onFilterAmountChange(e.target.value)}
-                className="bg-gray-700/50 border border-gray-600/50 rounded-lg px-2 py-1 text-xs text-gray-200 focus:border-blue-400 focus:outline-none w-16"
+                placeholder="Value"
+                className="bg-gray-900/50 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-200 focus:border-blue-500/50 focus:outline-none hover:bg-gray-800/50 transition-colors w-20 font-sans"
               />
             )}
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-400">{count}</span>
+          <span className="text-sm text-gray-400 font-sans">{count}</span>
           {count > 5 && (
             <div className="hidden md:flex items-center gap-1">
-              <span className="text-xs text-gray-500">(scroll for more)</span>
+              <span className="text-xs text-gray-500 font-sans">(scroll for more)</span>
               <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
               </svg>
@@ -842,57 +998,43 @@ export default function RadarPage() {
                         </button>
                       </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 w-full h-full gap-4 md:gap-0" style={{ height: 'calc(100vh - 200px)' }}>
+          <div className="grid grid-cols-1 md:grid-cols-3 w-full h-full" style={{ height: 'calc(100vh - 200px)' }}>
             {/* New Tokens Column */}
-            <div className="flex flex-col md:h-full relative">
+            <div className="flex flex-col md:h-full border-r border-gray-700/50">
               <ColumnHeader 
                 title="New Pairs" 
                 count={newTokens.length} 
-                icon={<FiPlus className="w-4 h-4 text-green-400" />}
                 filterValue={newPairsFilter}
                 onFilterChange={setNewPairsFilter}
                 filterAmount={newPairsFilterAmount}
                 onFilterAmountChange={setNewPairsFilterAmount}
               />
               <div className="flex-1 overflow-hidden">
-                <div className="h-full overflow-y-auto scrollbar-hide" style={{ minHeight: '400px' }}>
-                  {newTokens.map((token) => (
-                    <TokenCard key={token.address} token={token} />
+                <div className="h-full overflow-y-auto scrollbar-hide">
+                  {newTokens.map((token, index) => (
+                    <TokenCard key={`${token.address}-${index}`} token={token} index={index} />
                   ))}
-                  {newTokens.length === 0 && (
-                    <div className="text-center py-8 text-gray-500 text-sm">
-                      No new tokens found
-                    </div>
-                  )}
                 </div>
               </div>
-              <div className="absolute right-0 top-0 bottom-0 w-px bg-gray-700/50 hidden md:block"></div>
             </div>
                         
             {/* Surging Tokens Column */}
-            <div className="flex flex-col md:h-full relative">
+            <div className="flex flex-col md:h-full border-r border-gray-700/50">
               <ColumnHeader 
                 title="Surging" 
                 count={surgingTokens.length} 
-                icon={<FiZap className="w-4 h-4 text-red-400" />}
                 filterValue={surgingFilter}
                 onFilterChange={setSurgingFilter}
                 filterAmount={surgingFilterAmount}
                 onFilterAmountChange={setSurgingFilterAmount}
               />
               <div className="flex-1 overflow-hidden">
-                <div className="h-full overflow-y-auto scrollbar-hide" style={{ minHeight: '400px' }}>
-                  {surgingTokens.map((token) => (
-                    <TokenCard key={token.address} token={token} />
+                <div className="h-full overflow-y-auto scrollbar-hide">
+                  {surgingTokens.map((token, index) => (
+                    <TokenCard key={`${token.address}-${index}`} token={token} index={index} />
                   ))}
-                  {surgingTokens.length === 0 && (
-                    <div className="text-center py-8 text-gray-500 text-sm">
-                      No surging tokens found
-                    </div>
-                  )}
                 </div>
               </div>
-              <div className="absolute right-0 top-0 bottom-0 w-px bg-gray-700/50 hidden md:block"></div>
             </div>
                       
             {/* Gainer Tokens Column */}
@@ -900,22 +1042,16 @@ export default function RadarPage() {
               <ColumnHeader 
                 title="Top Gainers" 
                 count={gainerTokens.length} 
-                icon={<FiTrendingUp className="w-4 h-4 text-blue-400" />}
                 filterValue={gainersFilter}
                 onFilterChange={setGainersFilter}
                 filterAmount={gainersFilterAmount}
                 onFilterAmountChange={setGainersFilterAmount}
               />
               <div className="flex-1 overflow-hidden">
-                <div className="h-full overflow-y-auto scrollbar-hide" style={{ minHeight: '400px' }}>
-                  {gainerTokens.map((token) => (
-                    <TokenCard key={token.address} token={token} />
+                <div className="h-full overflow-y-auto scrollbar-hide">
+                  {gainerTokens.map((token, index) => (
+                    <TokenCard key={`${token.address}-${index}`} token={token} index={index} />
                   ))}
-                  {gainerTokens.length === 0 && (
-                    <div className="text-center py-8 text-gray-500 text-sm">
-                      No gainer tokens found
-                    </div>
-                  )}
                 </div>
               </div>
             </div>

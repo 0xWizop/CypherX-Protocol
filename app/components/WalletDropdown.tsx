@@ -141,6 +141,9 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
   const [tokenSearchQuery, setTokenSearchQuery] = useState<string>('');
   const [tokenSearchResults, setTokenSearchResults] = useState<any[]>([]);
   const [isSearchingTokens, setIsSearchingTokens] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  const isClient = typeof window !== 'undefined';
 
   // Mobile detection
   useEffect(() => {
@@ -149,6 +152,29 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  useEffect(() => {
+    if (walletData) {
+      setShowOnboarding(false);
+    }
+  }, [walletData]);
+
+  // Prevent background scroll when mobile sheet is open
+  useEffect(() => {
+    if (!isClient) return;
+    const originalOverflow = document.body.style.overflow;
+
+    if (isOpen && isMobile) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen, isMobile, isClient]);
 
   // Load token logos on mount
   useEffect(() => {
@@ -390,30 +416,35 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
 
   // Load existing wallet from secure storage
   const loadWallet = useCallback(async () => {
+    if (typeof window === "undefined") return;
+
+    let foundWallet = false;
+
     try {
-      if (typeof window !== "undefined") {
-        // Check if secure wallet exists
-        if (secureWalletManager.hasWallet()) {
-          const address = secureWalletManager.getWalletAddress();
-          if (address) {
-            
-            // Set wallet as connected but locked
-            setSelfCustodialWallet({
-              address: address,
-              isConnected: true,
-              ethBalance: "0.0",
-              tokenBalance: "0.0"
-            });
-            
-            // Show password modal to unlock
-            setShowPasswordModal(true);
-          }
-        } else {
-          // Fallback to old wallet system
-          const storedWallet = localStorage.getItem("cypherx_wallet");
-          if (storedWallet) {
-            try {
-              const data = JSON.parse(storedWallet);
+      setWalletLoading(true);
+
+      if (secureWalletManager.hasWallet()) {
+        const address = secureWalletManager.getWalletAddress();
+        if (address) {
+          foundWallet = true;
+          setShowOnboarding(false);
+
+          setSelfCustodialWallet({
+            address,
+            isConnected: true,
+            ethBalance: "0.0",
+            tokenBalance: "0.0"
+          });
+
+          setShowPasswordModal(true);
+        }
+      } else {
+        const storedWallet = localStorage.getItem("cypherx_wallet");
+        if (storedWallet) {
+          try {
+            const data = JSON.parse(storedWallet);
+            if (data?.address && data?.privateKey) {
+              foundWallet = true;
               setWalletData(data);
               setSelfCustodialWallet({
                 address: data.address,
@@ -423,18 +454,23 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
               });
               fetchBalance(data.address);
               fetchTransactions();
-            } catch (error) {
-              console.error("Error loading wallet:", error);
+              setShowOnboarding(false);
             }
+          } catch (error) {
+            console.error("Error loading wallet:", error);
           }
         }
-        setWalletLoading(false);
       }
     } catch (error) {
       console.error("Error in loadWallet:", error);
+    } finally {
       setWalletLoading(false);
+      if (!foundWallet) {
+        setWalletData(null);
+      }
+      setShowOnboarding(!foundWallet);
     }
-  }, [setSelfCustodialWallet, fetchBalance, setWalletLoading]);
+  }, [setSelfCustodialWallet, fetchBalance, fetchTransactions, setWalletLoading, setShowOnboarding]);
 
   // Unlock wallet with password
   const unlockWallet = useCallback(async (password: string) => {
@@ -446,6 +482,16 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
         
         setShowPasswordModal(false);
         setWalletPassword('');
+        setShowOnboarding(false);
+        setWalletLoading(false);
+
+        if (wallet.address) {
+          setWalletData({
+            address: wallet.address,
+            privateKey: wallet.privateKey ?? '__secured__',
+            createdAt: Date.now()
+          });
+        }
         
         // Fetch wallet data
         fetchBalance(wallet.address);
@@ -496,6 +542,8 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
             walletLoadedRef.current = false; // Reset ref for imported wallet
             fetchBalance(walletData.address);
               fetchTransactions();
+              setShowOnboarding(false);
+              setWalletLoading(false);
             }
           } catch (error) {
             console.error("Error importing wallet:", error);
@@ -506,7 +554,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
       }
     };
     input.click();
-  }, [setSelfCustodialWallet, fetchBalance]);
+  }, [setSelfCustodialWallet, fetchBalance, fetchTransactions, setShowOnboarding, setWalletLoading]);
 
   // Create new wallet
   const createWallet = useCallback(() => {
@@ -531,11 +579,13 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
       
       walletLoadedRef.current = false; // Reset ref for new wallet
               console.log("Wallet created successfully!");
+      setShowOnboarding(false);
+      setWalletLoading(false);
     } catch (error) {
       console.error("Error creating wallet:", error);
               console.error("Failed to create wallet");
     }
-  }, [setSelfCustodialWallet]);
+  }, [setSelfCustodialWallet, setShowOnboarding, setWalletLoading]);
 
   // Copy wallet address
   const copyAddress = useCallback(async () => {
@@ -1307,13 +1357,11 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
   }, [showWalletDropdown]);
 
   // Safety check to prevent rendering issues - move this after all hooks
-  const isClient = typeof window !== 'undefined';
-  
   // Safety check to prevent errors when wallet data is corrupted
-  const isValidWalletData = walletData && walletData.address && walletData.privateKey;
+  const isValidWalletData = walletData && walletData.address;
   
   // Check if we should show loading state
-  const shouldShowLoading = !walletData && isOpen;
+  const shouldShowLoading = isOpen && walletLoading && !showOnboarding && !showPasswordModal;
 
   const toggleBalanceVisibility = () => {
     setShowBalance(!showBalance);
@@ -1397,22 +1445,32 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
       <AnimatePresence>
         {isOpen && (
           <>
+            {isMobile && (
+              <motion.div
+                className="fixed inset-0 bg-[#02050d]/80 backdrop-blur-sm z-[9999998]"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onClose}
+              />
+            )}
             <motion.div
-              className="fixed inset-0 bg-gray-900/60 z-40"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={onClose}
-            />
-            <motion.div
-              className="fixed top-20 right-8 w-[400px] bg-gray-900 border border-gray-700 shadow-2xl z-[9999999] max-h-[85vh] overflow-hidden"
-              initial={{ opacity: 0, y: -10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            className={isMobile
+              ? "fixed inset-0 bottom-0 w-full bg-[#050a1a] border-t border-blue-900/40 shadow-2xl z-[9999999] h-[70vh] max-h-[640px] flex flex-col overflow-hidden rounded-t-3xl"
+              : "fixed top-20 right-8 w-[400px] bg-[#050a1a] border border-blue-900/40 shadow-2xl z-[9999999] max-h-[70vh] overflow-hidden rounded-2xl flex flex-col"
+              }
+              initial={isMobile ? { opacity: 0, y: 200 } : { opacity: 0, y: -10, scale: 0.95 }}
+              animate={isMobile ? { opacity: 1, y: 0 } : { opacity: 1, y: 0, scale: 1 }}
+              exit={isMobile ? { opacity: 0, y: 200 } : { opacity: 0, y: -10, scale: 0.95 }}
               transition={{ duration: 0.3 }}
             >
-              <div className="flex items-center justify-center h-32">
-                <div className="w-8 h-8 border-2 border-[#0052FF]/20 border-t-[#0052FF] rounded-full animate-spin"></div>
+            {isMobile && (
+              <div className="pt-2 pb-1 flex justify-center">
+                <div className="w-12 h-1.5 rounded-full bg-gray-500/70" />
+              </div>
+            )}
+              <div className="flex flex-1 items-center justify-center">
+                <div className="w-10 h-10 border-2 border-[#0052FF]/20 border-t-[#0052FF] rounded-full animate-spin"></div>
               </div>
             </motion.div>
           </>
@@ -1510,14 +1568,24 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
           )}
           
 
+          {isMobile && !showPasswordModal && (
+            <motion.div
+              className="fixed inset-0 bg-[#02050d]/80 backdrop-blur-sm z-[9999998]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={onClose}
+            />
+          )}
+
           <motion.div
             data-wallet-dropdown
-                    className={isMobile
-              ? "fixed inset-x-0 bottom-0 w-full bg-gray-950 border-t border-slate-700/50 shadow-2xl z-[9999999] h-[75vh] flex flex-col rounded-2xl"
-              : "fixed top-20 right-8 w-[400px] bg-gray-950 border border-slate-700/50 shadow-2xl z-[9999999] max-h-[70vh] overflow-hidden rounded-2xl flex flex-col"
+            className={isMobile
+              ? "fixed left-0 right-0 bottom-0 w-screen bg-[#050a1a] border-t border-blue-900/40 shadow-2xl z-[9999999] h-[70vh] max-h-[680px] flex flex-col overflow-hidden rounded-t-3xl"
+              : "fixed top-20 right-8 w-[400px] bg-[#050a1a] border border-blue-900/40 shadow-2xl z-[9999999] max-h-[70vh] overflow-hidden rounded-2xl flex flex-col"
         }
             initial={isMobile 
-              ? { opacity: 0, y: 100 }
+              ? { opacity: 0, y: 200 }
               : { opacity: 0, y: -10, scale: 0.95 }
             }
             animate={isMobile 
@@ -1525,13 +1593,18 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
               : { opacity: 1, y: 0, scale: 1 }
             }
             exit={isMobile 
-              ? { opacity: 0, y: 100 }
+              ? { opacity: 0, y: 200 }
               : { opacity: 0, y: -10, scale: 0.95 }
             }
             transition={{ duration: 0.3 }}
           >
+            {isMobile && (
+              <div className="flex justify-center pt-3">
+                <div className="w-12 h-1.5 rounded-full bg-gray-600/70" />
+              </div>
+            )}
             {/* Wallet Header - Blue Section */}
-            <div className="bg-[#0052FF] px-4 py-3 border-b border-blue-600/50 rounded-t-2xl">
+            <div className="bg-[#0052FF] px-4 py-3 border-b border-blue-600/50 rounded-t-3xl">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <div className="flex items-center space-x-2 mb-1">
@@ -1860,10 +1933,10 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                           )}
                         </button>
                                 </div>
-                                              <div className="flex items-center space-x-2 text-sm text-gray-400">
+                  <div className="flex items-center space-x-2 text-sm text-slate-300/80">
                           <button 
                             onClick={handleEthClick}
-                            className="hover:text-gray-300 transition-colors cursor-pointer"
+                      className="hover:text-slate-100 transition-colors cursor-pointer"
                             title="Click to view ETH chart"
                           >
                             <span>{getDisplayEthBalance()} ETH</span>
@@ -1875,28 +1948,28 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         </div>
                                 </div>
                   ) : (
-                    <div className="px-4 py-6 bg-gray-800 text-center">
-                      <div className="w-16 h-16 bg-[#0052FF]/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <FaWallet className="w-8 h-8 text-[#0052FF]" />
-                                </div>
-                      <h3 className="text-lg font-semibold text-gray-200 mb-2">Welcome to CypherX</h3>
-                      <p className="text-gray-400 mb-6">Create or import your wallet to get started</p>
-                      <div className="space-y-3">
-                             <button
-                               onClick={importWallet}
-                          className="w-full py-3 px-4 bg-[#0052FF] hover:bg-[#0052FF]/80 text-white rounded-lg font-medium transition-colors"
-                             >
-                          Import Wallet
-                             </button>
-                                                            <button
-                               onClick={createWallet}
-                          className="w-full py-3 px-4 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg font-medium transition-colors"
+                    <div className="px-4 py-5 bg-[#08122d] border border-blue-900/50 text-center">
+                      <div className="w-14 h-14 bg-blue-500/10 rounded-xl flex items-center justify-center mx-auto mb-3">
+                        <FaWallet className="w-7 h-7 text-blue-300" />
+                      </div>
+                      <h3 className="text-base font-semibold text-white mb-1.5">Welcome to CypherX</h3>
+                      <p className="text-sm text-slate-200/80 mb-4">Create or import a wallet to start exploring the network.</p>
+                      <div className="space-y-2">
+                        <button
+                          onClick={createWallet}
+                          className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition-colors text-sm shadow-sm shadow-blue-900/30"
                         >
                           Create New Wallet
-                               </button>
-                           </div>
-                         </div>
-                       )}
+                        </button>
+                        <button
+                          onClick={importWallet}
+                          className="w-full py-2.5 px-4 bg-[#050a1a] hover:bg-[#09132c] text-slate-200 rounded-lg font-medium border border-blue-900/50 transition-colors text-sm"
+                        >
+                          Import Existing Wallet
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Quick Actions */}
                   {walletData && (
