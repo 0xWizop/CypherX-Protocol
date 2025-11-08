@@ -7,28 +7,14 @@ const STORAGE_KEY = "cypherx_cookie_consent";
 
 const CookieBanner: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
-  const [footerOffset, setFooterOffset] = useState<number>(72);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    const updateOffset = () => {
-      const footerEl = document.getElementById("app-footer");
-      const height = footerEl?.offsetHeight ?? 60;
-      setFooterOffset(height + 12);
-    };
-
-    updateOffset();
-    window.addEventListener("resize", updateOffset);
 
     const consent = localStorage.getItem(STORAGE_KEY);
     if (!consent) {
       setIsVisible(true);
     }
-
-    return () => {
-      window.removeEventListener("resize", updateOffset);
-    };
   }, []);
 
   const handleChoice = (value: "accepted" | "rejected") => {
@@ -42,8 +28,7 @@ const CookieBanner: React.FC = () => {
     <AnimatePresence>
       {isVisible && (
         <motion.div
-          className="fixed inset-x-0 z-[9999998]"
-          style={{ bottom: footerOffset }}
+          className="fixed inset-x-0 bottom-0 z-[9999998]"
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 24 }}

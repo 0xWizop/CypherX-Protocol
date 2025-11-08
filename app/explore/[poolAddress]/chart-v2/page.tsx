@@ -10,6 +10,7 @@ import { coinGeckoMapping } from "../../../tokenMapping";
 import dayjs from "dayjs";
 import { motion, AnimatePresence } from "framer-motion";
 import { ethers } from "ethers";
+import { OverviewIcon, PerformanceIcon, SwapArrowsIcon, TradesIcon } from "../../../components/icons";
 
 // Extend Window interface for ethereum provider
 declare global {
@@ -43,6 +44,18 @@ interface DexPairResponse {
 
 // Constants
 const WETH_ADDRESS = "0x4200000000000000000000000000000000000006"; // Base WETH
+
+const MOBILE_TABS = [
+  { id: "overview", label: "Chart", icon: OverviewIcon },
+  { id: "pnl", label: "PnL", icon: PerformanceIcon },
+  { id: "swap", label: "Swap", icon: SwapArrowsIcon },
+  { id: "trades", label: "Trades", icon: TradesIcon },
+] as const;
+
+const TIMEFRAME_OPTIONS = ["1m", "5m", "15m", "1h", "4h", "1d"] as const;
+const MOBILE_TAB_HEIGHT = 44;
+
+type MobileTabKey = typeof MOBILE_TABS[number]["id"];
 
 export default function ChartV2Page() {
   const params = useParams();
@@ -83,6 +96,9 @@ export default function ChartV2Page() {
     twitter?: string;
     telegram?: string;
   } | null>(null);
+  const [activeMobileTab, setActiveMobileTab] = useState<MobileTabKey>("overview");
+  const [isMobile, setIsMobile] = useState(false);
+  const [footerHeight, setFooterHeight] = useState(56);
   
   // Orders and Positions state
   const [orders, setOrders] = useState<any[]>([]);
@@ -105,6 +121,43 @@ export default function ChartV2Page() {
     txns24h?: number;
     imageUrl?: string | null;
   }>>([]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const updateLayoutMetrics = () => {
+      const mobile = window.innerWidth < 1024;
+      setIsMobile(mobile);
+      if (mobile) {
+        setFooterHeight(0);
+      } else {
+        const footerEl = document.getElementById("app-footer");
+        setFooterHeight(footerEl?.offsetHeight ?? 56);
+      }
+    };
+    updateLayoutMetrics();
+    window.addEventListener("resize", updateLayoutMetrics);
+    return () => window.removeEventListener("resize", updateLayoutMetrics);
+  }, []);
+
+  const formatTimeAgo = useCallback((timestamp: number) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return `${Math.max(seconds, 1)}s ago`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    return `${Math.floor(seconds / 86400)}d ago`;
+  }, []);
+
+  const chartHeight = isMobile ? 260 : 480;
+  const mobileBottomOffset = isMobile
+    ? `calc(${footerHeight}px + ${MOBILE_TAB_HEIGHT}px + env(safe-area-inset-bottom, 0px))`
+    : "0px";
+  const swapButtonHeight = isMobile ? "h-10" : "h-12";
+  const swapSectionSpacing = isMobile ? "mb-2" : "mb-3";
+  const swapFieldPadding = isMobile ? "p-2.5" : "p-3";
+  const quickButtonClass = isMobile ? "px-2 py-1 text-[10px]" : "px-2 py-1 text-[11px]";
+  const desktopScrollable = !isMobile ? "overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" : "";
+  const visibleOrders = isMobile ? orders.slice(0, 4) : orders;
+  const visiblePositions = isMobile ? positions.slice(0, 4) : positions;
 
   // Detect connected wallet from localStorage (same key used elsewhere)
   useEffect(() => {
@@ -1509,174 +1562,285 @@ export default function ChartV2Page() {
   }
 
   return (
-    <div className="h-screen bg-gray-950 text-gray-200 flex flex-col">
+    <div className="h-screen bg-gray-950 text-gray-200 flex flex-col overflow-hidden">
       <Header />
 
-      <div className="flex-1 grid grid-cols-1 xl:grid-cols-[1fr_260px_440px] gap-0 overflow-hidden">
-        {/* Left: Chart */}
-        <div className="flex flex-col min-h-0 overflow-y-auto">
-          {/* Pair header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-950/90">
-            <div className="flex items-center gap-3">
-              {pair?.info?.imageUrl ? (
-                <img src={pair.info.imageUrl} alt={title} className="w-8 h-8 rounded-full border border-gray-700" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">{pair?.baseToken?.symbol?.[0] || "T"}</div>
-              )}
-              <div className="relative">
-                <div className="flex items-center gap-2">
-                  <div className="text-white text-sm sm:text-base font-semibold">{title}</div>
-                  {/* Dropdown trigger (placeholder icon) */}
-                  <button
-                    type="button"
-                    aria-label="Open markets"
-                    className="p-0.5 text-gray-400 hover:text-gray-200 focus:outline-none"
-                    onClick={() => {
-                      setShowTopVolume((v) => !v);
-                      if (!showTopVolume) {
-                        fetchTopVolume();
-                      }
-                    }}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="6 9 12 15 18 9"></polyline>
-                    </svg>
-                  </button>
-                  <span className="text-[10px] sm:text-xs text-blue-300 bg-blue-500/15 border border-blue-500/30 rounded-md px-2 py-[2px] leading-none">
-                    Spot
-                  </span>
-                </div>
-                {showTopVolume && (
-                  <div className="absolute mt-3 right-4 z-30 w-[720px] bg-gray-950 border border-gray-800 shadow-2xl rounded-md" style={{ maxWidth: 'calc(100vw - 24px)' }}>
-                    <div className="px-3 py-2 text-xs text-gray-400 border-b border-gray-800">Top 10 by 24h Volume</div>
-                    <div className="max-h-[70vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                      <table className="w-full text-xs">
-                        <thead className="sticky top-0 bg-gray-950 border-b border-gray-800 text-gray-400">
-                          <tr>
-                            <th className="px-3 py-2 text-left font-normal">Symbol</th>
-                            <th className="px-3 py-2 text-right font-normal">Last</th>
-                            <th className="px-3 py-2 text-right font-normal">24h</th>
-                            <th className="px-3 py-2 text-right font-normal">Vol 24h</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {topVolumeLoading ? (
-                            <tr>
-                              <td colSpan={4} className="p-4 text-center text-gray-400">Loading...</td>
-                            </tr>
-                          ) : topVolumePairs.length === 0 ? (
-                            <tr>
-                              <td colSpan={4} className="p-4 text-center text-gray-400">No data</td>
-                            </tr>
-                          ) : (
-                            topVolumePairs.map((p) => {
-                              const change = (p as any).priceChange24h ?? 0;
-                              const changeColor = change >= 0 ? 'text-green-400' : 'text-red-400';
-                              return (
-                                <tr
-                                  key={`${p.baseAddress}-${p.poolAddress}`}
-                                  className="hover:bg-gray-800/30 cursor-pointer"
-                                  onClick={() => {
-                                    setShowTopVolume(false);
-                                    if (p.poolAddress) {
-                                      try { window.location.href = `/explore/${p.poolAddress}/chart`; } catch {}
-                                    }
-                                  }}
-                                >
-                                  <td className="px-3 py-2">
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-5 h-5 bg-gray-800 text-[10px] text-gray-300 flex items-center justify-center overflow-hidden">
-                                        {p.imageUrl ? (
-                                          <img src={p.imageUrl} alt={p.baseSymbol || 'T'} className="w-full h-full object-cover" />
-                                        ) : (
-                                          <span>{(p.baseSymbol || 'T').slice(0,1)}</span>
-                                        )}
-                                      </div>
-                                      <div className="text-white text-[12px]">{p.baseSymbol}/{p.quoteSymbol}</div>
-                                      <span className="ml-1 text-[10px] text-blue-300 bg-blue-500/10 border border-blue-500/20 px-1 rounded">SPOT</span>
-                                    </div>
-                                  </td>
-                                  <td className="px-3 py-2 text-right text-gray-200">${p.priceUsd?.toFixed(6)}</td>
-                                  <td className={`px-3 py-2 text-right font-medium ${changeColor}`}>{change >= 0 ? '+' : ''}{Number(change).toFixed(2)}%</td>
-                                  <td className="px-3 py-2 text-right text-gray-200">${(p.volume24h || 0).toLocaleString()}</td>
-                                </tr>
-                              );
-                            })
-                          )}
-                        </tbody>
-                      </table>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 grid grid-cols-1 xl:grid-cols-[1fr_260px_440px] gap-0 overflow-hidden min-h-0">
+          {/* Left: Chart & PnL */}
+          <div
+            className={`${(activeMobileTab === "overview" || activeMobileTab === "pnl") ? "flex" : "hidden"} flex-1 flex-col min-h-0 overflow-hidden xl:flex xl:overflow-y-auto`}
+            style={isMobile ? { paddingBottom: mobileBottomOffset } : undefined}
+          >
+          <div className={`${activeMobileTab === "overview" ? "flex flex-col" : "hidden"} xl:flex xl:flex-col`}>
+              {/* Pair header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-950/90">
+                <div className="flex items-center gap-3">
+                  {pair?.info?.imageUrl ? (
+                    <img src={pair.info.imageUrl} alt={title} className="w-8 h-8 rounded-full border border-gray-700" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">{pair?.baseToken?.symbol?.[0] || "T"}</div>
+                  )}
+                  <div className="relative">
+                    <div className="flex items-center gap-2">
+                      <div className="text-white text-sm sm:text-base font-semibold">{title}</div>
+                      {/* Dropdown trigger (placeholder icon) */}
+                      <button
+                        type="button"
+                        aria-label="Open markets"
+                        className="p-0.5 text-gray-400 hover:text-gray-200 focus:outline-none"
+                        onClick={() => {
+                          setShowTopVolume((v) => !v);
+                          if (!showTopVolume) {
+                            fetchTopVolume();
+                          }
+                        }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                      </button>
+                      <span className="text-[10px] sm:text-xs text-blue-300 bg-blue-500/15 border border-blue-500/30 rounded-md px-2 py-[2px] leading-none">
+                        Spot
+                      </span>
                     </div>
+                    {showTopVolume && (
+                      <div className="absolute mt-3 right-4 z-30 w-[720px] bg-gray-950 border border-gray-800 shadow-2xl rounded-md" style={{ maxWidth: 'calc(100vw - 24px)' }}>
+                        <div className="px-3 py-2 text-xs text-gray-400 border-b border-gray-800">Top 10 by 24h Volume</div>
+                        <div className="max-h-[70vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                          <table className="w-full text-xs">
+                            <thead className="sticky top-0 bg-gray-950 border-b border-gray-800 text-gray-400">
+                              <tr>
+                                <th className="px-3 py-2 text-left font-normal">Symbol</th>
+                                <th className="px-3 py-2 text-right font-normal">Last</th>
+                                <th className="px-3 py-2 text-right font-normal">24h</th>
+                                <th className="px-3 py-2 text-right font-normal">Vol 24h</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {topVolumeLoading ? (
+                                <tr>
+                                  <td colSpan={4} className="p-4 text-center text-gray-400">Loading...</td>
+                                </tr>
+                              ) : topVolumePairs.length === 0 ? (
+                                <tr>
+                                  <td colSpan={4} className="p-4 text-center text-gray-400">No data</td>
+                                </tr>
+                              ) : (
+                                topVolumePairs.map((p) => {
+                                  const change = (p as any).priceChange24h ?? 0;
+                                  const changeColor = change >= 0 ? 'text-green-400' : 'text-red-400';
+                                  return (
+                                    <tr
+                                      key={`${p.baseAddress}-${p.poolAddress}`}
+                                      className="hover:bg-gray-800/30 cursor-pointer"
+                                      onClick={() => {
+                                        setShowTopVolume(false);
+                                        if (p.poolAddress) {
+                                          try { window.location.href = `/explore/${p.poolAddress}/chart`; } catch {}
+                                        }
+                                      }}
+                                    >
+                                      <td className="px-3 py-2">
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-5 h-5 bg-gray-800 text-[10px] text-gray-300 flex items-center justify-center overflow-hidden">
+                                            {p.imageUrl ? (
+                                              <img src={p.imageUrl} alt={p.baseSymbol || 'T'} className="w-full h-full object-cover" />
+                                            ) : (
+                                              <span>{(p.baseSymbol || 'T').slice(0,1)}</span>
+                                            )}
+                                          </div>
+                                          <div className="text-white text-[12px]">{p.baseSymbol}/{p.quoteSymbol}</div>
+                                          <span className="ml-1 text-[10px] text-blue-300 bg-blue-500/10 border border-blue-500/20 px-1 rounded">SPOT</span>
+                                        </div>
+                                      </td>
+                                      <td className="px-3 py-2 text-right text-gray-200">${p.priceUsd?.toFixed(6)}</td>
+                                      <td className={`px-3 py-2 text-right font-medium ${changeColor}`}>{change >= 0 ? '+' : ''}{Number(change).toFixed(2)}%</td>
+                                      <td className="px-3 py-2 text-right text-gray-200">${(p.volume24h || 0).toLocaleString()}</td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    <div className="text-xs text-gray-400">{(pair as any)?.dexId || (pair as any)?.dexName || "DEX"} • {poolAddress?.toString().slice(0, 6)}…{poolAddress?.toString().slice(-4)}</div>
                   </div>
-                )}
-                <div className="text-xs text-gray-400">{(pair as any)?.dexId || (pair as any)?.dexName || "DEX"} • {poolAddress?.toString().slice(0, 6)}…{poolAddress?.toString().slice(-4)}</div>
+                </div>
+                {/* Right-side stats from Dexscreener */}
+                <div className="hidden lg:flex items-center gap-6">
+                  <div className="text-right">
+                    <div className={`${(pair as any)?.priceChange?.h24 && (pair as any).priceChange.h24 >= 0 ? 'text-green-400' : 'text-red-400'} text-base sm:text-lg font-medium`}>${currentPrice.toFixed(6)}</div>
+                    <div className="text-gray-500 text-[11px]">Price</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-gray-200 text-sm">{pair?.marketCap ? `$${(pair.marketCap/1e6).toFixed(2)}M` : '-'}</div>
+                    <div className="text-gray-500 text-[11px]">MCap</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-gray-200 text-sm">{pair?.fdv ? `$${(pair.fdv/1e6).toFixed(2)}M` : '-'}</div>
+                    <div className="text-gray-500 text-[11px]">FDV</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-gray-200 text-sm">{pair?.liquidity?.usd ? `$${abbrev(pair.liquidity.usd)}` : '-'}</div>
+                    <div className="text-gray-500 text-[11px]">Liquidity</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-gray-200 text-sm">{pair?.volume?.h24 ? `$${abbrev(pair.volume.h24)}` : '-'}</div>
+                    <div className="text-gray-500 text-[11px]">Vol 24h</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-gray-200 text-sm">{pair?.txns?.h24 ? `${pair.txns.h24.buys}/${pair.txns.h24.sells}` : '-'}</div>
+                    <div className="text-gray-500 text-[11px]">Buys/Sells</div>
+                  </div>
+                </div>
               </div>
-            </div>
-            {/* Right-side stats from Dexscreener */}
-            <div className="hidden lg:flex items-center gap-6">
-              <div className="text-right">
-                <div className={`${(pair as any)?.priceChange?.h24 && (pair as any).priceChange.h24 >= 0 ? 'text-green-400' : 'text-red-400'} text-base sm:text-lg font-medium`}>${currentPrice.toFixed(6)}</div>
-                <div className="text-gray-500 text-[11px]">Price</div>
-              </div>
-              <div className="text-right">
-                <div className="text-gray-200 text-sm">{pair?.marketCap ? `$${(pair.marketCap/1e6).toFixed(2)}M` : '-'}</div>
-                <div className="text-gray-500 text-[11px]">MCap</div>
-              </div>
-              <div className="text-right">
-                <div className="text-gray-200 text-sm">{pair?.fdv ? `$${(pair.fdv/1e6).toFixed(2)}M` : '-'}</div>
-                <div className="text-gray-500 text-[11px]">FDV</div>
-              </div>
-              <div className="text-right">
-                <div className="text-gray-200 text-sm">{pair?.liquidity?.usd ? `$${abbrev(pair.liquidity.usd)}` : '-'}</div>
-                <div className="text-gray-500 text-[11px]">Liquidity</div>
-              </div>
-              <div className="text-right">
-                <div className="text-gray-200 text-sm">{pair?.volume?.h24 ? `$${abbrev(pair.volume.h24)}` : '-'}</div>
-                <div className="text-gray-500 text-[11px]">Vol 24h</div>
-              </div>
-              <div className="text-right">
-                <div className="text-gray-200 text-sm">{pair?.txns?.h24 ? `${pair.txns.h24.buys}/${pair.txns.h24.sells}` : '-'}</div>
-                <div className="text-gray-500 text-[11px]">Buys/Sells</div>
-              </div>
-            </div>
-          </div>
 
           {/* Chart */}
           <div className="flex-shrink-0">
             {/* Controls */}
-            <div className="px-4 py-2 flex items-center justify-between bg-gray-950">
-              <div className="flex gap-1">
-                {['1m','5m','15m','1h','4h','1d'].map(tf => (
+            <div className="px-4 py-2 bg-gray-950">
+              <div className="flex items-center gap-3 justify-between flex-nowrap overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="flex items-center gap-2 flex-shrink-0 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {TIMEFRAME_OPTIONS.map((tf) => {
+                    const isActive = timeframe === tf;
+                    return (
+                      <button
+                        key={tf}
+                        onClick={() => setTimeframe(tf)}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+                          isActive
+                            ? "text-blue-200 border-blue-500"
+                            : "text-gray-300 border-transparent hover:text-white hover:border-gray-600"
+                        }`}
+                      >
+                        {tf.toUpperCase()}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
                   <button
-                    key={tf}
-                    onClick={() => setTimeframe(tf)}
-                    className={`px-2 py-1 text-xs rounded transition-colors ${timeframe===tf? 'bg-blue-500/20 text-blue-300' : 'text-gray-300 hover:bg-blue-500/10 hover:text-blue-200'}`}
-                  >{tf}</button>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => chartRef.current?.zoomIn()} className="px-2 py-1 text-xs rounded text-gray-300 hover:bg-blue-500/10 hover:text-blue-200">Zoom In</button>
-                <button onClick={() => chartRef.current?.zoomOut()} className="px-2 py-1 text-xs rounded text-gray-300 hover:bg-blue-500/10 hover:text-blue-200">Zoom Out</button>
-                <button onClick={() => chartRef.current?.fit()} className="px-2 py-1 text-xs rounded text-gray-300 hover:bg-blue-500/10 hover:text-blue-200">Reset</button>
+                    onClick={() => chartRef.current?.zoomIn()}
+                    className="px-3 py-1.5 text-xs font-medium rounded-full border border-gray-700 text-gray-300 hover:text-white hover:border-blue-500 transition-colors"
+                  >
+                    Zoom In
+                  </button>
+                  <button
+                    onClick={() => chartRef.current?.zoomOut()}
+                    className="px-3 py-1.5 text-xs font-medium rounded-full border border-gray-700 text-gray-300 hover:text-white hover:border-blue-500 transition-colors"
+                  >
+                    Zoom Out
+                  </button>
+                  <button
+                    onClick={() => chartRef.current?.fit()}
+                    className="px-3 py-1.5 text-xs font-medium rounded-full border border-gray-700 text-gray-300 hover:text-white hover:border-blue-500 transition-colors"
+                  >
+                    Reset
+                  </button>
+                </div>
               </div>
             </div>
-            <LightweightChart ref={chartRef} height={480} theme="dark" candles={candles} />
+            <LightweightChart ref={chartRef} height={chartHeight} theme="dark" candles={candles} />
           </div>
 
           {/* OHLC strip */}
-          <div className="w-full px-4 py-2 border-t border-gray-800/50 text-xs text-gray-300 bg-gray-950">
-            {candles.length > 0 ? (
-              (() => { const c = candles[candles.length-1]; return (
-                <div className="flex gap-4">
-                  <div>O <span className="text-gray-200">{c.open.toFixed(6)}</span></div>
-                  <div>H <span className="text-gray-200">{c.high.toFixed(6)}</span></div>
-                  <div>L <span className="text-gray-200">{c.low.toFixed(6)}</span></div>
-                  <div>C <span className="text-gray-200">{c.close.toFixed(6)}</span></div>
+          {!isMobile && (
+            <div className="w-full px-4 py-2 border-t border-gray-800/50 text-xs text-gray-300 bg-gray-950">
+              {candles.length > 0 ? (
+                (() => { const c = candles[candles.length-1]; return (
+                  <div className="flex gap-4">
+                    <div>O <span className="text-gray-200">{c.open.toFixed(6)}</span></div>
+                    <div>H <span className="text-gray-200">{c.high.toFixed(6)}</span></div>
+                    <div>L <span className="text-gray-200">{c.low.toFixed(6)}</span></div>
+                    <div>C <span className="text-gray-200">{c.close.toFixed(6)}</span></div>
+                  </div>
+                ); })() ) : <span className="text-gray-500">No OHLC data</span>}
+            </div>
+          )}
+
+          {isMobile && (
+            <div className="flex-1 flex flex-col px-4 pt-1 pb-1">
+              <div className="flex-1 overflow-hidden flex flex-col -mx-4">
+                <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                  <table className="w-full text-xs table-fixed">
+                    <thead className="bg-gray-950 text-gray-400">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-normal w-[38%]">USD</th>
+                        <th className="text-center px-2 py-2 font-normal w-[36%]">Size ({pair?.baseToken?.symbol || "TOKEN"})</th>
+                        <th className="text-center px-3 py-2 font-normal w-[26%]">Time</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-white">
+                      {augmentedTransactions.length === 0 && (
+                        <tr>
+                          <td className="px-3 py-5 text-center text-gray-500" colSpan={3}>
+                            No recent trades
+                          </td>
+                        </tr>
+                      )}
+                        {augmentedTransactions.slice(0, 150).map((tx) => (
+                        <tr
+                          key={`mobile-trade-${tx.hash}-${tx.timestamp}-${tx.tokenAmount}`}
+                          className="border-b border-gray-900/40 last:border-b-0"
+                        >
+                          <td className="px-3 py-2.5 relative overflow-hidden">
+                            <motion.div
+                              aria-hidden
+                              className="absolute left-0 top-0 bottom-0"
+                              style={{
+                                background: tx.isBuy ? "rgba(34, 197, 94, 0.25)" : "rgba(244, 63, 94, 0.25)",
+                                width: tx.fill === 100 ? "100%" : `${tx.fill}%`,
+                                zIndex: 0,
+                              }}
+                              initial={{ width: 0, opacity: 0 }}
+                              animate={{
+                                width: tx.fill === 100 ? "100%" : `${tx.fill}%`,
+                                opacity: 1,
+                              }}
+                              transition={{
+                                duration: 0.6,
+                                ease: [0.4, 0, 0.2, 1],
+                                opacity: { duration: 0.3 },
+                              }}
+                            />
+                            <span className={`relative z-10 ${tx.isBuy ? "text-green-400" : "text-red-400"}`}>
+                              {tx.usdLabel}
+                            </span>
+                          </td>
+                          <td className="px-2 py-2.5 text-center text-white">
+                            {tx.tokenAmount > 0 ? (
+                              tx.tokenAmount >= 1
+                                ? tx.tokenAmount.toLocaleString(undefined, {
+                                    maximumFractionDigits: 2,
+                                    minimumFractionDigits: 0,
+                                  })
+                                : tx.tokenAmount.toLocaleString(undefined, {
+                                    maximumFractionDigits: 6,
+                                    minimumFractionDigits: 0,
+                                  })
+                            ) : (
+                              "0"
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 text-center text-gray-400">
+                            <span>{formatTimeAgo(tx.timestamp)}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              ); })() ) : <span className="text-gray-500">No OHLC data</span>}
+              </div>
+            </div>
+          )}
+
           </div>
 
           {/* Data sections below chart */}
-          <div className="flex-1 min-h-0 flex flex-col">
+          <div className={`${activeMobileTab === "pnl" ? "flex-1 min-h-0 flex flex-col" : "hidden"} xl:flex xl:flex-col xl:flex-1 xl:min-h-0`}>
             <div className="w-full px-4 pt-3 pb-2 flex gap-4 text-sm border-b border-gray-800/50">
               <button onClick={() => setActiveDataTab("orders")} className={`pb-2 transition-colors ${activeDataTab==='orders' ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-300'}`}>Orders</button>
               <button onClick={() => setActiveDataTab("positions")} className={`pb-2 transition-colors ${activeDataTab==='positions' ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-300'}`}>Positions</button>
@@ -1704,17 +1868,10 @@ export default function ChartV2Page() {
                           <div>Status</div>
                         </div>
                       </div>
-                      <div className="space-y-0 flex-1 min-h-0 overflow-y-auto pb-40 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                        {orders.map((order, idx) => {
+                      <div className={`space-y-0 flex-1 min-h-0 ${desktopScrollable}`}>
+                        {visibleOrders.map((order, idx) => {
                           const orderColor = order.type === 'buy' ? "text-green-400" : "text-red-400";
                           const orderLabel = order.type === 'buy' ? "BUY" : "SELL";
-                          const formatTimeAgo = (timestamp: number) => {
-                            const seconds = Math.floor((Date.now() - timestamp) / 1000);
-                            if (seconds < 60) return `${seconds}s ago`;
-                            if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-                            if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-                            return `${Math.floor(seconds / 86400)}d ago`;
-                          };
                           
                           // Calculate display amount - use outputAmount for buys, inputAmount for sells
                           const displayAmount = parseFloat(order.amount || '0');
@@ -1725,7 +1882,7 @@ export default function ChartV2Page() {
                           return (
                             <div 
                               key={`order-${order.id}-${order.transactionHash || order.timestamp || idx}`} 
-                              className={`w-full grid grid-cols-5 gap-4 px-4 py-3 ${idx < orders.length - 1 ? 'border-b border-gray-800/30' : ''} hover:bg-gray-800/20 transition-colors`}
+                              className={`w-full grid grid-cols-5 gap-4 px-4 py-3 ${idx < visibleOrders.length - 1 ? 'border-b border-gray-800/30' : ''} hover:bg-gray-800/20 transition-colors`}
                             >
                               <div className="text-gray-300 text-sm">
                                 {formatTimeAgo(order.timestamp)}
@@ -1780,8 +1937,8 @@ export default function ChartV2Page() {
                           <div>P&L</div>
                         </div>
                       </div>
-                      <div className="space-y-0 flex-1 min-h-0 overflow-y-auto pb-40 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                        {positions.map((position, idx) => {
+                      <div className={`space-y-0 flex-1 min-h-0 ${desktopScrollable}`}>
+                        {visiblePositions.map((position, idx) => {
                           const pnlColor = position.pnlPercentage !== undefined ? 
                             (position.pnlPercentage >= 0 ? "text-green-400" : "text-red-400") :
                             (position.pnl?.startsWith('+') ? "text-green-400" : "text-red-400");
@@ -1795,7 +1952,7 @@ export default function ChartV2Page() {
                           return (
                             <div 
                               key={`position-${position.id}-${position.tokenAddress}-${position.entryDate || idx}`} 
-                              className={`w-full grid grid-cols-5 gap-4 px-4 py-3 ${idx < positions.length - 1 ? 'border-b border-gray-800/30' : ''} hover:bg-gray-800/20 transition-colors`}
+                              className={`w-full grid grid-cols-5 gap-4 px-4 py-3 ${idx < visiblePositions.length - 1 ? 'border-b border-gray-800/30' : ''} hover:bg-gray-800/20 transition-colors`}
                             >
                               <div className="flex items-center space-x-3">
                                 <div className="w-8 h-8 rounded-full flex items-center justify-center border border-gray-600 flex-shrink-0 overflow-hidden">
@@ -1854,7 +2011,10 @@ export default function ChartV2Page() {
         </div>
 
         {/* Middle: Transactions and Holders */}
-        <div className="hidden xl:flex flex-col border-l border-gray-800 bg-gray-950 w-[260px] max-w-[260px] overflow-visible min-h-0 h-full">
+        <div
+          className={`${activeMobileTab === "trades" ? "flex" : "hidden"} xl:flex flex-col bg-gray-950 border-t border-gray-900/60 xl:border-t-0 xl:border-l xl:border-gray-800 w-full xl:w-[260px] xl:max-w-[260px] overflow-hidden min-h-0 h-full xl:overflow-y-auto`}
+          style={isMobile ? { paddingBottom: mobileBottomOffset } : undefined}
+        >
           {/* Tab selector */}
           <div className="px-4 pt-3 pb-0 flex gap-2 text-sm border-b border-gray-800/50 h-[70px] items-end">
             <button 
@@ -1873,7 +2033,14 @@ export default function ChartV2Page() {
           
           {/* Recent Trades content */}
           {activeMiddleTab === 'trades' && (
-            <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', overflowX: 'visible' }}>
+            <div
+              className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+              style={{
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+                overflowX: 'visible',
+              }}
+            >
               <table className="w-full text-xs" style={{ position: 'relative' }}>
                 <thead className="text-gray-300 bg-gray-950 border-b border-gray-800 sticky top-0 z-20">
                   <tr>
@@ -1951,14 +2118,24 @@ export default function ChartV2Page() {
           
           {/* Holders content */}
           {activeMiddleTab === 'holders' && (
-            <div className="flex-1 overflow-y-auto px-4 py-4 text-sm text-white [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <div
+              className="flex-1 overflow-y-auto px-4 py-4 text-sm text-white [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+              style={{
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+                paddingBottom: isMobile ? mobileBottomOffset : undefined
+              }}
+            >
               <div className="text-gray-300">Holders data will appear here.</div>
             </div>
           )}
         </div>
 
         {/* Right: Swap panel (refined UI) */}
-        <aside className="hidden xl:flex flex-col border-l border-gray-800 bg-gray-950 min-w-[440px]">
+        <aside
+          className={`${activeMobileTab === "swap" ? "flex" : "hidden"} xl:flex flex-col bg-gray-950 border-t border-gray-900/60 xl:border-t-0 xl:border-l xl:border-gray-800 w-full xl:min-w-[440px] overflow-hidden ${isMobile ? "" : "xl:overflow-y-auto"}`}
+          style={isMobile ? { paddingBottom: mobileBottomOffset } : undefined}
+        >
           {/* Token Info Header */}
           <div className="px-4 py-3 pb-4">
             <div className="flex items-center gap-3">
@@ -2015,17 +2192,17 @@ export default function ChartV2Page() {
           <div className="border-t border-gray-800"></div>
 
           {/* Buy/Sell and Swap Interface */}
-          <div className="px-4 py-3 flex-1 flex flex-col">
-            <div className="flex items-center justify-between mb-3">
+          <div className={`px-4 ${isMobile ? "py-2" : "py-3"} flex-1 flex flex-col`}>
+            <div className={`flex items-center justify-between ${swapSectionSpacing}`}>
               <div className="w-full bg-gray-900/40 backdrop-blur supports-[backdrop-filter]:bg-gray-900/30 border border-gray-800 flex">
-                <button onClick={()=>setIsBuy(true)} className={`flex-1 h-12 text-sm font-semibold ${isBuy ? 'bg-green-500/20 text-green-300' : 'text-gray-300 hover:text-white hover:bg-gray-800/50'}`}>Buy</button>
-                <button onClick={()=>setIsBuy(false)} className={`flex-1 h-12 text-sm font-semibold ${!isBuy ? 'bg-red-500/20 text-red-300' : 'text-gray-300 hover:text-white hover:bg-gray-800/50'}`}>Sell</button>
+                <button onClick={()=>setIsBuy(true)} className={`flex-1 ${swapButtonHeight} text-sm font-semibold ${isBuy ? 'bg-green-500/20 text-green-300' : 'text-gray-300 hover:text-white hover:bg-gray-800/50'}`}>Buy</button>
+                <button onClick={()=>setIsBuy(false)} className={`flex-1 ${swapButtonHeight} text-sm font-semibold ${!isBuy ? 'bg-red-500/20 text-red-300' : 'text-gray-300 hover:text-white hover:bg-gray-800/50'}`}>Sell</button>
               </div>
             </div>
-            <div className="text-[10px] text-gray-500 mb-3">Powered by 0x</div>
+            <div className="text-[10px] text-gray-500 mb-2">Powered by 0x</div>
 
             {/* You Pay */}
-            <div className="bg-gray-900/50 border border-gray-800 p-3">
+            <div className={`bg-gray-900/50 border border-gray-800 ${swapFieldPadding}`}>
               <div className="flex items-center justify-between">
                 <div className="text-xs text-gray-400">You Pay</div>
                 <div className="flex items-center gap-2 text-[11px] text-gray-300">
@@ -2073,7 +2250,7 @@ export default function ChartV2Page() {
             </div>
 
             {/* Quick % below You Pay */}
-            <div className="flex gap-2 mt-2 mb-3">
+              <div className="flex gap-2 mt-2 mb-2">
               {['25%','50%','75%','MAX'].map((v, i) => {
                 const pct = i < 3 ? (i+1)*25 : 100;
                 return (
@@ -2093,7 +2270,7 @@ export default function ChartV2Page() {
                       ? walletEthBalance 
                       : walletQuoteTokenBalance;
                     return isBuy ? quoteBalance <= 0 : walletTokenBalance <= 0;
-                  })()} className="px-2 py-1 text-[11px] bg-gray-800/60 text-gray-300 hover:text-white hover:bg-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed">{v}</button>
+                  })()} className={`${quickButtonClass} bg-gray-800/60 text-gray-300 hover:text-white hover:bg-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed`}>{v}</button>
                 );
               })}
             </div>
@@ -2113,11 +2290,13 @@ export default function ChartV2Page() {
                     fetchTokenBalance(walletAddress, pair.baseToken.address);
                   }
                 }
-              }} className="w-10 h-10 border border-gray-800 bg-gray-900/60 text-gray-300 hover:text-white">↕</button>
+              }} className="w-10 h-10 border border-gray-800 bg-gray-900/60 text-gray-300 hover:text-white flex items-center justify-center">
+                <SwapArrowsIcon className="w-4 h-4" />
+              </button>
             </div>
 
             {/* You Receive */}
-            <div className="bg-gray-900/50 border border-gray-800 p-3 mb-3">
+            <div className={`bg-gray-900/50 border border-gray-800 ${swapFieldPadding} ${isMobile ? "mb-2" : "mb-3"}`}>
               <div className="flex items-center justify-between">
                 <div className="text-xs text-gray-400">You Receive</div>
                 <div className="flex items-center gap-2 text-[11px] text-gray-300">
@@ -2145,7 +2324,7 @@ export default function ChartV2Page() {
                   <span>{isBuy ? (pair?.baseToken?.symbol || 'TOKEN') : (pair?.quoteToken?.symbol || 'WETH')}</span>
                 </div>
               </div>
-              <div className="flex items-center justify-between mt-1 h-12 relative">
+              <div className={`flex items-center justify-between mt-1 ${swapButtonHeight} relative`}>
                 <input value={receiveAmount || ''} readOnly className="bg-transparent text-white text-lg w-full pr-20" placeholder="Enter amount above" />
                 {/* Quote expiration timer inline with amount */}
                 {quoteExpiresAt && receiveAmount && (
@@ -2204,7 +2383,7 @@ export default function ChartV2Page() {
               <button onClick={()=>{ try { (window as any).dispatchEvent(new CustomEvent('open-wallet')); } catch {} }} className="w-full bg-blue-600/90 hover:bg-blue-600 text-white py-3">Connect Wallet</button>
             )}
 
-            <div className="flex items-center justify-between text-[11px] text-gray-500 mt-3">
+            <div className="flex items-center justify-between text-[11px] text-gray-500 mt-2">
               <span>Slippage</span>
               <div className="inline-flex border border-gray-800">
                 {[0.5,1,2].map(s => (
@@ -2214,14 +2393,51 @@ export default function ChartV2Page() {
             </div>
           </div>
 
-          <div className="px-4 py-4 border-t border-gray-800 text-xs text-gray-400">
-            <div className="flex items-center justify-between mb-2"><span>Liquidity</span><span>{pair?.liquidity?.usd ? `$${pair.liquidity.usd.toLocaleString()}` : '-'}</span></div>
-            <div className="flex items-center justify-between mb-2"><span>24h Txns</span><span>{pair?.txns?.h24 ? pair.txns.h24.buys + pair.txns.h24.sells : '-'}</span></div>
-          </div>
+          {!isMobile && (
+            <div className="px-4 py-4 border-t border-gray-800 text-xs text-gray-400">
+              <div className="flex items-center justify-between mb-2"><span>Liquidity</span><span>{pair?.liquidity?.usd ? `$${pair.liquidity.usd.toLocaleString()}` : '-'}</span></div>
+              <div className="flex items-center justify-between mb-2"><span>24h Txns</span><span>{pair?.txns?.h24 ? pair.txns.h24.buys + pair.txns.h24.sells : '-'}</span></div>
+            </div>
+          )}
         </aside>
+
+        </div>
+
+        <div
+          className="xl:hidden fixed inset-x-0 z-50 border-t border-gray-900 bg-gray-950"
+          style={{ bottom: `calc(${footerHeight}px + env(safe-area-inset-bottom, 0px))` }}
+        >
+          <div
+            className="max-w-4xl mx-auto flex items-center justify-between px-3 py-1.5 text-[10px] font-medium"
+            style={{ paddingBottom: "max(0px, env(safe-area-inset-bottom, 0px))" }}
+          >
+            {MOBILE_TABS.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeMobileTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveMobileTab(tab.id)}
+                  className={`group flex-1 mx-1 flex flex-col items-center gap-[3px] px-2 py-1 border-b-2 transition-colors ${
+                    isActive
+                      ? "text-blue-200 border-blue-500"
+                      : "text-gray-400 border-transparent hover:text-gray-200"
+                  }`}
+                >
+                  <Icon
+                    className={`w-3.5 h-3.5 ${
+                      isActive ? "text-blue-200" : "text-gray-500 group-hover:text-gray-300"
+                    }`}
+                  />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
-      <Footer />
+      {!isMobile && <Footer />}
 
       {/* Success Banner - Bottom Left */}
       <AnimatePresence>

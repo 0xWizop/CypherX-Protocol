@@ -312,3 +312,93 @@ export function TipIcon() {
     </svg>
   );
 }
+
+export function OverviewIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      className={`w-5 h-5 ${className}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="3 17 7 11 11 16 16 9 21 14" />
+      <line x1="3" y1="21" x2="21" y2="21" />
+    </svg>
+  );
+}
+
+export function PerformanceIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      className={`w-5 h-5 ${className}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="3 17 9 11 13 15 21 7" />
+      <polyline points="21 12 21 7 16 7" />
+    </svg>
+  );
+}
+
+export function SwapArrowsIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      className={`w-5 h-5 ${className}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="17 3 21 7 17 11" />
+      <path d="M21 7H10a4 4 0 00-4 4v1" />
+      <polyline points="7 21 3 17 7 13" />
+      <path d="M3 17h11a4 4 0 004-4v-1" />
+    </svg>
+  );
+}
+
+export function TokenInfoIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      className={`w-5 h-5 ${className}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <line x1="12" y1="8" x2="12.01" y2="8" />
+      <line x1="12" y1="12" x2="12" y2="16" />
+    </svg>
+  );
+}
+
+export function TradesIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      className={`w-5 h-5 ${className}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line x1="4" y1="19" x2="20" y2="19" />
+      <rect x="4" y="11" width="4" height="6" rx="1" />
+      <rect x="10" y="7" width="4" height="10" rx="1" />
+      <rect x="16" y="4" width="4" height="13" rx="1" />
+    </svg>
+  );
+}
