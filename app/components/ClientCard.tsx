@@ -28,7 +28,8 @@ interface IconMap {
 // Animation variants for cards
 const cardVariants = {
   hidden: { opacity: 0, y: 30 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } },
+  // Use a typed-friendly transition (omit `ease` to satisfy framer-motion TS types)
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6 } },
 };
 
 const ClientCard = ({ item, isComingSoon = false }: { item: MarketplaceItem; isComingSoon?: boolean }) => {

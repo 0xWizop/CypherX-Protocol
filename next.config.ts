@@ -1,3 +1,5 @@
+import path from "path";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -40,7 +42,7 @@ const nextConfig = {
             value: `
               default-src 'self';
               script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://*.gstatic.com https://*.tradingview.com;
-              connect-src 'self' https://*.googleapis.com https://*.dexscreener.com https://*.geckoterminal.com https://base-mainnet.g.alchemy.com wss://base-mainnet.g.alchemy.com https://api.coingecko.com http://localhost:3000 https://metamask-sdk.api.cx.metamask.io wss://metamask-sdk.api.cx.metamask.io https://*.tradingview.com https://*.walletconnect.com https://explorer-api.walletconnect.com;
+              connect-src 'self' https://*.googleapis.com https://*.dexscreener.com https://*.geckoterminal.com https://base-mainnet.g.alchemy.com wss://base-mainnet.g.alchemy.com https://api.coingecko.com http://localhost:3000 http://192.168.86.250:3000 https://*.tradingview.com https://*.walletconnect.com https://explorer-api.walletconnect.com https://pulse.walletconnect.org https://api.web3modal.org wss://*.walletconnect.com wss://relay.walletconnect.com https://*.reown.com;
               img-src 'self' data: https://i.imgur.com https://images.typeform.com https://landing.coingecko.com https://upload.wikimedia.org https://res.cloudinary.com https://www.google.com https://img.icons8.com https://www.alchemy.com https://lh7-us.googleusercontent.com https://elitecity.io https://images.mirror-media.xyz https://www.datocms-assets.com https://www.apple.com https://assets.coingecko.com https://www.coingecko.com https://dd.dexscreener.com https://images.seeklogo.com https://firebasestorage.googleapis.com https://cdn.dexscreener.com https://scontent-iad4-1.choicecdn.com https://dexscreener.com https://tba-social.mypinata.cloud https://*.tradingview.com https://*.coingecko.com https://*.dexscreener.com https://*.geckoterminal.com;
               style-src 'self' 'unsafe-inline' https://use.typekit.net https://fonts.googleapis.com https://*.tradingview.com;
               font-src 'self' data: https://fonts.gstatic.com https://*.tradingview.com;
@@ -53,12 +55,19 @@ const nextConfig = {
     ];
   },
   webpack: (config: import("webpack").Configuration, { isServer }: { isServer: boolean }) => {
-    console.log("Webpack config running, isServer:", isServer);
+    if (process.env.NODE_ENV === 'development') {
+      console.log("Webpack config running, isServer:", isServer);
+    }
 
     // Add alias for `~` to resolve to `node_modules` (for @uniswap/widgets fonts)
     if (!config.resolve) config.resolve = {};
     if (!config.resolve.alias) config.resolve.alias = {};
-    (config.resolve.alias as Record<string, string>)['~'] = 'node_modules';
+    (config.resolve.alias as Record<string, string>)["~"] = "node_modules";
+
+    // Alias '@zoralabs/coins-sdk' to a local stub to avoid breaking nested imports
+    // from '@zoralabs/protocol-deployments' during bundling.
+    (config.resolve.alias as Record<string, string>)["@zoralabs/coins-sdk"] =
+      path.resolve(__dirname, "lib/zora-sdk-stub.ts");
 
     // Suppress console warnings for development
     if (!isServer) {
@@ -72,10 +81,21 @@ const nextConfig = {
         /Warning: componentWillReceiveProps has been renamed/,
         /Warning: componentWillMount has been renamed/,
         /Warning: componentWillUpdate has been renamed/,
+        // Suppress MetaMask SDK warnings (if not using it)
+        /mm-sdk-analytics/,
+        /Failed to send batch/,
+        // Suppress WalletConnect warnings
+        /WalletConnect Core is already initialized/,
+        /Failed to fetch remote project configuration/,
+        // Suppress React setState warnings
+        /Cannot update a component.*while rendering/,
+        // Suppress telemetry errors
+        /Failed to execute inlined telemetry script/,
+        /initCCA/,
       ];
     }
 
-    if (!isServer) {
+    if (!isServer && process.env.NODE_ENV === 'development') {
       console.log("Applying client-side Webpack fallback for Node.js modules");
       // Ensure config.resolve exists
       if (!config.resolve) {

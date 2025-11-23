@@ -255,7 +255,6 @@ export async function GET(request: Request) {
       // Extract market data - prioritize DexScreener, then Clanker API, then defaults
       const dexStats = token.dexScreenerStats;
       const marketData = token.related?.market || {};
-      const userData = token.related?.user || {};
 
       const transformed: any = {
         address: token.contract_address?.toLowerCase() || '',

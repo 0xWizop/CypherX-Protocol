@@ -26,6 +26,7 @@ import {
   FaCopy,
   FaChartLine,
   FaBookmark,
+  FaFilter,
 } from "react-icons/fa";
 
 import debounce from "lodash/debounce";
@@ -104,18 +105,13 @@ type DexScreenerPair = {
   info?: {
     imageUrl: string;
   };
-  txns: {
-    h1: { buys: number; sells: number };
-    h6: { buys: number; sells: number };
-    h24: { buys: number; sells: number };
-  };
   pairCreatedAt: number;
   dexId?: string;
 };
 
 // Memoized Token Row Component
 
-const TokenRow = React.memo(({ token, index, style, onTokenClick, favorites, onToggleFavorite, formatPrice, getColorClass, getAge, getTxns24h, getTrophy, MarketingIcon }: {
+const TokenRow = React.memo(({ token, index, style, onTokenClick, favorites, onToggleFavorite, formatPrice, getColorClass, getAge, getTrophy, MarketingIcon }: {
   token: TokenData;
   index: number;
   style: React.CSSProperties;
@@ -125,7 +121,6 @@ const TokenRow = React.memo(({ token, index, style, onTokenClick, favorites, onT
   formatPrice: (price: string | number) => string;
   getColorClass: (value: number) => string;
   getAge: (createdAt?: number) => string;
-  getTxns24h: (token: TokenData) => number;
   getTrophy: (rank: number) => JSX.Element | null;
   MarketingIcon: () => JSX.Element;
 }) => {
@@ -146,7 +141,6 @@ const TokenRow = React.memo(({ token, index, style, onTokenClick, favorites, onT
                 <Image src={token.info.imageUrl} alt={token.symbol} width={24} height={24} className="w-6 h-6 rounded-full" />
               )}
               <span className="font-bold text-white">{token.symbol}</span>
-              {getTrophy(index + 1)}
               {token.boosted && <MarketingIcon />}
             </div>
             <button
@@ -181,7 +175,6 @@ const TokenRow = React.memo(({ token, index, style, onTokenClick, favorites, onT
           </div>
           <div className="mt-2 flex justify-between items-center">
             <span className="text-xs text-gray-500">{getAge(token.pairCreatedAt)}</span>
-            <span className="text-xs text-gray-500">{getTxns24h(token)} txns</span>
           </div>
         </div>
       </div>
@@ -223,10 +216,6 @@ const TokenRow = React.memo(({ token, index, style, onTokenClick, favorites, onT
         <div className="w-32 text-right">
           <div className="text-white">{formatPrice(token.marketCap || 0)}</div>
           <div className="text-xs text-gray-500">MCap</div>
-        </div>
-        <div className="w-32 text-right">
-          <div className="text-white">{getTxns24h(token)}</div>
-          <div className="text-xs text-gray-500">Txns</div>
         </div>
         <div className="w-20 text-right">
           <button
@@ -279,11 +268,6 @@ export type TokenData = {
     imageUrl?: string;
   };
   pairCreatedAt?: number;
-  txns?: {
-    h1: { buys: number; sells: number };
-    h6: { buys: number; sells: number };
-    h24: { buys: number; sells: number };
-  };
   trendingScore?: number;
   boosted?: boolean;
   boostValue?: number;
@@ -306,24 +290,29 @@ export type CustomAlert = {
   notified?: boolean;
 };
 
+export type UserAlert = {
+  id?: string;
+  tokenAddress: string;
+  poolAddress?: string;
+  tokenSymbol: string;
+  tokenName?: string;
+  metric: "price_usd" | "price_native" | "market_cap";
+  direction: "above" | "below";
+  threshold: number;
+  createdAt?: string;
+  lastTriggeredAt?: string;
+  lastValue?: number;
+};
+
 // ====== CONSTANTS ======
 
 const COOLDOWN_PERIOD = 300_000; // 5 minutes
 
-const LONG_COOLDOWN_PERIOD = 1_800_000; // 30 minutes
-
-const PRICE_CHECK_INTERVAL = 300_000; // 5 minutes
-
 const TOP_MOVERS_LOSERS_INTERVAL = 3_600_000; // 1 hour
-
-const NOTIFICATION_EXPIRY = 3 * 60 * 60 * 1000; // 3 hours
 
 const MAX_NOTIFICATIONS_PER_HOUR = 18;
 
 const MAX_NOTIFICATIONS_PER_TOKEN = 5;
-
-// Configurable thresholds for transaction/order filtering
-const MIN_LIQUIDITY_FOR_NOTIFICATIONS = 50000;
 
 
 
@@ -341,11 +330,6 @@ function getAge(createdAt?: number): string {
   return `${days}d`;
 }
 
-function getTxns24h(token: TokenData): number {
-  if (!token.txns || !token.txns.h24) return 0;
-  const { buys, sells } = token.txns.h24;
-  return buys + sells;
-}
 
 function formatPrice(price: string | number): string {
   const numPrice = Number(price);
@@ -355,13 +339,12 @@ function formatPrice(price: string | number): string {
 }
 
 function computeTrending(token: TokenData, boostValue: number): number {
-  const txns = getTxns24h(token);
   const volume24h = token.volume?.h24 || 0;
   const liquidity = token.liquidity?.usd || 0;
   const marketCap = token.marketCap || 0;
   
   // Base requirements - tokens must meet minimum thresholds
-  if (volume24h < 1000 || liquidity < 5000 || txns < 10) {
+  if (volume24h < 1000 || liquidity < 5000) {
     return 0; // Exclude low-quality tokens entirely
   }
   
@@ -370,9 +353,6 @@ function computeTrending(token: TokenData, boostValue: number): number {
   
   // Liquidity score - important for stability
   const liquidityScore = Math.log10(liquidity + 1) * 2.0;
-  
-  // Transaction score - but with diminishing returns and quality checks
-  const txnScore = Math.min(Math.log10(txns + 1) * 1.0, 5.0); // Cap at 5 points
   
   // Price movement scoring - only reward significant positive movements
   const priceChange1h = token.priceChange?.h1 ?? 0;
@@ -408,7 +388,6 @@ function computeTrending(token: TokenData, boostValue: number): number {
   const baseScore =
     volumeScore +
     liquidityScore +
-    txnScore +
     priceMovementScore +
     volumeMarketCapScore +
     consistencyBonus +
@@ -600,6 +579,17 @@ type Alert = {
   priceChangePercent?: number;
 };
 
+const compactCurrencyFormatter = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  compactDisplay: "short",
+  maximumFractionDigits: 2,
+});
+
+function formatCompactCurrency(value: number): string {
+  if (!value) return "$0";
+  return `$${compactCurrencyFormatter.format(value)}`;
+}
+
 export default function TokenScreener() {
   const router = useRouter();
   const pathname = usePathname();
@@ -618,6 +608,7 @@ export default function TokenScreener() {
     maxAge: Infinity,
   });
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [showMobileFilterModal, setShowMobileFilterModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [user, setUser] = useState<User | null>(null);
   const { favorites, toggleFavorite } = useFavorites();
@@ -626,6 +617,15 @@ export default function TokenScreener() {
   const [customAlerts, setCustomAlerts] = useState<CustomAlert[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [notificationCount, setNotificationCount] = useState(0);
+
+  const [_userAlerts, _setUserAlerts] = useState<UserAlert[]>([]);
+  const [_isAlertModalOpen, _setIsAlertModalOpen] = useState(false);
+  const [_pendingAlertToken, _setPendingAlertToken] = useState<TokenData | null>(null);
+  const [_notificationPermission, _setNotificationPermission] = useState<NotificationPermission>(
+    typeof window !== "undefined" && typeof Notification !== "undefined" ? Notification.permission : "default"
+  );
+  const [_isRequestingPermission, _setIsRequestingPermission] = useState(false);
+  const [_permissionChecked, _setPermissionChecked] = useState(false);
 
   const [isMounted, setIsMounted] = useState(false);
   const [pageLoadTime, setPageLoadTime] = useState(0);
@@ -657,6 +657,49 @@ export default function TokenScreener() {
       console.error('Failed to load trending history:', error);
     }
   }, []);
+
+  // Disable body scroll when mobile filter modal is open
+  useEffect(() => {
+    if (showMobileFilterModal) {
+      // Save current scroll position
+      const scrollY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+    } else {
+      // Restore scroll position
+      const scrollY = document.body.style.top;
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || '0') * -1);
+      }
+    }
+
+    return () => {
+      // Cleanup on unmount
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+    };
+  }, [showMobileFilterModal]);
+
+  // Prevent body scrolling during loading on desktop
+  useEffect(() => {
+    if (!isMobile && loading) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [loading, isMobile]);
   
   // Save trending history to localStorage when it updates
   useEffect(() => {
@@ -688,7 +731,7 @@ export default function TokenScreener() {
   const pageSize = 25;
   
   // Missing variables that were removed
-  const [previousPrices, setPreviousPrices] = useState<{ [symbol: string]: number }>({});
+  const [_previousPrices, _setPreviousPrices] = useState<{ [symbol: string]: number }>({});
   const [lastAlertTimes, setLastAlertTimes] = useState<{
     [symbol: string]: { volume: number; price: number; priceLong: number; boost: number };
   }>({});
@@ -1028,7 +1071,6 @@ export default function TokenScreener() {
                   liquidity: pair.liquidity || { usd: 0 },
                   marketCap: pair.marketCap || 0,
                   info: pair.info ? { imageUrl: pair.info.imageUrl } : undefined,
-                  txns: pair.txns || { h1: { buys: 0, sells: 0 }, h6: { buys: 0, sells: 0 }, h24: { buys: 0, sells: 0 } },
                   dexId: (pair as any).dexId || "unknown",
                 });
               }
@@ -1053,219 +1095,10 @@ export default function TokenScreener() {
   }, []);
 
   // Fetch Alerts from Firestore and Clean Up
-  useEffect(() => {
-    const alertsQuery = query(collection(db, "notifications"));
-    const unsubscribe = onSnapshot(
-      alertsQuery,
-      (snapshot) => {
-        const now = Date.now();
-        const newAlerts: Alert[] = [];
-        const alertsPerToken: { [poolAddress: string]: Alert[] } = {};
-        snapshot.forEach((doc) => {
-          const alert = { id: doc.id, ...doc.data() } as Alert;
-          const alertTime = new Date(alert.timestamp).getTime();
-          if (now - alertTime <= NOTIFICATION_EXPIRY) {
-            const poolAddress = alert.poolAddress || "unknown";
-            if (!alertsPerToken[poolAddress]) {
-              alertsPerToken[poolAddress] = [];
-            }
-            alertsPerToken[poolAddress].push(alert);
-          } else {
-            deleteDoc(doc.ref).catch((err) => console.error(`Failed to delete alert: ${err}`));
-          }
-        });
-        Object.keys(alertsPerToken).forEach((poolAddress) => {
-          const tokenAlerts = alertsPerToken[poolAddress];
-          tokenAlerts.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-          const limitedAlerts = tokenAlerts.slice(0, MAX_NOTIFICATIONS_PER_TOKEN);
-          newAlerts.push(...limitedAlerts);
-        });
-        setAlerts(newAlerts);
-        setNotificationCount(newAlerts.length);
-      },
-      (err) => {
-        console.error("Error fetching alerts:", err);
-        reactToast.info("Loading Alerts...", { position: "bottom-left" });
-      }
-    );
-    return () => unsubscribe();
-  }, []);
+  // TODO: Reintroduce alert subscription once the new alert system is ready
 
   // Price Spike and Volume Spike Alerts + Custom Alerts Check
-  useEffect(() => {
-    async function checkPriceAndVolume() {
-      const now = Date.now();
-      const newPrices: { [symbol: string]: number } = {};
-      const newAlerts: Alert[] = [];
-      if (notificationCount >= MAX_NOTIFICATIONS_PER_HOUR) return;
-      tokens.forEach((token) => {
-        const symbol = token.symbol;
-        const poolAddress = token.poolAddress;
-        const marketCap = token.marketCap || 0;
-        const liquidity = token.liquidity?.usd || 0;
-        const volumeH1 = token.volume?.h1 || 0;
-        const currentPrice = parseFloat(token.priceUsd || "0");
-        const previousPrice = previousPrices[symbol] || currentPrice;
-        const priceChange6h = token.priceChange?.h6 ?? 0;
-        const tokenAlerts = alerts.filter((a) => a.poolAddress === token.poolAddress).length;
-        if (tokenAlerts >= MAX_NOTIFICATIONS_PER_TOKEN) return;
-        newPrices[symbol] = currentPrice;
-        const lastTimes = lastAlertTimes[symbol] || {
-          volume: 0,
-          price: 0,
-          priceLong: 0,
-          boost: 0,
-        };
-        const volumeSpikeThresholdMarketCap = marketCap * 0.1;
-        const volumeSpikeThresholdLiquidity = liquidity * 0.5;
-        if (
-          (volumeH1 > volumeSpikeThresholdMarketCap || volumeH1 > volumeSpikeThresholdLiquidity) &&
-          now - lastTimes.volume >= COOLDOWN_PERIOD &&
-          notificationCount < MAX_NOTIFICATIONS_PER_HOUR &&
-          tokenAlerts < MAX_NOTIFICATIONS_PER_TOKEN
-        ) {
-          const alert: Alert = {
-            type: "volume_spike",
-            message: `${symbol} volume spiked to $${volumeH1.toLocaleString()} in the last hour.`,
-            timestamp: new Date().toISOString(),
-            poolAddress,
-          };
-          if (now >= pageLoadTime) {
-            newAlerts.push(alert);
-            addDoc(collection(db, "notifications"), {
-              ...alert,
-              createdAt: serverTimestamp(),
-            }).catch((err) => console.error(`Failed to save volume alert for ${symbol}:`, err));
-            setLastAlertTimes((prev) => ({
-              ...prev,
-              [symbol]: {
-                ...prev[symbol],
-                volume: now,
-              },
-            }));
-            setNotificationCount((prev) => prev + 1);
-            reactToast(alert.message, getAlertToastOptions(alert));
-          }
-        }
-        const priceChangePercent =
-          previousPrice !== 0 ? ((currentPrice - previousPrice) / previousPrice) * 100 : 0;
-        if (
-          liquidity >= MIN_LIQUIDITY_FOR_NOTIFICATIONS &&
-          Math.abs(priceChangePercent) >= 3 &&
-          now - lastTimes.price >= COOLDOWN_PERIOD &&
-          notificationCount < MAX_NOTIFICATIONS_PER_HOUR &&
-          tokenAlerts < MAX_NOTIFICATIONS_PER_TOKEN
-        ) {
-          const alert: Alert = {
-            type: "price_spike",
-            message: `${symbol} is ${priceChangePercent > 0 ? "up" : "down"} ${Math.abs(
-              priceChangePercent
-            ).toFixed(2)}% in the last 5 minutes.`,
-            timestamp: new Date().toISOString(),
-            priceChangePercent,
-            poolAddress,
-          };
-          if (now >= pageLoadTime) {
-            newAlerts.push(alert);
-            addDoc(collection(db, "notifications"), {
-              ...alert,
-              createdAt: serverTimestamp(),
-            }).catch((err) => console.error(`Failed to save price alert for ${symbol}:`, err));
-            setLastAlertTimes((prev) => ({
-              ...prev,
-              [symbol]: {
-                ...prev[symbol],
-                price: now,
-              },
-            }));
-            setNotificationCount((prev) => prev + 1);
-            reactToast(alert.message, getAlertToastOptions(alert));
-          }
-        }
-        if (
-          liquidity >= MIN_LIQUIDITY_FOR_NOTIFICATIONS &&
-          Math.abs(priceChange6h) >= 10 &&
-          now - lastTimes.priceLong >= LONG_COOLDOWN_PERIOD &&
-          notificationCount < MAX_NOTIFICATIONS_PER_HOUR &&
-          tokenAlerts < MAX_NOTIFICATIONS_PER_TOKEN
-        ) {
-          const alert: Alert = {
-            type: "price_spike_long",
-            message: `${symbol} is ${priceChange6h > 0 ? "up" : "down"} ${Math.abs(priceChange6h).toFixed(
-              2
-            )}% in the last 6 hours.`,
-            timestamp: new Date().toISOString(),
-            priceChangePercent: priceChange6h,
-            poolAddress,
-          };
-          if (now >= pageLoadTime) {
-            newAlerts.push(alert);
-            addDoc(collection(db, "notifications"), {
-              ...alert,
-              createdAt: serverTimestamp(),
-            }).catch((err) => console.error(`Failed to save long-term price alert for ${symbol}:`, err));
-            setLastAlertTimes((prev) => ({
-              ...prev,
-              [symbol]: {
-                ...prev[symbol],
-                priceLong: now,
-              },
-            }));
-            setNotificationCount((prev) => prev + 1);
-            reactToast(alert.message, getAlertToastOptions(alert));
-          }
-        }
-
-        // Custom alerts check
-        if (user) {
-          customAlerts.forEach((ca) => {
-            if (ca.poolAddress === poolAddress && !ca.notified) {
-              let triggered = false;
-              let message = "";
-              let changePercent;
-              if (ca.type === "price_above" && currentPrice > ca.threshold) {
-                triggered = true;
-                message = `${symbol} price exceeded $${ca.threshold}`;
-                changePercent = ((currentPrice - ca.threshold) / ca.threshold) * 100;
-              } else if (ca.type === "price_below" && currentPrice < ca.threshold) {
-                triggered = true;
-                message = `${symbol} price dropped below $${ca.threshold}`;
-                changePercent = ((currentPrice - ca.threshold) / ca.threshold) * 100;
-              } else if (ca.type === "volume_above" && volumeH1 > ca.threshold) {
-                triggered = true;
-                message = `${symbol} volume exceeded $${ca.threshold} in the last hour`;
-              } else if (ca.type === "mc_above" && marketCap > ca.threshold) {
-                triggered = true;
-                message = `${symbol} market cap exceeded $${ca.threshold}`;
-              }
-              if (triggered && now >= pageLoadTime) {
-                const alert: Alert = {
-                  type: ca.type,
-                  message,
-                  timestamp: new Date().toISOString(),
-                  poolAddress,
-                  priceChangePercent: changePercent,
-                };
-                newAlerts.push(alert);
-                addDoc(collection(db, "notifications"), {
-                  ...alert,
-                  createdAt: serverTimestamp(),
-                }).catch((err) => console.error(`Failed to save custom alert for ${symbol}:`, err));
-                updateDoc(doc(db, `users/${user.uid}/customAlerts`, ca.id!), { notified: true });
-                setNotificationCount((prev) => prev + 1);
-                reactToast(message, getAlertToastOptions(alert));
-              }
-            }
-          });
-        }
-      });
-      setPreviousPrices(newPrices);
-      setAlerts((prev) => [...prev, ...newAlerts]);
-    }
-    checkPriceAndVolume();
-    const interval = setInterval(checkPriceAndVolume, PRICE_CHECK_INTERVAL);
-    return () => clearInterval(interval);
-  }, [pageLoadTime]);
+  // TODO: Add alert evaluation interval once new alert triggers are implemented
 
   // Boost Alerts - Real-time with onSnapshot and expiration
   useEffect(() => {
@@ -1733,8 +1566,46 @@ export default function TokenScreener() {
   const totalPages = Math.ceil(filteredAndSortedTokens.length / pageSize);
   const rowVariants = {
     hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
+    // Use a TS-safe transition (omit `ease` which conflicts with framer-motion's typed Easing)
+    visible: { opacity: 1, y: 0, transition: { duration: 0.6 } },
   };
+
+  const desktopPagination = totalPages > 1 ? (
+    <div className="flex w-full items-center justify-center gap-2 text-[11px] uppercase text-gray-200">
+      <motion.button
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+        disabled={currentPage === 1}
+        className="rounded border border-blue-500/30 bg-gray-900/60 px-3 py-1.5 font-sans transition-colors hover:bg-gray-800 disabled:opacity-50"
+      >
+        Previous
+      </motion.button>
+      <input
+        type="number"
+        value={currentPage}
+        onChange={(e) => {
+          const page = Number(e.target.value);
+          if (page >= 1 && page <= totalPages) {
+            debouncedSetCurrentPage(page);
+          }
+        }}
+        className="w-20 rounded border border-blue-500/30 bg-gray-900/60 px-2 py-1.5 text-center font-sans text-gray-200 uppercase focus:outline-none focus:ring-2 focus:ring-blue-400 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        min={1}
+        max={totalPages}
+      />
+      <span className="font-sans text-gray-400">of {totalPages}</span>
+      <motion.button
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+        disabled={currentPage === totalPages}
+        className="rounded border border-blue-500/30 bg-gray-900/60 px-3 py-1.5 font-sans transition-colors hover:bg-gray-800 disabled:opacity-50"
+      >
+        Next
+      </motion.button>
+    </div>
+  ) : null;
 
   const filteredCustomAlerts = useMemo(() => {
     return triggerFilter === "all" ? customAlerts : customAlerts.filter(ca => ca.type === triggerFilter);
@@ -1764,47 +1635,23 @@ export default function TokenScreener() {
     }
   }, [pullToRefreshY, isRefreshing]);
 
-  // Mobile skeleton component
-  const MobileSkeletonCard = () => (
-    <div className="bg-gray-900 p-4 border-b border-blue-500/20 animate-pulse">
-      <div className="flex justify-between items-start mb-4">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-gray-800 rounded-full"></div>
-          <div>
-            <div className="h-4 bg-gray-800 rounded w-16 mb-2"></div>
-            <div className="h-3 bg-gray-800 rounded w-12"></div>
-          </div>
-        </div>
-        <div className="h-4 bg-gray-800 rounded w-12"></div>
-      </div>
-      <div className="bg-gray-800/50 p-3 mb-4">
-        <div className="h-4 bg-gray-700 rounded w-20 mb-2"></div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="h-3 bg-gray-700 rounded"></div>
-          <div className="h-3 bg-gray-700 rounded"></div>
-        </div>
-      </div>
-      <div className="grid grid-cols-4 gap-2 mb-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="bg-gray-800/30 p-2">
-            <div className="h-3 bg-gray-700 rounded mb-1"></div>
-            <div className="h-2 bg-gray-700 rounded"></div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  const handlePullToRefreshEnd = useCallback(() => {
+    // Reset pull-to-refresh state when user releases
+    if (pullToRefreshY > 0 && !isRefreshing) {
+      setPullToRefreshY(0);
+    }
+  }, [pullToRefreshY, isRefreshing]);
 
   if (!isMounted || initialLoad) {
     return (
-      <div className="w-screen h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen w-full bg-gray-950 flex items-center justify-center overflow-hidden">
         <LoadingPage />
       </div>
     );
   }
 
   return (
-    <div className="w-screen h-screen bg-gray-950 text-gray-200 font-sans m-0 p-0 overflow-hidden">
+    <div className="h-screen bg-gray-950 text-gray-200 font-sans m-0 p-0 overflow-hidden flex flex-col">
       <style jsx global>{`
         @keyframes fillLeftToRight {
           0% {
@@ -1858,6 +1705,30 @@ export default function TokenScreener() {
         * {
           scrollbar-width: thin;
           scrollbar-color: #374151 #1f2937;
+        }
+        
+        /* Prevent overscroll bounce on mobile */
+        @media (max-width: 768px) {
+          body {
+            overscroll-behavior-y: contain;
+            -webkit-overflow-scrolling: touch;
+          }
+        }
+        
+        /* Hide scrollbars but keep scrolling functionality */
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+        
+        /* Ensure body doesn't scroll on desktop */
+        @media (min-width: 769px) {
+          body {
+            overflow: hidden !important;
+          }
         }
       `}</style>
       <ToastContainer 
@@ -2095,7 +1966,7 @@ export default function TokenScreener() {
                               alt={token.symbol}
                               width={48}
                               height={48}
-                              className="rounded-full border-2 border-blue-500/30"
+                              className="rounded-full border border-blue-500/30"
                             />
                           ) : (
                             <div className="w-12 h-12 bg-gray-700 rounded-full border-2 border-blue-500/30 flex items-center justify-center">
@@ -2619,7 +2490,7 @@ export default function TokenScreener() {
                 whileHover={{ scale: 1.05 }}
                 onClick={() => setViewMode("alerts")}
                 className={`p-2 text-gray-200 rounded-lg text-sm sm:text-base w-full sm:w-auto font-sans transition-colors border border-blue-500/30 uppercase ${
-                  viewMode === "alerts" ? "bg-red-500/20 text-red-400" : "bg-gray-800/50 hover:bg-gray-700/50"
+                  viewMode === "alerts" ? "bg-red-500/20 text-red-400" : "bg-gray-800 hover:bg-gray-700"
                 }`}
               >
                 Alerts
@@ -2745,7 +2616,19 @@ export default function TokenScreener() {
           </div>
         )}
         {/* Main Table or Alerts Feed */}
-        <div className="flex-1 flex flex-col w-full h-full overflow-x-hidden overflow-y-auto">
+        <div className="flex-1 flex flex-col w-full overflow-hidden">
+          <div
+            className={`flex-1 overflow-x-hidden bg-gray-950 scrollbar-hide ${loading ? 'overflow-hidden' : 'overflow-y-auto'}`}
+            style={{ 
+              maxHeight: isMobile ? 'calc(100vh - 120px)' : 'calc(100vh - 160px)',
+              WebkitOverflowScrolling: 'touch',
+              overscrollBehavior: 'contain',
+              overscrollBehaviorY: 'contain',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+              paddingBottom: isMobile ? 0 : '60px'
+            }}
+          >
           {loading ? (
             <div className="flex-1 flex items-center justify-center bg-gray-950">
               <LoadingPage />
@@ -2755,7 +2638,7 @@ export default function TokenScreener() {
               No tokens match your filters. Try adjusting filters or check Firebase data.
             </div>
           ) : viewMode === "alerts" ? (
-            <div className="w-full h-full bg-gray-950 overflow-y-auto">
+            <div className="w-full h-full bg-gray-950 overflow-y-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               <div className="p-4 border-b border-gray-800 flex justify-between items-center">
                 <h2 className="text-xl font-bold font-sans text-gray-200 uppercase">Alerts</h2>
                 <motion.button
@@ -3052,7 +2935,7 @@ export default function TokenScreener() {
           ) : (
             <>
               {/* Desktop Table View */}
-              <div className="hidden md:block overflow-x-auto">
+              <div className="hidden md:block overflow-x-auto scrollbar-hide pb-12" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                 <table className="table-auto w-full whitespace-nowrap text-sm font-sans uppercase min-w-[1200px]">
                   <thead className="bg-gray-950 text-gray-400 sticky top-0 z-10 border-b border-gray-800">
                     <tr>
@@ -3075,9 +2958,6 @@ export default function TokenScreener() {
                         title="Age of the token pair"
                       >
                         AGE{sortFilter === "age" && (sortDirection === "desc" ? " ↓" : " ↑")}
-                      </th>
-                      <th className="p-3 text-right" title="Total transactions in 24 hours">
-                        TXN
                       </th>
                       <th
                         className="p-3 text-right cursor-pointer hover:text-blue-400 transition-colors"
@@ -3199,7 +3079,6 @@ export default function TokenScreener() {
                             </td>
                             <td className="p-3 text-right text-gray-200">{formatPrice(token.priceUsd || 0)}</td>
                             <td className="p-3 text-right text-gray-200">{getAge(token.pairCreatedAt)}</td>
-                            <td className="p-3 text-right text-gray-200">{getTxns24h(token)}</td>
                             <td className={`p-3 text-right ${getColorClass(token.priceChange?.m5 || 0)}`}>
                               {(token.priceChange?.m5 || 0).toFixed(2)}%
                             </td>
@@ -3219,7 +3098,7 @@ export default function TokenScreener() {
                               ${(token.liquidity?.usd || 0).toLocaleString()}
                             </td>
                             <td className="p-3 text-right text-gray-200">
-                              ${(token.marketCap || 0).toLocaleString()}
+                              {formatCompactCurrency(token.marketCap || 0)}
                             </td>
                             <td className="p-3 text-center">
                               <motion.button
@@ -3285,259 +3164,294 @@ export default function TokenScreener() {
                   </tbody>
                 </table>
               </div>
-              {/* Enhanced Mobile Card View */}
-              <div 
-                className="md:hidden flex flex-col p-0 gap-0 relative"
+              {/* Mobile Table View */}
+              <div
+                className="md:hidden bg-gray-950"
+                style={{ 
+                  paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))",
+                  marginBottom: 0,
+                  overscrollBehavior: 'contain',
+                  overscrollBehaviorY: 'contain'
+                }}
                 onTouchStart={handlePullToRefreshStart}
                 onTouchMove={handlePullToRefreshMove}
+                onTouchEnd={handlePullToRefreshEnd}
               >
-                {/* Pull to refresh indicator */}
                 {isRefreshing && (
-                  <div className="absolute top-0 left-0 right-0 bg-blue-500/20 text-blue-400 text-center py-2 z-10">
-                    <FaRedo className="inline animate-spin mr-2" />
+                  <div className="sticky top-0 z-20 flex items-center justify-center bg-blue-500/20 py-2 text-xs font-semibold uppercase tracking-wide text-blue-400">
+                    <FaRedo className="mr-2 h-4 w-4 animate-spin" />
                     Refreshing...
                   </div>
                 )}
-                
-                {/* Progressive loading skeleton */}
-                {showMobileSkeleton && isMobile && (loading || tokens.length === 0) && (
-                  <AnimatePresence>
-                    {Array.from({ length: 5 }).map((_, index) => (
-                      <motion.div
-                        key={`skeleton-${index}`}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        transition={{ delay: index * 0.1 }}
-                      >
-                        <MobileSkeletonCard />
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                )}
 
-                {currentTokens.length === 0 ? (
-                  <div className="p-6 text-center text-gray-400 font-sans uppercase">
-                    No tokens available for this page. Try adjusting filters or check Firebase/DexScreener data.
-                  </div>
-                ) : (
-                  currentTokens.map((token, index) => {
-                    const rank = indexOfFirstToken + index + 1;
-                    const tokenAlerts = alerts.filter((alert) => alert.poolAddress === token.poolAddress);
-                    
-                    if (!/^0x[a-fA-F0-9]{40}$/.test(token.poolAddress)) {
-                      console.warn(`Invalid pool address: ${token.poolAddress}`);
-                      return null;
-                    }
-                    
-                    return (
-                      <motion.div
-                        key={token.poolAddress}
-                        className="bg-gray-900 p-4 border-b border-blue-500/20 shadow-sm hover:shadow-md transition-all duration-200 w-full last:border-b-0 relative overflow-hidden"
-                        variants={rowVariants}
-                        initial="hidden"
-                        animate="visible"
-                      >
+                <table className="w-full table-fixed text-[11px] font-sans uppercase text-gray-400 bg-gray-950">
+                  <thead className="bg-gray-950 text-[10px] sticky top-0 z-10 border-b border-gray-800">
+                    <tr>
+                      <th className="px-2 py-3 text-left font-semibold tracking-wide whitespace-nowrap" style={{ width: '7%' }}>#</th>
+                      <th className="px-2 py-3 text-left font-semibold tracking-wide" style={{ width: '24%' }}>Token</th>
+                      <th className="px-2 py-3 text-right font-semibold tracking-wide whitespace-nowrap" style={{ width: '18%' }}>Price</th>
+                      <th className="px-2 py-3 text-right font-semibold tracking-wide whitespace-nowrap" style={{ width: '16%' }}>24h</th>
+                      <th className="px-2 py-3 text-right font-semibold tracking-wide whitespace-nowrap" style={{ width: '18%' }}>Mcap</th>
+                      <th className="px-2 py-3 text-right font-semibold tracking-wide whitespace-nowrap" style={{ width: '17%' }}>Time</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-gray-950">
+                    {showMobileSkeleton && isMobile && (loading || tokens.length === 0) ? (
+                      Array.from({ length: 6 }).map((_, index) => (
+                        <tr key={`mobile-skeleton-${index}`} className="border-b border-blue-500/10 bg-gray-950 last:border-b-0">
+                          <td className="px-2 py-4" style={{ width: '7%' }}>
+                            <div className="h-3 w-8 rounded bg-gray-800/80 animate-pulse" />
+                          </td>
+                          <td className="px-2 py-4" style={{ width: '24%' }}>
+                            <div className="flex items-center gap-2">
+                              <div className="h-6 w-6 rounded-full bg-gray-800/80 animate-pulse flex-shrink-0" />
+                              <div className="h-3 flex-1 rounded bg-gray-800/80 animate-pulse" />
+                            </div>
+                          </td>
+                          <td className="px-2 py-4 text-right" style={{ width: '18%' }}>
+                            <div className="ml-auto h-3 w-14 rounded bg-gray-800/80 animate-pulse" />
+                          </td>
+                          <td className="px-2 py-4 text-right" style={{ width: '16%' }}>
+                            <div className="ml-auto h-3 w-12 rounded bg-gray-800/80 animate-pulse" />
+                          </td>
+                          <td className="px-2 py-4 text-right" style={{ width: '18%' }}>
+                            <div className="ml-auto h-3 w-16 rounded bg-gray-800/80 animate-pulse" />
+                          </td>
+                          <td className="px-2 py-4 text-right" style={{ width: '17%' }}>
+                            <div className="ml-auto h-3 w-10 rounded bg-gray-800/80 animate-pulse" />
+                          </td>
+                        </tr>
+                      ))
+                    ) : currentTokens.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-6 text-center text-[11px] text-gray-500">
+                          No tokens available for this page. Try adjusting filters or check Firebase/DexScreener data.
+                        </td>
+                      </tr>
+                    ) : (
+                      currentTokens.map((token, index) => {
+                        const rank = indexOfFirstToken + index + 1;
+                        const change24h = token.priceChange?.h24 ?? 0;
 
-                        {/* Header Row */}
-                        <div className="flex justify-between items-start mb-4 relative z-10">
-                          <div className="flex items-center space-x-3">
-                            <span className="bg-blue-500/20 text-blue-400 px-3 py-1 text-sm font-bold border border-blue-500/30 rounded-full">#{rank}</span>
-                            <div className="flex items-center space-x-2">
-                              {token.info && (
-                                <Image
-                                  src={token.info.imageUrl || "/fallback.png"}
-                                  alt={token.symbol}
-                                  width={32}
-                                  height={32}
-                                  className="rounded-full border border-blue-500/30"
-                                />
-                              )}
-                              <div>
-                                <div className="font-bold text-gray-200">{token.symbol}</div>
-                                <div className="text-xs text-gray-400">/ WETH</div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className={`text-lg font-bold ${getColorClass(token.priceChange?.h24 || 0)}`}>
-                              {(token.priceChange?.h24 || 0).toFixed(2)}%
-                            </div>
-                            <div className="text-xs text-gray-400">24H</div>
-                          </div>
-                        </div>
+                        if (!/^0x[a-fA-F0-9]{40}$/.test(token.poolAddress)) {
+                          console.warn(`Invalid pool address: ${token.poolAddress}`);
+                          return null;
+                        }
 
-                        {/* Enhanced Price and Key Metrics */}
-                        <div className="bg-gradient-to-r from-gray-800/50 to-gray-700/50 p-4 mb-4 rounded-lg border border-blue-500/20 relative z-10">
-                          <div className="flex justify-between items-center mb-4">
-                            <div className="flex items-center space-x-2">
-                              <FaDollarSign className="w-4 h-4 text-green-400" />
-                              <span className="text-gray-400 text-sm font-medium">Price</span>
-                            </div>
-                            <span className="text-2xl font-bold text-gray-200">{formatPrice(token.priceUsd || 0)}</span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-gray-800/40 p-3 rounded-lg border border-blue-500/10">
-                              <div className="flex items-center space-x-2 mb-1">
-                                <FaDollarSign className="w-3 h-3 text-blue-400" />
-                                <span className="text-gray-400 text-xs font-medium">Market Cap</span>
-                              </div>
-                              <div className="font-bold text-gray-200 text-sm">${(token.marketCap || 0).toLocaleString()}</div>
-                            </div>
-                            <div className="bg-gray-800/40 p-3 rounded-lg border border-blue-500/10">
-                              <div className="flex items-center space-x-2 mb-1">
-                                <FaChartLine className="w-3 h-3 text-purple-400" />
-                                <span className="text-gray-400 text-xs font-medium">Volume 24H</span>
-                              </div>
-                              <div className="font-bold text-gray-200 text-sm">${(token.volume?.h24 || 0).toLocaleString()}</div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Enhanced Time-based Changes */}
-                        <div className="grid grid-cols-4 gap-2 mb-4 relative z-10">
-                          <div className="bg-gray-800/30 p-3 text-center rounded-lg border border-blue-500/10">
-                            <div className={`text-sm font-semibold ${getColorClass(token.priceChange?.m5 || 0)}`}>
-                              {(token.priceChange?.m5 || 0).toFixed(1)}%
-                            </div>
-                            <div className="text-xs text-gray-400 mt-1">5M</div>
-                          </div>
-                          <div className="bg-gray-800/30 p-3 text-center rounded-lg border border-blue-500/10">
-                            <div className={`text-sm font-semibold ${getColorClass(token.priceChange?.h1 || 0)}`}>
-                              {(token.priceChange?.h1 || 0).toFixed(1)}%
-                            </div>
-                            <div className="text-xs text-gray-400 mt-1">1H</div>
-                          </div>
-                          <div className="bg-gray-800/30 p-3 text-center rounded-lg border border-blue-500/10">
-                            <div className={`text-sm font-semibold ${getColorClass(token.priceChange?.h6 || 0)}`}>
-                              {(token.priceChange?.h6 || 0).toFixed(1)}%
-                            </div>
-                            <div className="text-xs text-gray-400 mt-1">6H</div>
-                          </div>
-                          <div className="bg-gray-800/30 p-3 text-center rounded-lg border border-blue-500/10">
-                            <div className="text-sm font-semibold text-gray-200">
-                              {getAge(token.pairCreatedAt)}
-                            </div>
-                            <div className="text-xs text-gray-400 mt-1">Age</div>
-                          </div>
-                        </div>
-
-                        {/* Enhanced Additional Info */}
-                        <div className="flex justify-between items-center text-xs text-gray-400 mb-4 relative z-10">
-                          <div className="flex items-center space-x-3">
-                            <div className="flex items-center space-x-1">
-                              <FaDollarSign className="w-3 h-3 text-green-400" />
-                              <span>${(token.liquidity?.usd || 0).toLocaleString()}</span>
-                            </div>
-                            <span className="text-gray-600">•</span>
-                            <div className="flex items-center space-x-1">
-                              <FaChartLine className="w-3 h-3 text-blue-400" />
-                              <span>{getTxns24h(token)} txns</span>
-                            </div>
-                          </div>
-                          {token.boosted && (
-                            <div className="flex items-center space-x-1 text-blue-400">
-                              <FaBolt className="w-3 h-3" />
-                              <span className="text-xs">+{token.boostValue}</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Enhanced Action Buttons */}
-                        <div className="flex justify-between items-center relative z-10">
-                          <motion.button 
-                            onClick={() => handleTokenClick(token.poolAddress)} 
-                            className="bg-gradient-to-r from-blue-500/20 to-blue-600/20 hover:from-blue-500/30 hover:to-blue-600/30 text-blue-400 px-6 py-3 text-sm font-semibold border border-blue-500/30 rounded-lg transition-all duration-200 flex items-center space-x-2"
-                            whileHover={{ scale: 1.02, y: -1 }}
-                            whileTap={{ scale: 0.98 }}
+                        return (
+                          <motion.tr
+                            key={token.poolAddress}
+                            className="border-b border-blue-500/10 bg-gray-950 text-[11px] text-gray-300 transition-colors duration-150 hover:bg-gray-900/60 last:border-b-0"
+                            variants={rowVariants}
+                            initial="hidden"
+                            animate="visible"
+                            onClick={() => handleTokenClick(token.poolAddress)}
                           >
-                            <FaChartLine className="w-4 h-4" />
-                            <span>Chart</span>
-                          </motion.button>
-                          <div className="flex space-x-1">
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setTimeout(() => handleCopy(token), 100);
-                              }}
-                              className="p-2 text-gray-400 rounded transition-colors duration-200"
-                            >
-                              <FaCopy className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => setSelectedAlerts(tokenAlerts)}
-                              className={`p-2 rounded transition-colors duration-200 ${
-                                tokenAlerts.length > 0 
-                                  ? "text-blue-400" 
-                                  : "text-gray-400"
-                              }`}
-                            >
-                              <FaBell className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => toggleFavorite(token.poolAddress)}
-                              className="p-2 text-gray-400 rounded transition-colors duration-200"
-                            >
-                              <FaStar className={`w-4 h-4 ${favorites.includes(token.poolAddress) ? 'text-yellow-400' : ''}`} />
-                            </button>
-                            <button
-                              onClick={() => handleOpenAddToWatchlist(token.poolAddress)}
-                              className="p-2 text-gray-400 rounded transition-colors duration-200"
-                            >
-                              <FaBookmark className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    );
-                  })
-                )}
+                            <td className="px-2 py-3" style={{ width: '7%' }}>
+                              <div className="flex items-center gap-1 text-gray-200">
+                                <span className="font-semibold text-[10px]">#{rank}</span>
+                                {token.boosted && (
+                                  <div className="flex items-center gap-1 text-blue-400">
+                                    <MarketingIcon />
+                                    {typeof token.boostValue === "number" && (
+                                      <span className="text-[9px] font-semibold">+{token.boostValue}</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-2 py-3" style={{ width: '24%' }}>
+                              <div className="flex items-center gap-2 min-w-0">
+                                {token.info?.imageUrl ? (
+                                  <Image
+                                    src={token.info.imageUrl}
+                                    alt={token.symbol}
+                                    width={20}
+                                    height={20}
+                                    className="h-5 w-5 rounded-full border border-blue-500/30 object-cover flex-shrink-0"
+                                  />
+                                ) : (
+                                  <div className="h-5 w-5 rounded-full border border-blue-500/30 bg-gray-800/80 flex-shrink-0" />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate font-semibold text-gray-100 text-[11px]">{token.symbol}</div>
+                                  <div className="truncate text-[9px] uppercase text-gray-500">
+                                    {token.quoteToken?.symbol || token.name || "WETH"}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-2 py-3 text-right text-gray-200 whitespace-nowrap" style={{ width: '18%' }}>
+                              <span className="text-[11px]">{formatPrice(token.priceUsd || 0)}</span>
+                            </td>
+                            <td className={`px-2 py-3 text-right font-semibold whitespace-nowrap ${getColorClass(change24h)}`} style={{ width: '16%' }}>
+                              <span className="text-[11px]">{`${change24h >= 0 ? "+" : ""}${change24h.toFixed(2)}%`}</span>
+                            </td>
+                            <td className="px-2 py-3 text-right text-gray-200 whitespace-nowrap" style={{ width: '18%' }}>
+                              <span className="text-[11px]">{formatCompactCurrency(token.marketCap || 0)}</span>
+                            </td>
+                            <td className="px-2 py-3 text-right text-gray-400 whitespace-nowrap" style={{ width: '17%' }}>
+                              <span className="text-[10px]">{getAge(token.pairCreatedAt)}</span>
+                            </td>
+                          </motion.tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
-              
-              {/* Pagination - At bottom of scrollable content */}
-              {totalPages > 1 && (
-                <div className="p-4 flex justify-center items-center space-x-2 bg-gray-950 border-t border-gray-800">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
-                    className="bg-gray-800/50 hover:bg-gray-700/50 text-gray-200 py-2 px-4 rounded font-sans disabled:opacity-50 border border-blue-500/30 uppercase"
-                  >
-                    Previous
-                  </motion.button>
-                  <input
-                    type="number"
-                    value={currentPage}
-                    onChange={(e) => {
-                      const page = Number(e.target.value);
-                      if (page >= 1 && page <= totalPages) {
-                        debouncedSetCurrentPage(page);
-                      }
-                    }}
-                    className="w-20 p-2 bg-gray-800/50 text-gray-200 border border-blue-500/30 rounded font-sans text-center focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    min={1}
-                    max={totalPages}
-                  />
-                  <span className="text-gray-400 font-sans uppercase">of {totalPages}</span>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                    className="bg-gray-800/50 hover:bg-gray-700/50 text-gray-200 py-2 px-4 rounded font-sans disabled:opacity-50 border border-blue-500/30 uppercase"
-                  >
-                    Next
-                  </motion.button>
-                </div>
-              )}
+
             </>
           )}
+          </div>
         </div>
-        
+
+        {/* Mobile Pagination */}
+        <div
+          className="md:hidden fixed left-0 right-0 z-40 flex items-center justify-between border-t border-gray-800 bg-gray-950 px-4 py-3 text-[11px] font-semibold uppercase text-gray-200"
+          style={{ bottom: "calc(32px + env(safe-area-inset-bottom, 0px))" }}
+        >
+          {totalPages > 1 ? (
+            <>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="flex items-center gap-1 transition-colors hover:text-blue-300 disabled:opacity-40"
+              >
+                Prev
+              </motion.button>
+              <span className="tracking-wide text-gray-300">
+                Page {currentPage} of {totalPages}
+              </span>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="flex items-center gap-1 transition-colors hover:text-blue-300 disabled:opacity-40"
+              >
+                Next
+              </motion.button>
+            </>
+          ) : (
+            <div className="flex-1" />
+          )}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setShowMobileFilterModal(true)}
+            className="ml-4 flex items-center gap-2 px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-800 hover:border-gray-600 hover:text-white transition-all"
+          >
+            <FaFilter className="w-3 h-3" />
+            <span className="text-[10px] font-medium">
+              {sortFilter === "trending" ? "Trend" : 
+               sortFilter === "age" ? "Age" :
+               sortFilter === "5m" ? "5M" :
+               sortFilter === "1h" ? "1H" :
+               sortFilter === "6h" ? "6H" :
+               sortFilter === "24h" ? "24H" :
+               sortFilter === "volume" ? "Vol" :
+               sortFilter === "liquidity" ? "Liq" :
+               sortFilter === "marketCap" ? "Mcap" : "Filter"}
+              {sortDirection === "desc" ? " ↓" : " ↑"}
+            </span>
+          </motion.button>
+        </div>
+
+        {/* Mobile Filter Modal */}
+        <AnimatePresence>
+          {showMobileFilterModal && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] md:hidden"
+                onClick={() => setShowMobileFilterModal(false)}
+              />
+              <motion.div
+                initial={{ opacity: 0, y: "100%" }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: "100%" }}
+                transition={{ 
+                  type: "spring", 
+                  damping: 30, 
+                  stiffness: 300,
+                  mass: 0.8
+                }}
+                className="fixed inset-0 z-[10000] md:hidden bg-gray-950 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="h-full flex flex-col">
+                  <div className="px-4 pt-6 pb-4 border-b border-gray-800">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-white text-base font-semibold">Sort & Filter</h3>
+                      <button
+                        onClick={() => setShowMobileFilterModal(false)}
+                        className="w-8 h-8 flex items-center justify-center rounded-md bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white transition-colors text-xl font-light"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto px-4 pt-4 pb-4">
+                    <div className="space-y-2">
+                    {[
+                      { key: "trending", label: "Trending Score" },
+                      { key: "age", label: "Age" },
+                      { key: "5m", label: "5M Change" },
+                      { key: "1h", label: "1H Change" },
+                      { key: "6h", label: "6H Change" },
+                      { key: "24h", label: "24H Change" },
+                      { key: "volume", label: "Volume" },
+                      { key: "liquidity", label: "Liquidity" },
+                      { key: "marketCap", label: "Market Cap" },
+                    ].map((filter) => (
+                      <motion.button
+                        key={filter.key}
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        onClick={() => {
+                          handleFilterChange(filter.key);
+                          setShowMobileFilterModal(false);
+                        }}
+                        className={`w-full flex items-center justify-between p-3.5 rounded-md border transition-all ${
+                          sortFilter === filter.key
+                            ? "bg-gray-800 border-gray-700 text-white"
+                            : "bg-gray-900 border-gray-800 text-gray-300 hover:bg-gray-800 hover:border-gray-700"
+                        }`}
+                      >
+                        <span className="text-sm font-medium">{filter.label}</span>
+                        {sortFilter === filter.key && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSortDirection(sortDirection === "desc" ? "asc" : "desc");
+                                setCurrentPage(1);
+                              }}
+                              className="px-3 py-1 rounded-md bg-gray-700 border border-gray-600 text-gray-200 hover:bg-gray-600 hover:border-gray-500 text-xs font-medium transition-colors"
+                            >
+                              {sortDirection === "desc" ? "↓ Desc" : "↑ Asc"}
+                            </button>
+                          </div>
+                        )}
+                      </motion.button>
+                    ))}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
         {/* Footer */}
-        <Footer />
+        <Footer desktopAddon={desktopPagination} />
       </div>
 
       {/* Point Transaction Modal */}

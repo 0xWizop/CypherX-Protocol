@@ -94,28 +94,12 @@ interface NewsSearchResult {
   thumbnailUrl?: string;
 }
 
-interface CalendarEventSearchResult {
-  type: "calendar";
-  id: string;
-  projectId: string;
-  projectName: string;
-  projectTicker: string;
-  title: string;
-  description: string;
-  date: string;
-  time: string;
-  eventType: string;
-  status: string;
-  votes: number;
-}
-
 interface SearchResult {
   tokens: TokenSearchResult[];
   wallets: WalletSearchResult[];
   transactions: TransactionSearchResult[];
   blocks: BlockSearchResult[];
   news: NewsSearchResult[];
-  calendar: CalendarEventSearchResult[];
 }
 
 // Helper function to check if string is an Ethereum address
@@ -134,12 +118,13 @@ function isBlockNumber(str: string): boolean {
 }
 
 // Search tokens from multiple sources
-async function searchTokens(query: string): Promise<TokenSearchResult[]> {
+async function searchTokens(query: string, baseUrl: string): Promise<TokenSearchResult[]> {
   const results: TokenSearchResult[] = [];
   
   try {
-    // Only search in our tokens collection
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/tokens?search=${encodeURIComponent(query)}&limit=10`);
+    // Only search in our tokens collection - use absolute URL
+    const tokensUrl = `${baseUrl}/api/tokens?search=${encodeURIComponent(query)}&limit=10`;
+    const response = await fetch(tokensUrl);
     if (response.ok) {
       const data = await response.json();
       if (data.tokens) {
@@ -434,11 +419,13 @@ async function searchTokens(query: string): Promise<TokenSearchResult[]> {
 }
 
 // Search news articles
-async function searchNews(query: string): Promise<NewsSearchResult[]> {
+async function searchNews(query: string, baseUrl: string): Promise<NewsSearchResult[]> {
   const results: NewsSearchResult[] = [];
   
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/news`);
+    // Use absolute URL for internal API call
+    const newsUrl = `${baseUrl}/api/news`;
+    const response = await fetch(newsUrl);
     if (response.ok) {
       const articles = await response.json();
       
@@ -473,38 +460,7 @@ async function searchNews(query: string): Promise<NewsSearchResult[]> {
 }
 
 
-// Search calendar events
-async function searchCalendarEvents(query: string): Promise<CalendarEventSearchResult[]> {
-  const results: CalendarEventSearchResult[] = [];
-  
-  try {
-    // Search through calendar events collection
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/calendar/events?search=${encodeURIComponent(query)}&limit=5`);
-    if (response.ok) {
-      const data = await response.json();
-      if (data.events) {
-        results.push(...data.events.map((event: any) => ({
-          type: "calendar" as const,
-          id: event.id,
-          projectId: event.projectId,
-          projectName: event.projectName,
-          projectTicker: event.projectTicker,
-          title: event.title,
-          description: event.description,
-          date: event.date,
-          time: event.time,
-          eventType: event.eventType,
-          status: event.status,
-          votes: event.votes || 0
-        })));
-      }
-    }
-  } catch (error) {
-    console.error("Error searching calendar events:", error);
-  }
-
-  return results;
-}
+// Calendar events search removed
 
 // Search wallet information
 async function searchWallet(address: string): Promise<WalletSearchResult | null> {
@@ -614,8 +570,12 @@ async function searchBlock(numberOrHash: string): Promise<BlockSearchResult | nu
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
+    const url = new URL(request.url);
+    const { searchParams } = url;
     const query = searchParams.get('q') || '';
+    
+    // Get base URL from request origin for internal API calls
+    const baseUrl = `${url.protocol}//${url.host}`;
     
     if (!query || query.trim().length === 0) {
       return NextResponse.json({
@@ -629,8 +589,7 @@ export async function GET(request: Request) {
       wallets: [],
       transactions: [],
       blocks: [],
-      news: [],
-      calendar: []
+      news: []
     };
 
     // Determine query type and search accordingly
@@ -642,7 +601,7 @@ export async function GET(request: Request) {
       }
       
       // Also search for tokens with this address
-      const tokenResults = await searchTokens(query);
+      const tokenResults = await searchTokens(query, baseUrl);
       results.tokens.push(...tokenResults);
       
     } else if (isTransactionHash(query)) {
@@ -661,17 +620,12 @@ export async function GET(request: Request) {
       
     } else {
       // Search for tokens by name/symbol
-      const tokenResults = await searchTokens(query);
+      const tokenResults = await searchTokens(query, baseUrl);
       results.tokens.push(...tokenResults);
       
       // Search for news articles
-      const newsResults = await searchNews(query);
+      const newsResults = await searchNews(query, baseUrl);
       results.news.push(...newsResults);
-      
-      
-      // Search for calendar events
-      const calendarResults = await searchCalendarEvents(query);
-      results.calendar.push(...calendarResults);
       
       // If query looks like a block number, try searching for it
       if (isBlockNumber(query)) {
@@ -686,7 +640,7 @@ export async function GET(request: Request) {
       success: true,
       query,
       results,
-      totalResults: results.tokens.length + results.wallets.length + results.transactions.length + results.blocks.length + results.news.length + results.calendar.length
+      totalResults: results.tokens.length + results.wallets.length + results.transactions.length + results.blocks.length + results.news.length
     });
     
   } catch (error) {

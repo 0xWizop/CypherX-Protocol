@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { adminDb, auth } from '@/lib/firebase-admin';
+import { adminDb } from '@/lib/firebase-admin';
 
 /**
  * Link wallet address to user account
@@ -193,6 +193,11 @@ export async function GET(request: Request) {
     );
   }
 }
+
+
+
+
+
 
 
 

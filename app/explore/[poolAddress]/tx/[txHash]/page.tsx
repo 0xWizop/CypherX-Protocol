@@ -7,7 +7,8 @@ import Footer from "../../../../components/Footer";
 import { ethers } from "ethers";
 
 export default function TransactionPage() {
-  const { poolAddress, txHash } = useParams<{ poolAddress: string; txHash: string }>();
+  const params = useParams();
+  const txHash = params?.txHash as string;
   const router = useRouter();
   const [txData, setTxData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -142,6 +143,20 @@ export default function TransactionPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

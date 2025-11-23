@@ -20,6 +20,7 @@ const StarIcon = ({ filled }: { filled: boolean }) => (
 
 // Tag logic functions
 function getTokenTags(token: {
+  address?: string;
   marketCap?: string | number;
   volume24h?: string | number;
   uniqueHolders?: string | number;
@@ -324,7 +325,7 @@ export default function RadarPage() {
   // Real-time fetching with smooth updates
   useEffect(() => {
     let isMounted = true;
-    let fetchTimeout: NodeJS.Timeout;
+    let fetchTimeout: NodeJS.Timeout | undefined;
     
     async function fetchTokens(silent = false) {
       if (!silent) setLoading(true);

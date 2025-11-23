@@ -3,8 +3,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { createPortal } from "react-dom";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
-import { FaWallet, FaExchangeAlt, FaCube, FaCoins, FaNewspaper, FaChartLine, FaCalendar } from "react-icons/fa";
+import { FaWallet, FaExchangeAlt, FaCube, FaCoins, FaNewspaper, FaChartLine } from "react-icons/fa";
 import { SiEthereum } from "react-icons/si";
 import debounce from "lodash/debounce";
 
@@ -97,39 +98,12 @@ interface NewsSearchResult {
   thumbnailUrl?: string;
 }
 
-interface IndexSearchResult {
-  type: "index";
-  indexName: string;
-  tokenAddress: string;
-  tokenSymbol: string;
-  tokenName: string;
-  weight: number;
-  marketCap?: number;
-  priceUsd?: string;
-}
-
-interface CalendarEventSearchResult {
-  type: "calendar";
-  id: string;
-  projectId: string;
-  projectName: string;
-  projectTicker: string;
-  title: string;
-  description: string;
-  date: string;
-  time: string;
-  eventType: string;
-  status: string;
-  votes: number;
-}
-
 interface SearchResults {
   tokens: TokenSearchResult[];
   wallets: WalletSearchResult[];
   transactions: TransactionSearchResult[];
   blocks: BlockSearchResult[];
   news: NewsSearchResult[];
-  calendar: CalendarEventSearchResult[];
 }
 
 interface GlobalSearchProps {
@@ -151,7 +125,6 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
     transactions: [],
     blocks: [],
     news: [],
-    calendar: []
   });
   const [isLoading, setIsLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
@@ -162,12 +135,14 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const [isMouseInResults, setIsMouseInResults] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [homepagePosition, setHomepagePosition] = useState<{ top: number; left: number; width: number } | null>(null);
 
   // Debounced search function
   const debouncedSearch = useRef(
     debounce(async (searchQuery: string) => {
       if (!searchQuery || searchQuery.length < 2) {
-        setResults({ tokens: [], wallets: [], transactions: [], blocks: [], news: [], calendar: [] });
+        setResults({ tokens: [], wallets: [], transactions: [], blocks: [], news: [] });
         setIsLoading(false);
         return;
       }
@@ -179,7 +154,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
         const response = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
         if (response.ok) {
           const data = await response.json();
-          setResults(data.results || { tokens: [], wallets: [], transactions: [], blocks: [], news: [], calendar: [] });
+          setResults(data.results || { tokens: [], wallets: [], transactions: [], blocks: [], news: [] });
         } else {
           setError("Search failed");
         }
@@ -229,6 +204,151 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [showResults, results, selectedIndex]);
+
+  // Update dropdown position when it opens
+  useEffect(() => {
+    if (showResults && variant === "header" && query.length >= 2) {
+      // Set a default position immediately so dropdown shows
+      const setDefaultPosition = () => {
+        const header = document.querySelector('header');
+        const headerBottom = header ? header.getBoundingClientRect().bottom : 80;
+        const maxWidth = 580;
+        const minMargin = 16;
+        const width = Math.min(maxWidth, window.innerWidth - minMargin * 2);
+        const left = minMargin;
+        
+        setDropdownPosition({
+          top: headerBottom + 8,
+          left: left,
+          width: width
+        });
+      };
+      
+      // Set default position immediately
+      setDefaultPosition();
+      
+      const updatePosition = () => {
+        // Try multiple ways to get the search container element
+        let element: HTMLElement | null = null;
+        
+        if (searchRef.current) {
+          element = searchRef.current;
+        } else if (inputRef.current) {
+          element = inputRef.current.closest('div') as HTMLElement;
+        } else {
+          // Try to find by class or data attribute as last resort
+          const searchContainer = document.querySelector('[data-search-container]') as HTMLElement;
+          if (searchContainer) {
+            element = searchContainer;
+          }
+        }
+        
+        if (!element) {
+          // If element not found, keep default position
+          return;
+        }
+        
+        const rect = element.getBoundingClientRect();
+        // Find the header element to get its bottom position (after separator)
+        const header = document.querySelector('header');
+        const headerBottom = header ? header.getBoundingClientRect().bottom : rect.bottom;
+        
+        // Calculate width - ensure it doesn't overflow viewport
+        const maxWidth = 580;
+        const minMargin = 16; // Minimum margin from viewport edges
+        const rightMargin = 24; // Extra margin on the right side
+        const availableWidth = window.innerWidth - minMargin - rightMargin;
+        const width = Math.min(maxWidth, availableWidth);
+        
+        // Calculate left position - align with search input's left edge, but ensure it doesn't overflow
+        let left = rect.left;
+        // If dropdown would overflow right edge, shift it left
+        if (left + width > window.innerWidth - rightMargin) {
+          left = window.innerWidth - width - rightMargin;
+        }
+        // Ensure minimum margin from left edge
+        left = Math.max(minMargin, left);
+        
+        // Ensure it doesn't overflow on the right side
+        const rightEdge = left + width;
+        if (rightEdge > window.innerWidth - rightMargin) {
+          left = window.innerWidth - width - rightMargin;
+        }
+        
+        setDropdownPosition({
+          top: headerBottom + 8, // 8px gap below header separator
+          left: left,
+          width: width
+        });
+      };
+      
+      // Calculate accurate position on next frame
+      const rafId = requestAnimationFrame(updatePosition);
+      
+      // Also set up listeners for updates
+      window.addEventListener('resize', updatePosition);
+      window.addEventListener('scroll', updatePosition, true);
+      
+      return () => {
+        cancelAnimationFrame(rafId);
+        window.removeEventListener('resize', updatePosition);
+        window.removeEventListener('scroll', updatePosition, true);
+      };
+    } else if (!showResults || query.length < 2) {
+      // Reset position when dropdown closes or query is too short
+      setDropdownPosition(null);
+    }
+  }, [showResults, variant, query]);
+
+  // Update homepage dropdown position when it opens
+  useEffect(() => {
+    if (showResults && variant !== "header" && query.length >= 2) {
+      // Set default position immediately
+      const setDefaultPosition = () => {
+        if (searchRef.current) {
+          const rect = searchRef.current.getBoundingClientRect();
+          setHomepagePosition({
+            top: rect.bottom + 12,
+            left: rect.left,
+            width: rect.width
+          });
+        } else {
+          // Fallback position
+          setHomepagePosition({
+            top: 100,
+            left: 16,
+            width: Math.min(600, window.innerWidth - 32)
+          });
+        }
+      };
+      
+      setDefaultPosition();
+      
+      const updatePosition = () => {
+        if (!searchRef.current) return;
+        
+        const rect = searchRef.current.getBoundingClientRect();
+        setHomepagePosition({
+          top: rect.bottom + 12,
+          left: rect.left,
+          width: rect.width
+        });
+      };
+      
+      const rafId = requestAnimationFrame(updatePosition);
+      
+      window.addEventListener('resize', updatePosition);
+      window.addEventListener('scroll', updatePosition, true);
+      
+      return () => {
+        cancelAnimationFrame(rafId);
+        window.removeEventListener('resize', updatePosition);
+        window.removeEventListener('scroll', updatePosition, true);
+      };
+    } else if (!showResults || query.length < 2) {
+      setHomepagePosition(null);
+    }
+  }, [showResults, variant, query]);
 
   // Click outside to close
   useEffect(() => {
@@ -350,12 +470,6 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
     }
     currentIndex += results.news.length;
     
-    
-    // Check calendar
-    if (index < currentIndex + results.calendar.length) {
-      return { type: "calendar", result: results.calendar[index - currentIndex] };
-    }
-    
     return null;
   };
 
@@ -393,14 +507,6 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
         console.log('Navigating to news:', result.slug);
         router.push(`/insights/${result.slug}`);
         break;
-      case "index":
-        console.log('Navigating to index token:', result.tokenAddress);
-        router.push(`/explore/${result.tokenAddress}/chart`);
-        break;
-      case "calendar":
-        console.log('Navigating to calendar');
-        router.push(`/calendar`);
-        break;
     }
     
     setShowResults(false);
@@ -409,7 +515,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
   };
 
   // Get total results count
-  const totalResults = results.tokens.length + results.wallets.length + results.transactions.length + results.blocks.length + results.news.length + results.calendar.length;
+  const totalResults = results.tokens.length + results.wallets.length + results.transactions.length + results.blocks.length + results.news.length;
 
   // Format number for display
   const formatNumber = (num: number | undefined) => {
@@ -435,8 +541,6 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
         return <FaNewspaper className="w-4 h-4 text-orange-400" />;
       case "index":
         return <FaChartLine className="w-4 h-4 text-indigo-400" />;
-      case "calendar":
-        return <FaCalendar className="w-4 h-4 text-pink-400" />;
       default:
         return <SiEthereum className="w-4 h-4 text-gray-400" />;
     }
@@ -460,8 +564,386 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
     );
   };
 
+  // Render search results
+  const renderResults = () => (
+    <>
+      {/* Loading State */}
+      {isLoading && (
+        <div className="p-4 text-center text-gray-400">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-400 mx-auto mb-2"></div>
+          Searching...
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div className="p-4 text-center text-red-400">
+          {error}
+        </div>
+      )}
+
+      {/* No Results */}
+      {!isLoading && !error && totalResults === 0 && query.length >= 2 && (
+        <div className="p-4 text-center text-gray-400">
+          No results found for "{query}"
+        </div>
+      )}
+
+      {/* Results Summary */}
+      {!isLoading && !error && totalResults > 0 && (
+        <div className="px-4 py-2 bg-gray-950 border-b border-gray-700/50 sticky top-0 z-20 flex-shrink-0">
+          <div className="text-xs text-gray-400">
+            Found {totalResults} result{totalResults !== 1 ? 's' : ''} for "{query}"
+          </div>
+        </div>
+      )}
+
+      {/* Results Container */}
+      <div 
+        ref={resultsRef}
+        className={`overflow-y-auto scrollbar-hide transition-all duration-200 ${
+          variant === "homepage" ? "h-[250px] pr-2" : "max-h-[400px] pr-6"
+        } ${isMouseInResults ? 'ring-1 ring-blue-400/30' : ''}`}
+        style={{
+          scrollBehavior: 'smooth',
+          overscrollBehavior: 'contain'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Results */}
+        {!isLoading && !error && totalResults > 0 && (
+          <div className="pt-0 pb-2">
+           {/* Tokens */}
+           {results.tokens.length > 0 && (
+             <div className="mb-0">
+               <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-700/50 bg-gray-950 z-10">
+                 Tokens ({results.tokens.length})
+               </div>
+               <div>
+                 {results.tokens.map((token, index) => {
+                   const globalIndex = index;
+                   const isSelected = selectedIndex === globalIndex;
+                   
+                   return (
+                     <motion.div
+                       key={`${token.address}-${token.poolAddress || 'nopool'}`}
+                       initial={{ opacity: 0, x: -20 }}
+                       animate={{ opacity: 1, x: 0 }}
+                       transition={{ delay: index * 0.05 }}
+                       className={`p-3 hover:bg-blue-500/20 cursor-pointer border-b border-gray-700/50 last:border-b-0 transition-all duration-200 ${
+                         isSelected ? "bg-blue-500/20" : ""
+                       }`}
+                       onClick={() => handleResultClick({ type: "token", result: token })}
+                     >
+                       <div className="flex items-start space-x-3">
+                         {/* Token Icon */}
+                         <div className="relative flex-shrink-0">
+                           {token.imageUrl ? (
+                             <img
+                               src={token.imageUrl}
+                               alt={token.name}
+                               className="w-10 h-10 rounded-full border border-gray-600"
+                               onError={(e) => {
+                                 e.currentTarget.src = `https://ui-avatars.com/api/?name=${token.symbol}&background=1f2937&color=60a5fa&size=40`;
+                               }}
+                             />
+                           ) : (
+                             <img
+                               src={`https://ui-avatars.com/api/?name=${token.symbol}&background=1f2937&color=60a5fa&size=40`}
+                               alt={token.name}
+                               className="w-10 h-10 rounded-full border border-gray-600"
+                             />
+                           )}
+                           <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-gray-800"></div>
+                         </div>
+                         
+                         {/* Token Info - Compact Layout */}
+                         <div className="flex-1 min-w-0">
+                           {/* First Row: Symbol, Name, and Metrics */}
+                           <div className="flex items-center justify-between mb-2">
+                             <div className="flex items-center space-x-2 min-w-0">
+                               <span className="font-bold text-gray-200 truncate">{token.symbol}</span>
+                               <span className="text-sm text-gray-400 truncate max-w-[120px]">
+                                 ({token.name.length > 20 ? token.name.substring(0, 20) + '...' : token.name})
+                               </span>
+                             </div>
+                             <div className="flex items-center space-x-2">
+                               {token.priceChange?.h24 && (
+                                 <span className={`text-xs px-2 py-1 rounded-md font-medium ${
+                                   parseFloat(token.priceChange.h24.toString()) > 0 
+                                     ? 'bg-green-500/20 text-green-400' 
+                                     : 'bg-red-500/20 text-red-400'
+                                 }`}>
+                                   {parseFloat(token.priceChange.h24.toString()) > 0 ? '+' : ''}{parseFloat(token.priceChange.h24.toString()).toFixed(2)}%
+                                 </span>
+                               )}
+                               {token.dexId && (
+                                 <span
+                                   className={`text-xs px-2 py-1 rounded-md font-medium border uppercase ${
+                                     token.dexId?.toLowerCase() === 'aerodrome'
+                                       ? 'bg-blue-500/40 text-white border-blue-400/50'
+                                       : (token.dexId?.toLowerCase() === 'uniswap' || token.dexId?.toLowerCase() === 'uniswap_v3')
+                                         ? 'bg-pink-500/40 text-white border-pink-400/50'
+                                         : 'bg-gray-500/20 text-gray-300 border-gray-500/30'
+                                   }`}
+                                 >
+                                   {token.dexId}
+                                 </span>
+                               )}
+                               {token.metrics && token.metrics.buyRatio24h > 0 && (
+                                 <span className={`text-xs px-2 py-1 rounded-md font-medium ${
+                                   token.metrics.buyRatio24h > 0.6 ? 'bg-green-500/20 text-green-400' : 
+                                   token.metrics.buyRatio24h > 0.4 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'
+                                 }`}>
+                                   Buy: {(token.metrics.buyRatio24h * 100).toFixed(0)}%
+                                 </span>
+                               )}
+                               {token.metrics && token.metrics.volumeChange24h !== 0 && (
+                                 <span className={`text-xs px-2 py-1 rounded-md font-medium ${
+                                   token.metrics.volumeChange24h > 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'
+                                 }`}>
+                                   Vol: {token.metrics.volumeChange24h > 0 ? '+' : ''}{token.metrics.volumeChange24h.toFixed(1)}%
+                                 </span>
+                               )}
+                             </div>
+                           </div>
+                           
+                           {/* Second Row: Market Cap, Volume, Transactions */}
+                           <div className="flex items-center justify-between">
+                             <div className="flex items-center space-x-4 text-xs text-gray-400">
+                               <span>MC: ${formatNumber(token.marketCap)}</span>
+                               {token.volume?.h24 && (
+                                 <span>Vol: ${formatNumber(token.volume.h24)}</span>
+                               )}
+                               {token.liquidity?.usd !== undefined && (
+                                 <span>Liq: ${formatNumber(token.liquidity.usd)}</span>
+                               )}
+                               {token.txns?.h24 && (
+                                 <span>{token.txns.h24.buys + token.txns.h24.sells} txns</span>
+                               )}
+                             </div>
+                           </div>
+                         </div>
+                       </div>
+                     </motion.div>
+                   );
+                 })}
+               </div>
+             </div>
+           )}
+
+           {/* Separator */}
+           {results.tokens.length > 0 && (results.wallets.length > 0 || results.transactions.length > 0 || results.blocks.length > 0 || results.news.length > 0) && (
+             <div className="py-0">
+               <div className="border-t border-gray-700/50"></div>
+             </div>
+           )}
+
+           {/* Wallets */}
+           {results.wallets.length > 0 && (
+             <div className="mb-0">
+               <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-700/50 bg-gray-950 z-10">
+                 Wallets ({results.wallets.length})
+               </div>
+               <div>
+                 {results.wallets.map((wallet, index) => {
+                   const globalIndex = results.tokens.length + index;
+                   const isSelected = selectedIndex === globalIndex;
+                   
+                   return (
+                     <motion.div
+                       key={wallet.address}
+                       initial={{ opacity: 0, x: -20 }}
+                       animate={{ opacity: 1, x: 0 }}
+                       transition={{ delay: index * 0.05 }}
+                       className={`p-3 hover:bg-blue-500/20 cursor-pointer border-b border-gray-700/50 last:border-b-0 transition-all duration-200 ${
+                         isSelected ? "bg-blue-500/20" : ""
+                       }`}
+                       onClick={() => handleResultClick({ type: "wallet", result: wallet })}
+                     >
+                       <div className="flex items-center space-x-3">
+                         <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
+                           {getResultIcon("wallet")}
+                         </div>
+                         <div className="flex-1 min-w-0">
+                           <div className="font-mono text-sm text-gray-200 truncate">
+                             {wallet.address}
+                           </div>
+                           <div className="text-xs text-gray-400 mt-1">
+                             {wallet.balance ? `${parseFloat(wallet.balance).toFixed(4)} ETH` : "0 ETH"} • {wallet.transactionCount || 0} txs
+                           </div>
+                         </div>
+                       </div>
+                     </motion.div>
+                   );
+                 })}
+               </div>
+             </div>
+           )}
+
+           {/* Separator */}
+           {results.wallets.length > 0 && (results.transactions.length > 0 || results.blocks.length > 0 || results.news.length > 0) && (
+             <div className="py-0">
+               <div className="border-t border-gray-700/50"></div>
+             </div>
+           )}
+
+           {/* Transactions */}
+           {results.transactions.length > 0 && (
+             <div className="mb-0">
+               <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-700/50 bg-gray-950 z-10">
+                 Transactions ({results.transactions.length})
+               </div>
+               <div>
+                 {results.transactions.map((tx, index) => {
+                   const globalIndex = results.tokens.length + results.wallets.length + index;
+                   const isSelected = selectedIndex === globalIndex;
+                   
+                   return (
+                     <motion.div
+                       key={tx.hash}
+                       initial={{ opacity: 0, x: -20 }}
+                       animate={{ opacity: 1, x: 0 }}
+                       transition={{ delay: index * 0.05 }}
+                       className={`p-3 hover:bg-blue-500/20 cursor-pointer border-b border-gray-700/50 last:border-b-0 transition-all duration-200 ${
+                         isSelected ? "bg-blue-500/20" : ""
+                       }`}
+                       onClick={() => handleResultClick({ type: "transaction", result: tx })}
+                     >
+                       <div className="flex items-center space-x-3">
+                         <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                           {getResultIcon("transaction")}
+                         </div>
+                         <div className="flex-1 min-w-0">
+                           <div className="font-mono text-sm text-gray-200 truncate">
+                             {tx.hash.slice(0, 10)}...{tx.hash.slice(-8)}
+                           </div>
+                           <div className="text-xs text-gray-400 mt-1">
+                             Block {tx.blockNumber} • {tx.status === 1 ? "Success" : "Failed"}
+                           </div>
+                         </div>
+                       </div>
+                     </motion.div>
+                   );
+                 })}
+               </div>
+             </div>
+           )}
+
+           {/* Separator */}
+           {results.transactions.length > 0 && (results.blocks.length > 0 || results.news.length > 0) && (
+             <div className="py-0">
+               <div className="border-t border-gray-700/50"></div>
+             </div>
+           )}
+
+           {/* Blocks */}
+           {results.blocks.length > 0 && (
+             <div className="mb-0">
+               <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-700/50 bg-gray-950 z-10">
+                 Blocks ({results.blocks.length})
+               </div>
+               <div>
+                 {results.blocks.map((block, index) => {
+                   const globalIndex = results.tokens.length + results.wallets.length + results.transactions.length + index;
+                   const isSelected = selectedIndex === globalIndex;
+                   
+                   return (
+                     <motion.div
+                       key={block.number}
+                       initial={{ opacity: 0, x: -20 }}
+                       animate={{ opacity: 1, x: 0 }}
+                       transition={{ delay: index * 0.05 }}
+                       className={`p-3 hover:bg-blue-500/20 cursor-pointer border-b border-gray-700/50 last:border-b-0 transition-all duration-200 ${
+                         isSelected ? "bg-blue-500/20" : ""
+                       }`}
+                       onClick={() => handleResultClick({ type: "block", result: block })}
+                     >
+                       <div className="flex items-center space-x-3">
+                         <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
+                           {getResultIcon("block")}
+                         </div>
+                         <div className="flex-1 min-w-0">
+                           <div className="font-semibold text-gray-200">
+                             Block #{block.number}
+                           </div>
+                           <div className="text-xs text-gray-400 mt-1">
+                             {block.transactions || 0} transactions • {block.timestamp ? new Date(block.timestamp).toLocaleString() : "Unknown time"}
+                           </div>
+                         </div>
+                       </div>
+                     </motion.div>
+                   );
+                 })}
+               </div>
+             </div>
+           )}
+
+           {/* Separator */}
+           {results.blocks.length > 0 && results.news.length > 0 && (
+             <div className="py-0">
+               <div className="border-t border-gray-700/50"></div>
+             </div>
+           )}
+
+           {/* News Articles */}
+           {results.news.length > 0 && (
+             <div className="mb-0">
+               <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-700/50 bg-gray-950 z-10">
+                 News ({results.news.length})
+               </div>
+               <div>
+                {results.news.map((article, index) => {
+                  const globalIndex = results.tokens.length + results.wallets.length + results.transactions.length + results.blocks.length + index;
+                  const isSelected = selectedIndex === globalIndex;
+                  
+                  return (
+                    <motion.div
+                      key={article.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className={`p-3 hover:bg-blue-500/20 cursor-pointer border-b border-gray-700/50 last:border-b-0 transition-all duration-200 ${
+                        isSelected ? "bg-blue-500/20" : ""
+                      }`}
+                      onClick={() => handleResultClick({ type: "news", result: article })}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center">
+                          {getResultIcon("news")}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-gray-200 truncate max-w-[280px]">
+                            {highlightSearchTerm(article.title.length > 60 ? article.title.substring(0, 60) + '...' : article.title, query)}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {article.author} • {article.source} • {new Date(article.publishedAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+               </div>
+             </div>
+           )}
+          </div>
+        )}
+      </div>
+      
+      {/* Scroll Indicator */}
+      {!isLoading && !error && totalResults > 0 && (
+        <div className="px-4 py-2 bg-gradient-to-t from-gray-950 to-transparent border-t border-gray-700/50 flex-shrink-0">
+          <div className="text-xs text-gray-400 text-center">
+            {isMouseInResults ? "Scroll to see more results" : "Hover to scroll results"}
+          </div>
+        </div>
+      )}
+    </>
+  );
+
   return (
-    <div ref={searchRef} className={`relative ${className} ${variant === "homepage" ? "z-[9999999]" : ""}`}>
+    <div ref={searchRef} data-search-container className={`relative ${className} ${variant === "homepage" ? "z-[9999999]" : ""}`}>
       {/* Search Input */}
       <div className={`relative group ${variant === "header" ? "mr-2" : ""}`}>
         <input
@@ -477,6 +959,16 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
           onFocus={() => {
             if (query.length >= 2) {
               setShowResults(true);
+            }
+          }}
+          onBlur={(e) => {
+            // Don't close if clicking into results
+            if (!isMouseInResults && !resultsRef.current?.contains(e.relatedTarget as Node)) {
+              setTimeout(() => {
+                if (!isMouseInResults) {
+                  setShowResults(false);
+                }
+              }, 200);
             }
           }}
           className={`w-full pl-10 pr-10 py-1.5 text-sm text-gray-100 bg-gray-950/50 backdrop-blur-sm border border-gray-600 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-gray-500 transition-all duration-300 placeholder-gray-400 shadow-lg group-hover:border-gray-500 ${
@@ -517,451 +1009,42 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
       </div>
 
       {/* Search Results Dropdown */}
-      <AnimatePresence>
-        {showResults && (query.length >= 2 || totalResults > 0) && (
-          <motion.div
-                         className={`absolute top-full left-0 right-0 bg-gray-950 border border-gray-700 rounded-xl shadow-2xl overflow-hidden flex flex-col ${
-              variant === "homepage" ? "w-full max-h-[300px]" : "w-full max-w-xl max-h-[60vh]"
-            }`}
-            style={{
-              top: variant === "header" ? "calc(100% + 8px)" : "calc(100% + 4px)",
-              zIndex: variant === "homepage" ? 9999999 : 9999999,
-              maxHeight: variant === "homepage" ? "300px" : "auto",
-              width: variant === "header" ? "min(580px, calc(100vw - 32px))" : "100%",
-              position: variant === "homepage" ? "absolute" : "absolute",
-              right: variant === "header" ? "16px" : "auto"
-            }}
-            initial={{ opacity: 0, y: -10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Loading State */}
-            {isLoading && (
-              <div className="p-4 text-center text-gray-400">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-400 mx-auto mb-2"></div>
-                Searching...
-              </div>
-            )}
-
-            {/* Error State */}
-            {error && (
-              <div className="p-4 text-center text-red-400">
-                {error}
-              </div>
-            )}
-
-            {/* No Results */}
-            {!isLoading && !error && totalResults === 0 && query.length >= 2 && (
-              <div className="p-4 text-center text-gray-400">
-                No results found for "{query}"
-              </div>
-            )}
-
-            {/* Results Summary */}
-            {!isLoading && !error && totalResults > 0 && (
-              <div className="px-4 py-2 bg-gray-950 border-b border-gray-700/50 sticky top-0 z-20 flex-shrink-0">
-                <div className="text-xs text-gray-400">
-                  Found {totalResults} result{totalResults !== 1 ? 's' : ''} for "{query}"
-                </div>
-              </div>
-            )}
-
-            {/* Results Container */}
-            <div 
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {showResults && (query.length >= 2 || totalResults > 0) && (
+            <motion.div
               ref={resultsRef}
-              className={`overflow-y-auto scrollbar-hide transition-all duration-200 ${
-                variant === "homepage" ? "h-[250px] pr-2" : "max-h-[400px] pr-6"
-              } ${isMouseInResults ? 'ring-1 ring-blue-400/30' : ''}`}
+              key="search-dropdown"
+              className="fixed bg-gray-950 border border-gray-800 shadow-2xl overflow-hidden flex flex-col max-h-[60vh] rounded-xl"
               style={{
-                scrollBehavior: 'smooth',
-                overscrollBehavior: 'contain'
+                top: `${variant === "header" 
+                  ? (dropdownPosition?.top ?? 80)
+                  : (homepagePosition?.top ?? 100)}px`,
+                left: `${variant === "header"
+                  ? (dropdownPosition?.left ?? 16)
+                  : (homepagePosition?.left ?? 16)}px`,
+                width: variant === "header"
+                  ? `${Math.min(dropdownPosition?.width ?? 580, window.innerWidth - (dropdownPosition?.left ?? 16) - 24)}px`
+                  : (homepagePosition?.width ? `${homepagePosition.width}px` : (searchRef.current ? `${searchRef.current.getBoundingClientRect().width}px` : '100%')),
+                maxWidth: variant === "header" 
+                  ? `${Math.min(dropdownPosition?.width ?? 580, window.innerWidth - (dropdownPosition?.left ?? 16) - 24)}px`
+                  : 'none',
+                zIndex: 99999
               }}
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
+              onMouseEnter={() => setIsMouseInResults(true)}
+              onMouseLeave={() => setIsMouseInResults(false)}
             >
-              {/* Results */}
-              {!isLoading && !error && totalResults > 0 && (
-                <div className="pt-0 pb-2">
-                 {/* Tokens */}
-                 {results.tokens.length > 0 && (
-                   <div className="mb-0">
-                     <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-700/50 bg-gray-950 z-10">
-                       Tokens ({results.tokens.length})
-                     </div>
-                     <div>
-                       {results.tokens.map((token, index) => {
-                         const globalIndex = index;
-                         const isSelected = selectedIndex === globalIndex;
-                         
-                         return (
-                           <motion.div
-                             key={`${token.address}-${token.poolAddress || 'nopool'}`}
-                             initial={{ opacity: 0, x: -20 }}
-                             animate={{ opacity: 1, x: 0 }}
-                             transition={{ delay: index * 0.05 }}
-                             className={`p-3 hover:bg-blue-500/20 cursor-pointer border-b border-gray-700/50 last:border-b-0 transition-all duration-200 ${
-                               isSelected ? "bg-blue-500/20" : ""
-                             }`}
-                             onClick={() => handleResultClick({ type: "token", result: token })}
-                           >
-                             <div className="flex items-start space-x-3">
-                               {/* Token Icon */}
-                               <div className="relative flex-shrink-0">
-                                 {token.imageUrl ? (
-                                   <img
-                                     src={token.imageUrl}
-                                     alt={token.name}
-                                     className="w-10 h-10 rounded-full border border-gray-600"
-                                     onError={(e) => {
-                                       e.currentTarget.src = `https://ui-avatars.com/api/?name=${token.symbol}&background=1f2937&color=60a5fa&size=40`;
-                                     }}
-                                   />
-                                 ) : (
-                                   <img
-                                     src={`https://ui-avatars.com/api/?name=${token.symbol}&background=1f2937&color=60a5fa&size=40`}
-                                     alt={token.name}
-                                     className="w-10 h-10 rounded-full border border-gray-600"
-                                   />
-                                 )}
-                                 <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-gray-800"></div>
-                               </div>
-                               
-                               {/* Token Info - Compact Layout */}
-                               <div className="flex-1 min-w-0">
-                                 {/* First Row: Symbol, Name, and Metrics */}
-                                 <div className="flex items-center justify-between mb-2">
-                                   <div className="flex items-center space-x-2 min-w-0">
-                                     <span className="font-bold text-gray-200 truncate">{token.symbol}</span>
-                                     <span className="text-sm text-gray-400 truncate max-w-[120px]">
-                                       ({token.name.length > 20 ? token.name.substring(0, 20) + '...' : token.name})
-                                     </span>
-                                   </div>
-                                   <div className="flex items-center space-x-2">
-                                     {token.priceChange?.h24 && (
-                                       <span className={`text-xs px-2 py-1 rounded-md font-medium ${
-                                         parseFloat(token.priceChange.h24.toString()) > 0 
-                                           ? 'bg-green-500/20 text-green-400' 
-                                           : 'bg-red-500/20 text-red-400'
-                                       }`}>
-                                         {parseFloat(token.priceChange.h24.toString()) > 0 ? '+' : ''}{parseFloat(token.priceChange.h24.toString()).toFixed(2)}%
-                                       </span>
-                                     )}
-                                     {token.dexId && (
-                                       <span
-                                         className={`text-xs px-2 py-1 rounded-md font-medium border uppercase ${
-                                                                                                                               token.dexId?.toLowerCase() === 'aerodrome'
-                                            ? 'bg-blue-500/40 text-white border-blue-400/50'
-                                            : (token.dexId?.toLowerCase() === 'uniswap' || token.dexId?.toLowerCase() === 'uniswap_v3')
-                                              ? 'bg-pink-500/40 text-white border-pink-400/50'
-                                               : 'bg-gray-500/20 text-gray-300 border-gray-500/30'
-                                         }`}
-                                       >
-                                         {token.dexId}
-                                       </span>
-                                     )}
-                                     {token.metrics && token.metrics.buyRatio24h > 0 && (
-                                       <span className={`text-xs px-2 py-1 rounded-md font-medium ${
-                                         token.metrics.buyRatio24h > 0.6 ? 'bg-green-500/20 text-green-400' : 
-                                         token.metrics.buyRatio24h > 0.4 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'
-                                       }`}>
-                                         Buy: {(token.metrics.buyRatio24h * 100).toFixed(0)}%
-                                       </span>
-                                     )}
-                                                                           {token.metrics && token.metrics.volumeChange24h !== 0 && (
-                                        <span className={`text-xs px-2 py-1 rounded-md font-medium ${
-                                          token.metrics.volumeChange24h > 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'
-                                        }`}>
-                                          Vol: {token.metrics.volumeChange24h > 0 ? '+' : ''}{token.metrics.volumeChange24h.toFixed(1)}%
-                                        </span>
-                                      )}
-                                   </div>
-                                 </div>
-                                 
-                                 {/* Second Row: Market Cap, Volume, Transactions */}
-                                 <div className="flex items-center justify-between">
-                                   <div className="flex items-center space-x-4 text-xs text-gray-400">
-                                     <span>MC: ${formatNumber(token.marketCap)}</span>
-                                     {token.volume?.h24 && (
-                                       <span>Vol: ${formatNumber(token.volume.h24)}</span>
-                                     )}
-                                     {token.liquidity?.usd !== undefined && (
-                                       <span>Liq: ${formatNumber(token.liquidity.usd)}</span>
-                                     )}
-                                     {token.txns?.h24 && (
-                                       <span>{token.txns.h24.buys + token.txns.h24.sells} txns</span>
-                                     )}
-                                   </div>
-                                 </div>
-                               </div>
-                             </div>
-                           </motion.div>
-                         );
-                       })}
-                     </div>
-                   </div>
-                 )}
-
-                 {/* Separator */}
-                 {results.tokens.length > 0 && (results.wallets.length > 0 || results.transactions.length > 0 || results.blocks.length > 0 || results.news.length > 0 || results.calendar.length > 0) && (
-                   <div className="py-0">
-                     <div className="border-t border-gray-700/50"></div>
-                   </div>
-                 )}
-
-                 {/* Wallets */}
-                 {results.wallets.length > 0 && (
-                   <div className="mb-0">
-                     <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-700/50 bg-gray-950 z-10">
-                       Wallets ({results.wallets.length})
-                     </div>
-                     <div>
-                       {results.wallets.map((wallet, index) => {
-                         const globalIndex = results.tokens.length + index;
-                         const isSelected = selectedIndex === globalIndex;
-                         
-                         return (
-                           <motion.div
-                             key={wallet.address}
-                             initial={{ opacity: 0, x: -20 }}
-                             animate={{ opacity: 1, x: 0 }}
-                             transition={{ delay: index * 0.05 }}
-                             className={`p-3 hover:bg-blue-500/20 cursor-pointer border-b border-gray-700/50 last:border-b-0 transition-all duration-200 ${
-                               isSelected ? "bg-blue-500/20" : ""
-                             }`}
-                             onClick={() => handleResultClick({ type: "wallet", result: wallet })}
-                           >
-                             <div className="flex items-center space-x-3">
-                               <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
-                                 {getResultIcon("wallet")}
-                               </div>
-                               <div className="flex-1 min-w-0">
-                                 <div className="font-mono text-sm text-gray-200 truncate">
-                                   {wallet.address}
-                                 </div>
-                                 <div className="text-xs text-gray-400 mt-1">
-                                   {wallet.balance ? `${parseFloat(wallet.balance).toFixed(4)} ETH` : "0 ETH"} • {wallet.transactionCount || 0} txs
-                                 </div>
-                               </div>
-                             </div>
-                           </motion.div>
-                         );
-                       })}
-                     </div>
-                   </div>
-                 )}
-
-                 {/* Separator */}
-                 {results.wallets.length > 0 && (results.transactions.length > 0 || results.blocks.length > 0 || results.news.length > 0 || results.calendar.length > 0) && (
-                   <div className="py-0">
-                     <div className="border-t border-gray-700/50"></div>
-                   </div>
-                 )}
-
-                 {/* Transactions */}
-                 {results.transactions.length > 0 && (
-                   <div className="mb-0">
-                     <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-700/50 bg-gray-950 z-10">
-                       Transactions ({results.transactions.length})
-                     </div>
-                     <div>
-                       {results.transactions.map((tx, index) => {
-                         const globalIndex = results.tokens.length + results.wallets.length + index;
-                         const isSelected = selectedIndex === globalIndex;
-                         
-                         return (
-                           <motion.div
-                             key={tx.hash}
-                             initial={{ opacity: 0, x: -20 }}
-                             animate={{ opacity: 1, x: 0 }}
-                             transition={{ delay: index * 0.05 }}
-                             className={`p-3 hover:bg-blue-500/20 cursor-pointer border-b border-gray-700/50 last:border-b-0 transition-all duration-200 ${
-                               isSelected ? "bg-blue-500/20" : ""
-                             }`}
-                             onClick={() => handleResultClick({ type: "transaction", result: tx })}
-                           >
-                             <div className="flex items-center space-x-3">
-                               <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
-                                 {getResultIcon("transaction")}
-                               </div>
-                               <div className="flex-1 min-w-0">
-                                 <div className="font-mono text-sm text-gray-200 truncate">
-                                   {tx.hash.slice(0, 10)}...{tx.hash.slice(-8)}
-                                 </div>
-                                 <div className="text-xs text-gray-400 mt-1">
-                                   Block {tx.blockNumber} • {tx.status === 1 ? "Success" : "Failed"}
-                                 </div>
-                               </div>
-                             </div>
-                           </motion.div>
-                         );
-                       })}
-                     </div>
-                   </div>
-                 )}
-
-                 {/* Separator */}
-                 {results.transactions.length > 0 && (results.blocks.length > 0 || results.news.length > 0 || results.calendar.length > 0) && (
-                   <div className="py-0">
-                     <div className="border-t border-gray-700/50"></div>
-                   </div>
-                 )}
-
-                 {/* Blocks */}
-                 {results.blocks.length > 0 && (
-                   <div className="mb-0">
-                     <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-700/50 bg-gray-950 z-10">
-                       Blocks ({results.blocks.length})
-                     </div>
-                     <div>
-                       {results.blocks.map((block, index) => {
-                         const globalIndex = results.tokens.length + results.wallets.length + results.transactions.length + index;
-                         const isSelected = selectedIndex === globalIndex;
-                         
-                         return (
-                           <motion.div
-                             key={block.number}
-                             initial={{ opacity: 0, x: -20 }}
-                             animate={{ opacity: 1, x: 0 }}
-                             transition={{ delay: index * 0.05 }}
-                             className={`p-3 hover:bg-blue-500/20 cursor-pointer border-b border-gray-700/50 last:border-b-0 transition-all duration-200 ${
-                               isSelected ? "bg-blue-500/20" : ""
-                             }`}
-                             onClick={() => handleResultClick({ type: "block", result: block })}
-                           >
-                             <div className="flex items-center space-x-3">
-                               <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
-                                 {getResultIcon("block")}
-                               </div>
-                               <div className="flex-1 min-w-0">
-                                 <div className="font-semibold text-gray-200">
-                                   Block #{block.number}
-                                 </div>
-                                 <div className="text-xs text-gray-400 mt-1">
-                                   {block.transactions || 0} transactions • {block.timestamp ? new Date(block.timestamp).toLocaleString() : "Unknown time"}
-                                 </div>
-                               </div>
-                             </div>
-                           </motion.div>
-                         );
-                       })}
-                     </div>
-                   </div>
-                 )}
-
-                 {/* Separator */}
-                 {results.blocks.length > 0 && (results.news.length > 0 || results.calendar.length > 0) && (
-                   <div className="py-0">
-                     <div className="border-t border-gray-700/50"></div>
-                   </div>
-                 )}
-
-                 {/* News Articles */}
-                 {results.news.length > 0 && (
-                   <div className="mb-0">
-                                         <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-700/50 bg-gray-950 z-10">
-                       News ({results.news.length})
-                     </div>
-                     <div>
-                      {results.news.map((article, index) => {
-                        const globalIndex = results.tokens.length + results.wallets.length + results.transactions.length + results.blocks.length + index;
-                        const isSelected = selectedIndex === globalIndex;
-                        
-                        return (
-                          <motion.div
-                            key={article.id}
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: index * 0.05 }}
-                            className={`p-3 hover:bg-blue-500/20 cursor-pointer border-b border-gray-700/50 last:border-b-0 transition-all duration-200 ${
-                              isSelected ? "bg-blue-500/20" : ""
-                            }`}
-                            onClick={() => handleResultClick({ type: "news", result: article })}
-                          >
-                            <div className="flex items-center space-x-3">
-                              <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center">
-                                {getResultIcon("news")}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                                                 <div className="font-semibold text-gray-200 truncate max-w-[280px]">
-                                   {highlightSearchTerm(article.title.length > 60 ? article.title.substring(0, 60) + '...' : article.title, query)}
-                                 </div>
-                                <div className="text-xs text-gray-400 mt-1">
-                                  {article.author} • {article.source} • {new Date(article.publishedAt).toLocaleDateString()}
-                                </div>
-                              </div>
-                            </div>
-                          </motion.div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                 {/* Separator */}
-                 {results.news.length > 0 && results.calendar.length > 0 && (
-                   <div className="py-0">
-                     <div className="border-t border-gray-700/50"></div>
-                   </div>
-                 )}
-
-
-                 {/* Calendar Events */}
-                 {results.calendar.length > 0 && (
-                   <div className="mb-0">
-                                          <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-700/50 bg-gray-950 z-10">
-                       Events ({results.calendar.length})
-                     </div>
-                     <div>
-                      {results.calendar.map((event, index) => {
-                        const globalIndex = results.tokens.length + results.wallets.length + results.transactions.length + results.blocks.length + results.news.length + index;
-                        const isSelected = selectedIndex === globalIndex;
-                        
-                        return (
-                          <motion.div
-                            key={event.id}
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: index * 0.05 }}
-                            className={`p-3 hover:bg-blue-500/20 cursor-pointer border-b border-gray-700/50 last:border-b-0 transition-all duration-200 ${
-                              isSelected ? "bg-blue-500/20" : ""
-                            }`}
-                            onClick={() => handleResultClick({ type: "calendar", result: event })}
-                          >
-                            <div className="flex items-center space-x-3">
-                              <div className="w-8 h-8 rounded-full bg-pink-500/20 flex items-center justify-center">
-                                {getResultIcon("calendar")}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                                                 <div className="font-semibold text-gray-200 truncate max-w-[280px]">
-                                   {event.title.length > 50 ? event.title.substring(0, 50) + '...' : event.title}
-                                 </div>
-                                <div className="text-xs text-gray-400 mt-1">
-                                  {event.projectName} ({event.projectTicker}) • {event.date} • {event.votes} votes
-                                </div>
-                              </div>
-                            </div>
-                          </motion.div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                                 )}
-              </div>
-            )}
-            
-            {/* Scroll Indicator */}
-            {!isLoading && !error && totalResults > 0 && (
-              <div className="px-4 py-2 bg-gradient-to-t from-gray-950 to-transparent border-t border-gray-700/50 flex-shrink-0">
-                <div className="text-xs text-gray-400 text-center">
-                  {isMouseInResults ? "Scroll to see more results" : "Hover to scroll results"}
-                </div>
-              </div>
-            )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              {renderResults()}
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 };

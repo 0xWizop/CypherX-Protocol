@@ -16,7 +16,7 @@ import {
   FiChevronLeft,
   FiChevronRight,
 } from "react-icons/fi";
-import { format, parseISO, startOfWeek, addDays, isToday } from "date-fns";
+import { format, addDays, isToday } from "date-fns";
 
 interface Event {
   id: string;
@@ -48,6 +48,14 @@ interface EnhancedCalendarProps {
   onWeekChange: (week: number) => void;
 }
 
+const getStartOfWeek = (date: Date) => {
+  const start = new Date(date);
+  const day = start.getDay();
+  start.setDate(start.getDate() - day);
+  start.setHours(0, 0, 0, 0);
+  return start;
+};
+
 export default function EnhancedCalendar({
   events,
   selectedDate,
@@ -66,7 +74,7 @@ export default function EnhancedCalendar({
 
   const getWeekDates = (weekOffset: number = 0) => {
     const today = new Date();
-    const startOfCurrentWeek = startOfWeek(today);
+    const startOfCurrentWeek = getStartOfWeek(today);
     const startOfTargetWeek = addDays(startOfCurrentWeek, weekOffset * 7);
     
     return Array.from({ length: 7 }, (_, i) => {
@@ -322,7 +330,7 @@ export default function EnhancedCalendar({
       <div className="bg-gray-800/30 backdrop-blur-sm rounded-xl border border-gray-700 p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-xl font-bold text-white">
-            Events for {format(parseISO(selectedDate), "EEEE, MMMM d, yyyy")}
+            Events for {format(new Date(selectedDate), "EEEE, MMMM d, yyyy")}
           </h3>
           <div className="text-sm text-gray-400">
             {selectedDateEvents.length} event{selectedDateEvents.length !== 1 ? 's' : ''}

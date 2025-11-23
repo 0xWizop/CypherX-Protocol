@@ -2,27 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
 import { db } from "../../../../lib/firebase.ts";
-import { doc, getDoc, setDoc, query, where, getDocs, collection } from "firebase/firestore";
-import {
-  FiSearch,
-  FiRefreshCw,
-  FiFilter,
-  FiEye,
-  FiHash,
-  FiClock,
-  FiActivity,
-  FiZap,
-  FiBox,
-  FiArrowRight,
-  FiArrowLeft,
-  FiGrid,
-  FiList,
-  FiBarChart,
-} from "react-icons/fi";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import Header from "../../../components/Header";
 import Footer from "../../../components/Footer";
 import LoadingSpinner from "../../../components/LoadingSpinner";
@@ -41,12 +23,11 @@ export default function CypherScanPage() {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState<number>(1);
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [filterStatus, setFilterStatus] = useState<string>("All");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
-  const [showStats, setShowStats] = useState<boolean>(true);
-  const router = useRouter();
+  const [_page] = useState<number>(1);
+  const [_searchQuery] = useState<string>("");
+  const [_filterStatus] = useState<string>("All");
+  const [_viewMode] = useState<"grid" | "list">("list");
+  const [_showStats] = useState<boolean>(true);
   const blocksPerPage = 50;
 
   const fetchBlocks = async (startPage: number) => {
@@ -180,70 +161,27 @@ export default function CypherScanPage() {
     }
   };
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
-
-    setLoading(true);
-    setError(null);
-    try {
-      if (/^\d+$/.test(searchQuery)) {
-        router.push(`/explorer/latest/block/${searchQuery}`);
-      } else if (/^0x[a-fA-F0-9]{64}$/.test(searchQuery)) {
-        const blocksRef = collection(db, "blocks");
-        const q = query(blocksRef, where("hash", "==", searchQuery));
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) {
-          router.push(`/explorer/latest/hash/${searchQuery}`);
-        } else {
-          setError("Block hash not found in local database");
-        }
-      } else {
-        setError("Invalid search: Enter a block number or valid hash");
-      }
-    } catch (err: unknown) {
-      console.error("Search error:", err);
-      const errorMessage = err instanceof Error ? err.message : "Unknown error";
-      setError("Failed to search: " + errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRefresh = () => {
-    fetchBlocks(page);
-  };
-
-  const filteredBlocks = blocks.filter((block) =>
-    filterStatus === "All" ? true : block.status === filterStatus
-  );
-
-  const totalTransactions = blocks.reduce((sum, block) => sum + block.transactions, 0);
-  const averageTransactions = blocks.length > 0 ? Math.round(totalTransactions / blocks.length) : 0;
-  const latestBlockNumber = blocks.length > 0 ? Math.max(...blocks.map(b => b.number)) : 0;
-
   useEffect(() => {
     if (!db) {
       setError("Firestore is not initialized");
       return;
     }
     if (alchemyUrl) {
-      fetchBlocks(page);
+      fetchBlocks(_page);
     } else {
       setError("Alchemy URL is not configured");
     }
-  }, [page]);
+  }, [_page]);
 
   return (
-    <div className="h-screen bg-[#0f172a] flex flex-col overflow-hidden">
+    <div className="h-screen bg-gray-950 flex flex-col overflow-hidden">
       <Header />
       
-      <main className="flex-1 bg-[#0f172a] overflow-hidden">
-        <div className="h-full max-w-[1280px] mx-auto px-5 lg:px-8 pt-6 pb-0 flex flex-col">
+      <main className="flex-1 bg-gray-950 overflow-hidden">
+        <div className="h-full max-w-[1280px] mx-auto px-4 sm:px-5 lg:px-8 pt-4 pb-4 sm:pt-6 sm:pb-0 flex flex-col">
           {/* Header */}
           <div className="text-left mb-4 flex-shrink-0">
-            <h1 className="text-base font-semibold mb-0.5 text-white">Latest Blocks</h1>
+            <h1 className="text-xs sm:text-base font-semibold mb-0.5 text-white">Latest Blocks</h1>
             <p className="text-gray-400 text-xs">Real-time blockchain data from Base network</p>
           </div>
 
@@ -251,7 +189,7 @@ export default function CypherScanPage() {
 
           {/* Error Display */}
           {error && (
-            <div className="bg-red-900/20 border border-red-500/30 p-3 mb-4 text-red-400">
+            <div className="bg-red-900/20 p-3 mb-4 text-red-400">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-red-400 animate-pulse"></div>
                 Error: {error}
@@ -262,8 +200,8 @@ export default function CypherScanPage() {
           {/* Main Content */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {/* Latest Blocks */}
-            <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg overflow-hidden">
-              <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-gray-700/50">
+            <div className="bg-slate-800/30 rounded-lg overflow-hidden">
+              <div className="flex items-center justify-between px-4 pt-3 pb-2">
                 <h2 className="text-sm font-semibold text-white">Latest Blocks</h2>
                 <Link href="/explorer/latest/block" className="text-blue-400 hover:text-blue-300 text-xs">
                   View all
@@ -282,29 +220,28 @@ export default function CypherScanPage() {
                 <div>
                   {blocks.slice(0, 15).map((block, index) => (
                     <div key={block.number}>
-                      <div className="flex items-center px-4 py-1.5">
-                        <div className="flex items-center space-x-2 flex-1">
-                          <FiBox className="w-3.5 h-3.5 text-blue-400" />
+                      <div className="flex items-center px-4 py-2">
+                        <div className="flex items-center flex-1 min-w-0">
                           <a 
                             href={`/explorer/latest/block/${block.number}`}
-                            className="text-blue-400 hover:text-blue-300 font-mono text-sm"
+                            className="text-blue-400 hover:text-blue-300 font-mono text-xs truncate"
                           >
                             #{block.number.toLocaleString()}
                           </a>
                         </div>
-                        <div className="text-right mr-4">
-                          <div className="text-sm text-white">
+                        <div className="text-right mr-3 flex-shrink-0">
+                          <div className="text-xs text-white">
                             {block.transactions} tx
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-sm text-gray-400">
+                        <div className="text-right flex-shrink-0 min-w-[70px]">
+                          <div className="text-xs text-gray-400">
                             {block.timestamp}
                           </div>
                         </div>
                       </div>
                       {index < 14 && (
-                        <div className="border-b border-gray-700/50"></div>
+                        <div></div>
                       )}
                     </div>
                   ))}

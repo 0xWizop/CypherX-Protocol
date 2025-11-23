@@ -349,18 +349,18 @@ export default function EnhancedWalletInterface({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden"
+        className="bg-[#0b1220] border border-[#1f2a44] rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden"
       >
         {/* Header */}
-        <div className="bg-gray-800 px-6 py-4 border-b border-gray-700">
+        <div className="bg-[#0d1628] px-6 py-5 border-b border-[#1f2a44]">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <FaWallet className="text-blue-400 text-xl" />
-              <h2 className="text-xl font-bold text-gray-100">Wallet Interface</h2>
+              <FaWallet className="text-[#3b82f6] text-xl" />
+              <h2 className="text-xl font-bold text-white">Wallet Interface</h2>
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-200 transition-colors"
+              className="text-gray-400 hover:text-white transition-colors"
             >
               ✕
             </button>
@@ -369,16 +369,16 @@ export default function EnhancedWalletInterface({
           {/* Wallet Address */}
           {walletData && (
             <div className="mt-3 flex items-center space-x-3">
-              <div className="flex-1 bg-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-200">
+              <div className="flex-1 bg-[#15233d] border border-[#1f2a44] rounded-lg px-3 py-2 font-mono text-sm text-gray-200">
                 {walletData.address}
               </div>
               <button
                 onClick={copyAddress}
-                className="bg-blue-500 hover:bg-blue-600 px-3 py-2 rounded-lg text-white text-sm transition-colors relative"
+                className="bg-[#1d4ed8] hover:bg-[#2563eb] px-3 py-2 rounded-lg text-white text-sm transition-colors relative"
               >
                 <FaCopy className="w-4 h-4" />
                 {showCopiedTooltip && (
-                  <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded">
+                  <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-[#15233d] text-white text-xs px-2 py-1 rounded">
                     Copied!
                   </span>
                 )}
@@ -388,7 +388,7 @@ export default function EnhancedWalletInterface({
                   const explorerUrl = `/explorer/address/${walletData.address}`;
                   window.open(explorerUrl, '_blank');
                 }}
-                className="bg-gray-600 hover:bg-gray-700 px-3 py-2 rounded-lg text-white text-sm transition-colors"
+                className="bg-[#15233d] hover:bg-[#1d2a44] px-3 py-2 rounded-lg text-white text-sm transition-colors border border-transparent hover:border-[#1f2a44]"
                 title="View in Explorer"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -400,7 +400,7 @@ export default function EnhancedWalletInterface({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="bg-gray-800 border-b border-gray-700">
+        <div className="bg-[#0d1628] border-b border-[#1f2a44]">
           <div className="flex space-x-1 px-6">
             {[
               { id: "overview", label: "Overview", icon: FaWallet },
@@ -413,8 +413,8 @@ export default function EnhancedWalletInterface({
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`flex items-center space-x-2 px-4 py-3 text-sm font-medium rounded-t-lg transition-colors ${
                   activeTab === tab.id
-                    ? "bg-gray-900 text-blue-400 border-b-2 border-blue-400"
-                    : "text-gray-400 hover:text-gray-200 hover:bg-gray-700"
+                    ? "bg-[#14213a] text-[#3b82f6] border-b-2 border-[#3b82f6]"
+                    : "text-gray-400 hover:text-white hover:bg-[#15233d]"
                 }`}
               >
                 <tab.icon className="w-4 h-4" />
@@ -425,10 +425,10 @@ export default function EnhancedWalletInterface({
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)] bg-[#0b1220]">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#3b82f6]"></div>
             </div>
           ) : (
             <AnimatePresence mode="wait">
@@ -444,31 +444,31 @@ export default function EnhancedWalletInterface({
                   <div className="space-y-6">
                     {/* Portfolio Summary */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                        <h3 className="text-gray-400 text-sm font-medium">Total Portfolio</h3>
-                        <p className="text-2xl font-bold text-gray-100">{formatUSD(totalPortfolioValue)}</p>
+                      <div className="bg-[#101b33] rounded-xl p-4 border border-[#1f2a44] shadow-sm">
+                        <h3 className="text-gray-300 text-sm font-medium">Total Portfolio</h3>
+                        <p className="text-2xl font-bold text-white">{formatUSD(totalPortfolioValue)}</p>
                       </div>
-                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                        <h3 className="text-gray-400 text-sm font-medium">ETH Balance</h3>
-                        <p className="text-2xl font-bold text-blue-400">{parseFloat(ethBalance).toFixed(4)} ETH</p>
+                      <div className="bg-[#101b33] rounded-xl p-4 border border-[#1f2a44] shadow-sm">
+                        <h3 className="text-gray-300 text-sm font-medium">ETH Balance</h3>
+                        <p className="text-2xl font-bold text-[#60a5fa]">{parseFloat(ethBalance).toFixed(4)} ETH</p>
                         <p className="text-sm text-gray-400">{formatUSD(parseFloat(ethBalance) * ethPrice)}</p>
                       </div>
-                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                        <h3 className="text-gray-400 text-sm font-medium">Token Holdings</h3>
-                        <p className="text-2xl font-bold text-purple-400">{tokenHoldings.length}</p>
+                      <div className="bg-[#101b33] rounded-xl p-4 border border-[#1f2a44] shadow-sm">
+                        <h3 className="text-gray-300 text-sm font-medium">Token Holdings</h3>
+                        <p className="text-2xl font-bold text-[#3b82f6]">{tokenHoldings.length}</p>
                         <p className="text-sm text-gray-400">Different tokens</p>
                       </div>
                     </div>
 
                     {/* Recent Transactions */}
-                    <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                      <h3 className="text-lg font-semibold text-gray-100 mb-4">Recent Transactions</h3>
+                    <div className="bg-[#101b33] rounded-xl p-5 border border-[#1f2a44] shadow-sm">
+                      <h3 className="text-lg font-semibold text-white mb-4">Recent Transactions</h3>
                       <div className="space-y-3">
                         {transactions.slice(0, 5).map((tx) => (
-                          <div key={tx.hash} className="flex items-center justify-between p-3 bg-gray-700 rounded-lg">
+                          <div key={tx.hash} className="flex items-center justify-between p-3 rounded-lg bg-[#15233d] border border-transparent hover:border-[#1f2a44] transition-colors">
                             <div className="flex items-center space-x-3">
                               <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                                tx.type === 'incoming' ? 'bg-green-500/20' : 'bg-red-500/20'
+                                tx.type === 'incoming' ? 'bg-green-500/15' : 'bg-red-500/15'
                               }`}>
                                 {tx.type === 'incoming' ? (
                                   <FaDownload className="w-4 h-4 text-green-400" />
@@ -477,12 +477,12 @@ export default function EnhancedWalletInterface({
                                 )}
                               </div>
                               <div>
-                                <p className="font-medium text-gray-200">{tx.description}</p>
+                                <p className="font-medium text-gray-100">{tx.description}</p>
                                 <p className="text-sm text-gray-400">{formatTimeAgo(tx.timestamp)}</p>
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="font-medium text-gray-200">{tx.amount} {tx.asset}</p>
+                              <p className="font-medium text-gray-100">{tx.amount} {tx.asset}</p>
                               {tx.usdValue && (
                                 <p className="text-sm text-gray-400">{formatUSD(tx.usdValue)}</p>
                               )}
@@ -497,10 +497,10 @@ export default function EnhancedWalletInterface({
                 {/* Holdings Tab */}
                 {activeTab === "holdings" && (
                   <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-gray-100">Token Holdings</h3>
+                    <h3 className="text-lg font-semibold text-white">Token Holdings</h3>
                     <div className="space-y-3">
                       {tokenHoldings.map((token) => (
-                        <div key={token.contractAddress} className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                        <div key={token.contractAddress} className="bg-[#101b33] rounded-xl p-4 border border-[#1f2a44] shadow-sm">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-3">
                               <div className="relative">
@@ -516,7 +516,7 @@ export default function EnhancedWalletInterface({
                                 />
                               </div>
                               <div>
-                                <p className="font-semibold text-gray-100">{token.name}</p>
+                                <p className="font-semibold text-white">{token.name}</p>
                                 <p className="text-sm text-gray-400">{token.symbol}</p>
                                 {token.priceChange24h !== undefined && (
                                   <p className={`text-xs ${
@@ -528,9 +528,9 @@ export default function EnhancedWalletInterface({
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="font-semibold text-gray-100">{parseFloat(token.balance).toFixed(4)}</p>
+                              <p className="font-semibold text-white">{parseFloat(token.balance).toFixed(4)}</p>
                               <p className="text-sm text-gray-400">${token.priceUsd.toFixed(6)}</p>
-                              <p className="text-sm font-medium text-blue-400">{formatUSD(token.usdValue)}</p>
+                              <p className="text-sm font-medium text-[#60a5fa]">{formatUSD(token.usdValue)}</p>
                             </div>
                           </div>
                         </div>
@@ -542,14 +542,14 @@ export default function EnhancedWalletInterface({
                 {/* Transactions Tab */}
                 {activeTab === "transactions" && (
                   <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-gray-100">Transaction History</h3>
+                    <h3 className="text-lg font-semibold text-white">Transaction History</h3>
                     <div className="space-y-3">
                       {transactions.map((tx) => (
-                        <div key={tx.hash} className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                        <div key={tx.hash} className="bg-[#101b33] rounded-xl p-4 border border-[#1f2a44] shadow-sm">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-3">
                               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                tx.type === 'incoming' ? 'bg-green-500/20' : 'bg-red-500/20'
+                                tx.type === 'incoming' ? 'bg-green-500/15' : 'bg-red-500/15'
                               }`}>
                                 {tx.type === 'incoming' ? (
                                   <FaDownload className="w-5 h-5 text-green-400" />
@@ -558,13 +558,13 @@ export default function EnhancedWalletInterface({
                                 )}
                               </div>
                               <div>
-                                <p className="font-semibold text-gray-100">{tx.description}</p>
+                                <p className="font-semibold text-white">{tx.description}</p>
                                 <p className="text-sm text-gray-400">{formatTimeAgo(tx.timestamp)}</p>
                                 <p className="text-xs text-gray-500 font-mono">{tx.hash.slice(0, 8)}...{tx.hash.slice(-6)}</p>
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="font-semibold text-gray-100">{tx.amount} {tx.asset}</p>
+                              <p className="font-semibold text-white">{tx.amount} {tx.asset}</p>
                               {tx.usdValue && (
                                 <p className="text-sm text-gray-400">{formatUSD(tx.usdValue)}</p>
                               )}
@@ -582,12 +582,12 @@ export default function EnhancedWalletInterface({
                 {/* PnL Tab */}
                 {activeTab === "pnl" && (
                   <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-gray-100">Profit & Loss Analysis</h3>
+                    <h3 className="text-lg font-semibold text-white">Profit & Loss Analysis</h3>
                     <div className="space-y-3">
                       {pnlData.map((pnl) => (
-                        <div key={pnl.tokenAddress} className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                        <div key={pnl.tokenAddress} className="bg-[#101b33] rounded-xl p-4 border border-[#1f2a44] shadow-sm">
                           <div className="flex items-center justify-between mb-3">
-                            <h4 className="font-semibold text-gray-100">{pnl.tokenSymbol}</h4>
+                            <h4 className="font-semibold text-white">{pnl.tokenSymbol}</h4>
                             <div className={`text-sm font-medium ${
                               pnl.totalPnL >= 0 ? 'text-green-400' : 'text-red-400'
                             }`}>
@@ -597,15 +597,15 @@ export default function EnhancedWalletInterface({
                           <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
                               <p className="text-gray-400">Current Holding</p>
-                              <p className="text-gray-100">{pnl.currentHolding.toFixed(4)}</p>
+                              <p className="text-white">{pnl.currentHolding.toFixed(4)}</p>
                             </div>
                             <div>
                               <p className="text-gray-400">Avg Buy Price</p>
-                              <p className="text-gray-100">${pnl.averageBuyPrice.toFixed(6)}</p>
+                              <p className="text-white">${pnl.averageBuyPrice.toFixed(6)}</p>
                             </div>
                             <div>
                               <p className="text-gray-400">Current Price</p>
-                              <p className="text-gray-100">${pnl.currentPrice.toFixed(6)}</p>
+                              <p className="text-white">${pnl.currentPrice.toFixed(6)}</p>
                             </div>
                             <div>
                               <p className="text-gray-400">Unrealized PnL</p>

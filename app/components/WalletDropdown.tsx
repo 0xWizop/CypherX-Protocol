@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { FaWallet, FaDownload, FaEye, FaEyeSlash, FaArrowLeft, FaLock } from "react-icons/fa";
-import { FiSettings, FiExternalLink, FiX, FiUser, FiCopy, FiCheck } from "react-icons/fi";
+import { FiSettings, FiExternalLink, FiX, FiCopy, FiCheck } from "react-icons/fi";
 import { Sparklines, SparklinesLine, SparklinesCurve } from "react-sparklines";
 import { ethers } from "ethers";
 
@@ -87,6 +87,9 @@ interface Transaction {
   priceAtTime?: number;
 }
 
+const BASE_RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://base-mainnet.g.alchemy.com/v2/8KR6qwxbLlIISgrMCZfsrYeMmn6-S-bN";
+const ERC20_ABI = ["function transfer(address to, uint256 value) returns (bool)"];
+
 const WalletDropdown: React.FC<WalletDropdownProps> = ({
   isOpen,
   onClose,
@@ -116,7 +119,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
   const [passwordError, setPasswordError] = useState<string>('');
   const [sendAmount, setSendAmount] = useState<string>('');
   const [sendAddress, setSendAddress] = useState<string>('');
-  const [selectedToken, setSelectedToken] = useState<string>('ETH');
+  const [sendToken, setSendToken] = useState<{symbol: string; address: string; logo?: string; name?: string}>({symbol: 'ETH', address: '0x4200000000000000000000000000000000000006', name: 'Ethereum'});
   const [showBalance, setShowBalance] = useState(true);
 
   const [selectedTokenForChart, setSelectedTokenForChart] = useState<any>(null);
@@ -127,6 +130,9 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [showCopyNotification, setShowCopyNotification] = useState(false);
   const walletLoadedRef = useRef(false);
+  const [isSending, setIsSending] = useState(false);
+  const [sendError, setSendError] = useState<string>("");
+  const [sendTxHash, setSendTxHash] = useState<string | null>(null);
   
   // Swap state
   const [swapPayAmount, setSwapPayAmount] = useState<string>('0');
@@ -136,12 +142,16 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
   const [swapQuote, setSwapQuote] = useState<any>(null);
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
-  const [activeBottomTab, setActiveBottomTab] = useState<'home' | 'swap' | 'history' | 'search'>('home');
-  const [showTokenSelector, setShowTokenSelector] = useState<'pay' | 'receive' | null>(null);
+  const [activeBottomTab, setActiveBottomTab] = useState<'home' | 'swap' | 'history' | 'send'>('home');
   const [tokenSearchQuery, setTokenSearchQuery] = useState<string>('');
   const [tokenSearchResults, setTokenSearchResults] = useState<any[]>([]);
   const [isSearchingTokens, setIsSearchingTokens] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showTokenSelector, setShowTokenSelector] = useState(false);
+  const [selectingTokenFor, setSelectingTokenFor] = useState<'pay' | 'receive' | 'send'>('pay');
+  const [availableTokens, setAvailableTokens] = useState<any[]>([]);
+  const [isLoadingTokens, setIsLoadingTokens] = useState(false);
+  const [recentTokens, setRecentTokens] = useState<Array<{symbol: string; address: string; logo?: string; name?: string}>>([]);
 
   const isClient = typeof window !== 'undefined';
 
@@ -176,6 +186,37 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
     };
   }, [isOpen, isMobile, isClient]);
 
+  // ETH token
+  const ETH_TOKEN = { symbol: 'ETH', address: '0x4200000000000000000000000000000000000006', name: 'Ethereum', logo: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png' };
+
+  // Load recent tokens from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('cypherx_recent_tokens');
+      if (stored) {
+        try {
+          setRecentTokens(JSON.parse(stored));
+        } catch (e) {
+          console.error('Error loading recent tokens:', e);
+        }
+      }
+    }
+  }, []);
+
+  // Save token to recent tokens
+  const addToRecentTokens = useCallback((token: {symbol: string; address: string; logo?: string; name?: string}) => {
+    if (typeof window === 'undefined') return;
+    
+    setRecentTokens(prev => {
+      // Remove if already exists
+      const filtered = prev.filter(t => t.address.toLowerCase() !== token.address.toLowerCase());
+      // Add to beginning, limit to 10
+      const updated = [token, ...filtered].slice(0, 10);
+      localStorage.setItem('cypherx_recent_tokens', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
   // Load token logos on mount
   useEffect(() => {
     const loadTokenLogos = async () => {
@@ -189,6 +230,143 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
     };
     loadTokenLogos();
   }, []);
+
+  // Load available tokens (ETH + recent tokens)
+  const loadAvailableTokens = useCallback(async () => {
+    setIsLoadingTokens(true);
+    try {
+      // Start with ETH
+      const tokens = [ETH_TOKEN];
+      
+      // Add recent tokens (excluding ETH if it's already there)
+      recentTokens.forEach((token) => {
+        if (token.address.toLowerCase() !== ETH_TOKEN.address.toLowerCase() && 
+            !tokens.find(t => t.address.toLowerCase() === token.address.toLowerCase())) {
+          tokens.push({
+            symbol: token.symbol,
+            address: token.address,
+            name: token.name || token.symbol,
+            logo: token.logo || ''
+          });
+        }
+      });
+      
+      setAvailableTokens(tokens);
+    } catch (error) {
+      console.error('Error loading tokens:', error);
+    } finally {
+      setIsLoadingTokens(false);
+    }
+  }, [recentTokens]);
+
+  // Get token logo from DexScreener
+  const getTokenLogo = useCallback(async (tokenAddress: string): Promise<string | undefined> => {
+    try {
+      const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.pairs && data.pairs.length > 0) {
+          const pair = data.pairs[0];
+          return pair.baseToken?.logoURI || pair.quoteToken?.logoURI || undefined;
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching token logo:', error);
+    }
+    return undefined;
+  }, []);
+
+  // Search tokens
+  const searchTokens = useCallback(async (query: string) => {
+    if (!query || query.length < 2) {
+      setTokenSearchResults([]);
+      return;
+    }
+
+    setIsSearchingTokens(true);
+    try {
+      // Search by address
+      if (query.startsWith('0x') && query.length === 42) {
+        try {
+          const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${query}`);
+          const data = await response.json();
+          
+          if (data.pairs && data.pairs.length > 0) {
+            const pair = data.pairs[0];
+            const logo = pair.baseToken?.logoURI || pair.quoteToken?.logoURI || undefined;
+            setTokenSearchResults([{
+              symbol: pair.baseToken?.symbol || 'UNKNOWN',
+              address: query,
+              name: pair.baseToken?.name || 'Unknown Token',
+              logo: logo
+            }]);
+          } else {
+            setTokenSearchResults([]);
+          }
+        } catch (error) {
+          console.error('Error searching token by address:', error);
+          setTokenSearchResults([]);
+        }
+        setIsSearchingTokens(false);
+        return;
+      }
+
+      // Search by symbol/name using DexScreener
+      const response = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      
+      if (data.pairs && data.pairs.length > 0) {
+        // Filter for Base chain and get unique tokens
+        const basePairs = data.pairs.filter((pair: any) => 
+          pair.chainId === 'base' || pair.chainId === '8453'
+        );
+        
+        const uniqueTokens = new Map();
+        basePairs.forEach((pair: any) => {
+          const tokenAddress = pair.baseToken?.address?.toLowerCase();
+          if (tokenAddress && !uniqueTokens.has(tokenAddress)) {
+            const logo = pair.baseToken?.logoURI || pair.quoteToken?.logoURI || undefined;
+            uniqueTokens.set(tokenAddress, {
+              symbol: pair.baseToken?.symbol || 'UNKNOWN',
+              address: pair.baseToken?.address,
+              name: pair.baseToken?.name || pair.baseToken?.symbol || 'Unknown Token',
+              logo: logo
+            });
+          }
+        });
+        
+        setTokenSearchResults(Array.from(uniqueTokens.values()).slice(0, 20));
+      } else {
+        setTokenSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Error searching tokens:', error);
+      setTokenSearchResults([]);
+    } finally {
+      setIsSearchingTokens(false);
+    }
+  }, []);
+
+  // Handle token search input
+  useEffect(() => {
+    if (showTokenSelector && tokenSearchQuery) {
+      const timeoutId = setTimeout(() => {
+        searchTokens(tokenSearchQuery);
+      }, 300);
+      return () => clearTimeout(timeoutId);
+    } else if (showTokenSelector && !tokenSearchQuery) {
+      setTokenSearchResults([]);
+    }
+  }, [tokenSearchQuery, showTokenSelector, searchTokens]);
+
+  // Load tokens when selector opens
+  useEffect(() => {
+    if (showTokenSelector) {
+      loadAvailableTokens();
+      setTokenSearchQuery('');
+      setTokenSearchResults([]);
+    }
+  }, [showTokenSelector, loadAvailableTokens]);
 
   // Fetch user account information
   const fetchUserAccount = useCallback(async () => {
@@ -539,6 +717,11 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
               tokenBalance: "0.0"
             });
             
+            // Dispatch custom event to notify other components
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("wallet-updated"));
+            }
+            
             walletLoadedRef.current = false; // Reset ref for imported wallet
             fetchBalance(walletData.address);
               fetchTransactions();
@@ -576,6 +759,11 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
         ethBalance: "0.0",
         tokenBalance: "0.0"
       });
+      
+      // Dispatch custom event to notify other components
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("wallet-updated"));
+      }
       
       walletLoadedRef.current = false; // Reset ref for new wallet
               console.log("Wallet created successfully!");
@@ -746,11 +934,6 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
     });
   }, []);
 
-  // Handle hiding all tokens
-  const hideAllTokens = useCallback(() => {
-    setHiddenTokens(new Set(tokenHoldings.map(token => token.contractAddress)));
-  }, [tokenHoldings]);
-
   // Handle showing all tokens
   const showAllTokens = useCallback(() => {
     setHiddenTokens(new Set());
@@ -762,7 +945,6 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
     setCurrentView('main');
     setSendAmount('');
     setSendAddress('');
-    setSelectedToken('ETH');
     setSelectedTokenForChart(null);
   }, []);
 
@@ -1025,35 +1207,91 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
 
   // Handle send transaction
   const handleSendTransaction = useCallback(async () => {
-    if (!walletData || !sendAmount || !sendAddress) {
+    if (!walletData) {
       console.error("Action failed");
+      return;
+    }
+    if (!sendAmount || Number(sendAmount) <= 0) {
+      setSendError("Enter an amount greater than zero");
+      return;
+    }
+    if (!sendAddress || !ethers.isAddress(sendAddress)) {
+      setSendError("Enter a valid address");
       return;
     }
 
     try {
-      // Basic validation
-      if (selectedToken === 'ETH') {
-        const amount = parseFloat(sendAmount);
+      setSendError("");
+      setIsSending(true);
+      setSendTxHash(null);
+
+      const provider = new ethers.JsonRpcProvider(BASE_RPC_URL);
+      const signer = new ethers.Wallet(walletData.privateKey, provider);
+
+      let tx;
+      if (sendToken.symbol === "ETH" || sendToken.address.toLowerCase() === '0x4200000000000000000000000000000000000006') {
         const balance = parseFloat(ethBalance);
-        if (amount > balance) {
-          console.error("Action failed");
+        const amountNum = parseFloat(sendAmount);
+        if (amountNum > balance) {
+          setSendError("Insufficient balance");
+          setIsSending(false);
           return;
         }
+        const value = ethers.parseEther(sendAmount);
+        tx = await signer.sendTransaction({
+          to: sendAddress,
+          value,
+        });
+      } else {
+        if (!sendToken.address) {
+          setSendError("Token address not found");
+          setIsSending(false);
+          return;
+        }
+        // Get token decimals - try to fetch from tokenHoldings first, otherwise default to 18
+        const token = tokenHoldings.find((t) => t.symbol === sendToken.symbol);
+        const decimals =
+          token && typeof token.decimals === "number"
+            ? token.decimals
+            : token && typeof token.decimals === "string"
+            ? parseInt(token.decimals, 10)
+            : 18;
+        const amount = ethers.parseUnits(sendAmount, decimals);
+        const contract = new ethers.Contract(sendToken.address, ERC20_ABI, signer);
+        tx = await contract.transfer(sendAddress, amount);
       }
 
-      // For now, just show a success message
-      // In a real implementation, you would sign and send the transaction
-      console.log(`Sending ${sendAmount} ${selectedToken} to ${sendAddress?.slice(0, 6)}...${sendAddress?.slice(-4)}`);
-      
-      // Reset form and go back to main
-      setSendAmount('');
-      setSendAddress('');
-      setCurrentSection('main');
-    } catch (error) {
-      console.error('Error sending transaction:', error);
-      console.error("Action failed");
+      console.log(`Submitting transaction ${tx.hash}`);
+      await tx.wait();
+      console.log("Action completed");
+
+      setSendTxHash(tx.hash);
+      setSendAmount("");
+      setSendAddress("");
+      setCurrentSection("main");
+
+      if (walletData.address) {
+        fetchBalance(walletData.address);
+        fetchTokenHoldings();
+        fetchTransactions();
+      }
+    } catch (error: any) {
+      console.error("Error sending transaction:", error);
+      setSendError(error?.message || "Failed to send transaction");
+    } finally {
+      setIsSending(false);
     }
-  }, [walletData, sendAmount, sendAddress, selectedToken, ethBalance]);
+  }, [
+    walletData,
+    sendAmount,
+    sendAddress,
+    sendToken,
+    ethBalance,
+    tokenHoldings,
+    fetchBalance,
+    fetchTokenHoldings,
+    fetchTransactions,
+  ]);
 
   // Handle Buy/Sell button
   const handleBuySell = useCallback(() => {
@@ -1064,64 +1302,6 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
     setCurrentSection('buy');
   }, [walletData]);
 
-  // Search tokens
-  const searchTokens = useCallback(async (query: string) => {
-    if (!query || query.length < 2) {
-      setTokenSearchResults([]);
-      return;
-    }
-
-    setIsSearchingTokens(true);
-    try {
-      // Search our tokens collection
-      const response = await fetch(`/api/tokens?search=${encodeURIComponent(query)}&limit=20`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.tokens) {
-          // Enhance with DexScreener data for logos
-          const enhanced = await Promise.all(
-            data.tokens.map(async (token: any) => {
-              try {
-                const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${token.address}`);
-                if (dexRes.ok) {
-                  const dexData = await dexRes.json();
-                  const pair = dexData.pairs?.[0];
-                  return {
-                    ...token,
-                    logo: pair?.baseToken?.logoURI || pair?.quoteToken?.logoURI || `https://dexscreener.com/base/${token.address}/logo.png`
-                  };
-                }
-              } catch (e) {}
-              return {
-                ...token,
-                logo: `https://dexscreener.com/base/${token.address}/logo.png`
-              };
-            })
-          );
-          setTokenSearchResults(enhanced);
-        } else {
-          setTokenSearchResults([]);
-        }
-      }
-    } catch (error) {
-      console.error('Error searching tokens:', error);
-      setTokenSearchResults([]);
-    } finally {
-      setIsSearchingTokens(false);
-    }
-  }, []);
-
-  // Debounced token search
-  useEffect(() => {
-    if (!tokenSearchQuery) {
-      setTokenSearchResults([]);
-      return;
-    }
-    const timeoutId = setTimeout(() => {
-      searchTokens(tokenSearchQuery);
-    }, 300);
-    return () => clearTimeout(timeoutId);
-  }, [tokenSearchQuery, searchTokens]);
 
   // Fetch swap quote
   const fetchSwapQuote = useCallback(async (amount: string, tokenIn: {symbol: string; address: string}, tokenOut: {symbol: string; address: string}) => {
@@ -1174,6 +1354,44 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
       setIsLoadingQuote(false);
     }
   }, []);
+
+  // Handle token selection
+  const handleTokenSelect = useCallback(async (token: {symbol: string; address: string; logo?: string; name?: string}) => {
+    // Fetch logo from DexScreener if not available
+    let tokenWithLogo = { ...token };
+    if (!token.logo && token.address.toLowerCase() !== ETH_TOKEN.address.toLowerCase()) {
+      const logo = await getTokenLogo(token.address);
+      if (logo) {
+        tokenWithLogo.logo = logo;
+      }
+    }
+    
+    if (selectingTokenFor === 'pay') {
+      setSwapPayToken(tokenWithLogo);
+    } else if (selectingTokenFor === 'receive') {
+      setSwapReceiveToken(tokenWithLogo);
+    } else if (selectingTokenFor === 'send') {
+      setSendToken(tokenWithLogo);
+    }
+    
+    // Add to recent tokens (unless it's ETH)
+    if (token.address.toLowerCase() !== ETH_TOKEN.address.toLowerCase()) {
+      addToRecentTokens(tokenWithLogo);
+    }
+    
+    setShowTokenSelector(false);
+    setTokenSearchQuery('');
+    setTokenSearchResults([]);
+    
+    // Refresh quote if amount is set
+    if (swapPayAmount && parseFloat(swapPayAmount) > 0) {
+      const tokenToUse = selectingTokenFor === 'pay' ? tokenWithLogo : swapPayToken;
+      const receiveTokenToUse = selectingTokenFor === 'receive' ? tokenWithLogo : swapReceiveToken;
+      if (tokenToUse && receiveTokenToUse) {
+        fetchSwapQuote(swapPayAmount, tokenToUse, receiveTokenToUse);
+      }
+    }
+  }, [selectingTokenFor, swapPayAmount, swapPayToken, swapReceiveToken, fetchSwapQuote, addToRecentTokens, getTokenLogo]);
 
   // Execute swap
   const executeSwap = useCallback(async () => {
@@ -1240,6 +1458,8 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
       console.error("Action failed");
       return;
     }
+    setSendError("");
+    setSendTxHash(null);
     setCurrentSection('send');
   }, [walletData]);
 
@@ -1456,8 +1676,8 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
             )}
             <motion.div
             className={isMobile
-              ? "fixed inset-0 bottom-0 w-full bg-[#050a1a] border-t border-blue-900/40 shadow-2xl z-[9999999] h-[70vh] max-h-[640px] flex flex-col overflow-hidden rounded-t-3xl"
-              : "fixed top-20 right-8 w-[400px] bg-[#050a1a] border border-blue-900/40 shadow-2xl z-[9999999] max-h-[70vh] overflow-hidden rounded-2xl flex flex-col"
+              ? "fixed inset-0 bottom-0 w-full bg-[#0d1628] border-t border-[#1f2a44] shadow-2xl z-[9999999] h-[70vh] max-h-[640px] flex flex-col overflow-hidden rounded-none"
+              : "fixed top-20 right-8 w-[400px] bg-[#0d1628] border border-[#1f2a44] shadow-2xl z-[9999999] max-h-[70vh] overflow-hidden rounded-[24px]"
               }
               initial={isMobile ? { opacity: 0, y: 200 } : { opacity: 0, y: -10, scale: 0.95 }}
               animate={isMobile ? { opacity: 1, y: 0 } : { opacity: 1, y: 0, scale: 1 }}
@@ -1470,7 +1690,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
               </div>
             )}
               <div className="flex flex-1 items-center justify-center">
-                <div className="w-10 h-10 border-2 border-[#0052FF]/20 border-t-[#0052FF] rounded-full animate-spin"></div>
+                <div className="w-10 h-10 border-2 border-[#1d4ed8]/20 border-t-[#1d4ed8] rounded-full animate-spin"></div>
               </div>
             </motion.div>
           </>
@@ -1486,23 +1706,23 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
           {/* Password Modal */}
           {showPasswordModal && (
             <motion.div
-              className="fixed inset-0 bg-gray-900/80 z-[9999999] flex items-center justify-center"
+              className="fixed inset-0 bg-[#02050d]/80 backdrop-blur-sm z-[9999999] flex items-center justify-center"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
               <motion.div
-                className="bg-gray-800 p-6 rounded-lg border border-gray-700 w-96 max-w-md"
+                className="bg-[#0b1220] p-6 rounded-2xl border border-[#1f2a44] w-96 max-w-md"
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
               >
                 <div className="flex items-center space-x-3 mb-6">
-                  <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+                  <div className="w-12 h-12 bg-[#1d4ed8] rounded-full flex items-center justify-center shadow-lg shadow-blue-900/30">
                     <FaLock className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-200">Unlock Wallet</h3>
+                    <h3 className="text-lg font-semibold text-white">Unlock Wallet</h3>
                     <p className="text-sm text-gray-400">Enter your password to access your wallet</p>
                   </div>
                 </div>
@@ -1519,7 +1739,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                       type="password"
                       value={walletPassword}
                       onChange={(e) => setWalletPassword(e.target.value)}
-                      className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:border-blue-500"
+                      className="w-full p-3 bg-[#15233d] border border-[#1f2a44] rounded-lg text-gray-100 focus:outline-none focus:border-[#2563eb] focus:ring-1 focus:ring-[#2563eb]"
                       placeholder="Enter your wallet password"
                       autoFocus
                     />
@@ -1534,7 +1754,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                   <div className="flex space-x-3">
                     <button
                       type="submit"
-                      className="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                      className="flex-1 py-3 px-4 bg-[#1d4ed8] hover:bg-[#2563eb] text-white rounded-lg font-medium transition-colors shadow-sm shadow-blue-900/20"
                     >
                       Unlock
                     </button>
@@ -1544,7 +1764,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         setShowPasswordModal(false);
                         onClose();
                       }}
-                      className="flex-1 py-3 px-4 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg font-medium transition-colors"
+                      className="flex-1 py-3 px-4 bg-[#15233d] hover:bg-[#1d2a44] text-gray-200 rounded-lg font-medium transition-colors border border-transparent hover:border-[#1f2a44]"
                     >
                       Cancel
                     </button>
@@ -1581,8 +1801,8 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
           <motion.div
             data-wallet-dropdown
             className={isMobile
-              ? "fixed left-0 right-0 bottom-0 w-screen bg-[#050a1a] border-t border-blue-900/40 shadow-2xl z-[9999999] h-[70vh] max-h-[680px] flex flex-col overflow-hidden rounded-t-3xl"
-              : "fixed top-20 right-8 w-[400px] bg-[#050a1a] border border-blue-900/40 shadow-2xl z-[9999999] max-h-[70vh] overflow-hidden rounded-2xl flex flex-col"
+              ? "fixed left-0 right-0 bottom-0 w-screen bg-[#0d1628] border-t border-[#1f2a44] shadow-2xl z-[9999999] h-[70vh] max-h-[680px] flex flex-col overflow-hidden rounded-t-[28px]"
+              : "fixed top-20 right-8 w-[400px] bg-[#0d1628] border border-[#1f2a44] shadow-2xl z-[9999999] max-h-[70vh] overflow-hidden rounded-[24px] flex flex-col"
         }
             initial={isMobile 
               ? { opacity: 0, y: 200 }
@@ -1599,12 +1819,16 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
             transition={{ duration: 0.3 }}
           >
             {isMobile && (
-              <div className="flex justify-center pt-3">
-                <div className="w-12 h-1.5 rounded-full bg-gray-600/70" />
+              <div className="flex justify-center pt-2 pb-1">
+                <div className="w-12 h-1.5 rounded-full bg-gray-500/60" />
               </div>
             )}
-            {/* Wallet Header - Blue Section */}
-            <div className="bg-[#0052FF] px-4 py-3 border-b border-blue-600/50 rounded-t-3xl">
+            {/* Wallet Header */}
+            <div
+              className={`px-4 py-3 border-b border-[#1f2a44] bg-[#0d1628] ${
+                isMobile ? "rounded-t-[28px]" : "rounded-t-[24px]"
+              }`}
+            >
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <div className="flex items-center space-x-2 mb-1">
@@ -1663,16 +1887,16 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
 
             {/* Wallet Dropdown Menu */}
             {showWalletDropdown && (
-              <div className="wallet-dropdown-menu bg-gray-800 border-b border-gray-700">
+              <div className="wallet-dropdown-menu bg-[#101b33] border-b border-[#1f2a44]">
                 <div className="px-4 py-2">
                   <div className="text-xs text-gray-400 mb-2">Current Wallet</div>
-                  <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
+                  <div className="flex items-center justify-between p-2.5 bg-[#15233d] border border-[#1f2a44] rounded-lg">
                              <div className="flex items-center space-x-2">
-                      <div className="w-6 h-6 bg-[#0052FF] rounded-full flex items-center justify-center">
+                      <div className="w-6 h-6 bg-[#1d4ed8] rounded-full flex items-center justify-center">
                         <FaWallet className="w-3 h-3 text-white" />
                              </div>
                       <div>
-                        <div className="text-sm font-medium text-gray-200">
+                        <div className="text-sm font-medium text-white">
                           {walletData?.address ? `${walletData.address.slice(0, 6)}...${walletData.address.slice(-4)}` : 'No Wallet'}
                         </div>
                         <div className="text-xs text-gray-400">
@@ -1689,7 +1913,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         createWallet();
                         setShowWalletDropdown(false);
                       }}
-                      className="w-full text-left p-2 text-sm text-gray-300 hover:bg-gray-700 rounded transition-colors"
+                      className="w-full text-left p-2 text-sm text-gray-300 hover:bg-[#15233d] rounded-lg transition-colors"
                     >
                       <div className="flex items-center space-x-2">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1703,7 +1927,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         importWallet();
                         setShowWalletDropdown(false);
                       }}
-                      className="w-full text-left p-2 text-sm text-gray-300 hover:bg-gray-700 rounded transition-colors"
+                      className="w-full text-left p-2 text-sm text-gray-300 hover:bg-[#15233d] rounded-lg transition-colors"
                     >
                       <div className="flex items-center space-x-2">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1717,39 +1941,258 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                               </div>
             )}
 
-            {/* Swap Section - Full Screen */}
-            {walletSystem === "self-custodial" && currentSection === 'swap' && !walletLoading && (
-              <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Top Bar */}
-                <div className="px-4 py-3 border-b border-slate-700/50 flex items-center justify-between flex-shrink-0">
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={handleBackToMain}
-                      className="p-2 text-gray-400 hover:text-white rounded-lg transition-colors"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                      </svg>
-                    </button>
-                    <span className="text-sm text-white">{userAlias || 'Account 1'}</span>
-                    <button
-                      onClick={copyAddress}
-                      className="text-gray-400 hover:text-white transition-colors"
-                    >
-                      <FiCopy className="w-3 h-3" />
-                    </button>
+            {/* Send/Receive Section */}
+            {walletSystem === "self-custodial" && activeBottomTab === 'send' && !walletLoading && (
+              <div className="flex-1 flex flex-col overflow-hidden bg-[#0b1220]">
+                {currentSection === 'main' && (
+                  <div className={`px-4 ${isMobile ? "py-3" : "py-4"} flex-1 flex flex-col`}>
+                    <h3 className={`${isMobile ? "text-base" : "text-lg"} font-semibold text-gray-200 mb-4`}>Send / Receive</h3>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleSend}
+                        className={`flex flex-col items-center flex-1 bg-gray-800 rounded-lg border border-gray-700 hover:border-blue-500 transition-colors ${isMobile ? "p-3" : "p-4"}`}
+                      >
+                        <div className={`${isMobile ? "w-10 h-10" : "w-12 h-12"} bg-[#1d4ed8] rounded-full flex items-center justify-center mb-2 hover:bg-[#2563eb] transition-colors`}>
+                          {isMobile ? (
+                            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                            </svg>
+                          ) : (
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                            </svg>
+                          )}
+                        </div>
+                        <span className={`${isMobile ? "text-xs" : "text-sm"} text-white font-medium`}>Send</span>
+                      </button>
+                      <button
+                        onClick={handleReceive}
+                        className={`flex flex-col items-center flex-1 bg-gray-800 rounded-lg border border-gray-700 hover:border-blue-500 transition-colors ${isMobile ? "p-3" : "p-4"}`}
+                      >
+                        <div className={`${isMobile ? "w-10 h-10" : "w-12 h-12"} bg-[#1d4ed8] rounded-full flex items-center justify-center mb-2 hover:bg-[#2563eb] transition-colors`}>
+                          {isMobile ? (
+                            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                            </svg>
+                          ) : (
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                            </svg>
+                          )}
+                        </div>
+                        <span className={`${isMobile ? "text-xs" : "text-sm"} text-white font-medium`}>Receive</span>
+                      </button>
+                    </div>
                   </div>
-                  <button className="p-2 text-gray-400 hover:text-white rounded-lg transition-colors">
-                    <FiSettings className="w-4 h-4" />
+                )}
+
+                {currentSection === 'send' && (
+                  <div className={`px-4 ${isMobile ? "py-3" : "py-4"} flex-1 overflow-y-auto`}>
+                    <div className="flex items-center space-x-3 mb-4">
+                      <button
+                        onClick={() => setCurrentSection('main')}
+                        className="p-2 text-gray-400 hover:text-gray-300 hover:bg-gray-800 rounded-lg transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                      <h3 className="text-lg font-semibold text-gray-200">Send</h3>
+                    </div>
+
+                    <div className="space-y-4">
+                      {/* Token Selection */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Token</label>
+                        <button
+                          onClick={() => {
+                            setSelectingTokenFor('send');
+                            setShowTokenSelector(true);
+                          }}
+                          className="w-full flex items-center justify-between gap-2 bg-[#15233d] border border-[#1f2a44] rounded-lg px-3 py-3 text-gray-200 hover:border-[#2563eb] transition-colors"
+                        >
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            {sendToken.logo ? (
+                              <img src={sendToken.logo} alt={sendToken.symbol} className="w-5 h-5 rounded-full flex-shrink-0" onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                              }} />
+                            ) : null}
+                            <div className={`w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 ${sendToken.logo ? 'hidden' : ''}`}>
+                              <span className="text-[10px] text-white font-bold">
+                                {sendToken.symbol.length <= 4 ? sendToken.symbol : sendToken.symbol.substring(0, 2).toUpperCase()}
+                              </span>
+                            </div>
+                            <span className="text-left text-sm font-medium">{sendToken.symbol}</span>
+                          </div>
+                          <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                      </div>
+                      
+                      {/* Amount */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Amount</label>
+                        <input
+                          type="number"
+                          value={sendAmount}
+                          onChange={(e) => setSendAmount(e.target.value)}
+                          placeholder="0.0"
+                          className="w-full p-3 bg-[#15233d] border border-[#1f2a44] rounded-lg text-gray-200 focus:outline-none focus:border-[#2563eb]"
+                        />
+                        <div className="text-xs text-gray-400 mt-1">
+                          Balance: {sendToken.symbol === 'ETH' ? parseFloat(ethBalance).toFixed(6) : 
+                            tokenHoldings.find(t => t.symbol === sendToken.symbol)?.tokenBalance || '0'} {sendToken.symbol}
+                        </div>
+                      </div>
+
+                      {/* Address */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">To Address</label>
+                        <input
+                          type="text"
+                          value={sendAddress}
+                          onChange={(e) => setSendAddress(e.target.value)}
+                          placeholder="0x..."
+                          className="w-full p-3 bg-[#15233d] border border-[#1f2a44] rounded-lg text-gray-200 focus:outline-none focus:border-[#2563eb]"
+                        />
+                      </div>
+
+                      {sendError && (
+                        <div className="text-xs text-red-400 bg-red-900/20 border border-red-700/40 rounded-lg px-3 py-2">
+                          {sendError}
+                        </div>
+                      )}
+                      {sendTxHash && (
+                        <div className="text-xs text-green-400 bg-green-900/10 border border-green-600/40 rounded-lg px-3 py-2">
+                          Transaction sent:&nbsp;
+                          <a
+                            href={`/explorer/tx/${sendTxHash}`}
+                            className="underline hover:text-green-300"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {sendTxHash.slice(0, 6)}...{sendTxHash.slice(-4)}
+                          </a>
+                        </div>
+                      )}
+                      {/* Send Button */}
+                      <button
+                        onClick={handleSendTransaction}
+                        disabled={isSending}
+                        className={`w-full ${isMobile ? "py-2.5" : "py-3"} px-4 bg-[#1d4ed8] hover:bg-[#2563eb] disabled:bg-[#1f2a44] disabled:text-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors`}
+                      >
+                        {isSending ? "Sending..." : `Send ${sendToken.symbol}`}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {currentSection === 'receive' && (
+                  <div className={`px-4 ${isMobile ? "py-3" : "py-4"} flex-1 overflow-y-auto`}>
+                    <div className="flex items-center space-x-3 mb-4">
+                      <button
+                        onClick={() => setCurrentSection('main')}
+                        className="p-2 text-gray-400 hover:text-gray-300 hover:bg-gray-800 rounded-lg transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                      <h3 className="text-lg font-semibold text-gray-200">Receive</h3>
+                    </div>
+
+                    <div className="text-center space-y-4">
+                      <div className="w-16 h-16 bg-[#1d4ed8]/20 rounded-full flex items-center justify-center mx-auto">
+                        <svg className="w-8 h-8 text-[#3b82f6]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                        </svg>
+                      </div>
+                      
+                      <div>
+                        <h4 className="text-lg font-medium text-gray-200 mb-2">Your Wallet Address</h4>
+                        <div className="bg-gray-800 p-3 rounded-lg border border-gray-700">
+                          <div className="text-sm font-mono text-gray-300 break-all">
+                            {walletData ? walletData.address : 'No wallet loaded'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={copyAddress}
+                        className="w-full py-3 px-4 bg-[#1d4ed8] hover:bg-[#2563eb] text-white rounded-lg font-medium transition-colors"
+                      >
+                        Copy Address
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Bottom Tab Navigation */}
+                <div className="border-t border-slate-700/50 px-4 py-3 flex items-center justify-around flex-shrink-0">
+                  <button
+                    onClick={() => {
+                      setActiveBottomTab('home');
+                      setCurrentSection('main');
+                    }}
+                    className={`flex flex-col items-center space-y-1 ${(activeBottomTab as string) === 'home' ? 'text-blue-400' : 'text-gray-400'}`}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                    <span className="text-xs">Home</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveBottomTab('swap');
+                      setCurrentSection('swap');
+                    }}
+                    className={`flex flex-col items-center space-y-1 ${(activeBottomTab as string) === 'swap' ? 'text-blue-400' : 'text-gray-400'}`}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                    </svg>
+                    <span className="text-xs">Swap</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveBottomTab('history');
+                      setActiveTab('history');
+                      setCurrentSection('main');
+                    }}
+                    className={`flex flex-col items-center space-y-1 ${(activeBottomTab as string) === 'history' ? 'text-blue-400' : 'text-gray-400'}`}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-xs">History</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveBottomTab('send');
+                      setCurrentSection('main');
+                    }}
+                    className={`flex flex-col items-center space-y-1 ${(activeBottomTab as string) === 'send' ? 'text-blue-400' : 'text-gray-400'}`}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                    <span className="text-xs">Send</span>
                   </button>
                 </div>
+              </div>
+            )}
 
+            {/* Swap Section - Full Screen */}
+            {walletSystem === "self-custodial" && currentSection === 'swap' && !walletLoading && (
+              <div className="flex-1 flex flex-col overflow-hidden bg-[#0b1220] relative">
                 {/* Swap UI */}
-                <div className="flex-1 overflow-y-auto scrollbar-hide px-4 py-6">
+                <div className={`flex-1 overflow-y-auto scrollbar-hide px-4 ${isMobile ? "py-2.5" : "py-6"}`}>
                   {/* You Pay Card */}
-                  <div className="bg-slate-800/50 rounded-2xl p-4 mb-4 border border-slate-700/50">
-                    <div className="text-xs text-gray-400 mb-2">You Pay</div>
-                    <div className="flex items-center justify-between mb-2">
+                  <div className={`bg-slate-800/50 rounded-2xl border border-slate-700/50 ${isMobile ? "p-3 mb-3" : "p-4 mb-4"}`}>
+                    <div className="text-xs text-gray-400 mb-1.5">You Pay</div>
+                    <div className="flex items-center justify-between mb-1.5">
                       <input
                         type="text"
                         value={swapPayAmount}
@@ -1763,23 +2206,28 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                           }
                         }}
                         placeholder="0"
-                        className="text-3xl font-bold text-white bg-transparent border-none outline-none w-full"
+                        className={`font-bold text-white bg-transparent border-none outline-none w-full ${isMobile ? "text-2xl" : "text-3xl"}`}
                       />
                       <button 
-                        onClick={() => setShowTokenSelector('pay')}
-                        className="flex items-center space-x-2 bg-slate-700/50 hover:bg-slate-700 rounded-xl px-3 py-2 border border-slate-600/50"
+                        onClick={() => {
+                          setSelectingTokenFor('pay');
+                          setShowTokenSelector(true);
+                        }}
+                        className="flex items-center gap-2 bg-slate-700/50 hover:bg-slate-700 rounded-xl px-3 py-2 border border-slate-600/50 transition-colors"
                       >
                         {swapPayToken.logo ? (
-                          <img src={swapPayToken.logo} alt={swapPayToken.symbol} className="w-6 h-6 rounded-full" onError={(e) => {
+                          <img src={swapPayToken.logo} alt={swapPayToken.symbol} className="w-6 h-6 rounded-full flex-shrink-0" onError={(e) => {
                             e.currentTarget.style.display = 'none';
                             e.currentTarget.nextElementSibling?.classList.remove('hidden');
                           }} />
                         ) : null}
-                        <div className={`w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center ${swapPayToken.logo ? 'hidden' : ''}`}>
-                          <span className="text-xs text-white font-bold">{swapPayToken.symbol.charAt(0)}</span>
+                        <div className={`w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 ${swapPayToken.logo ? 'hidden' : ''}`}>
+                          <span className="text-xs text-white font-bold">
+                            {swapPayToken.symbol.length <= 4 ? swapPayToken.symbol : swapPayToken.symbol.substring(0, 2).toUpperCase()}
+                          </span>
                         </div>
-                        <span className="text-sm text-white font-medium">{swapPayToken.symbol}</span>
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <span className="text-sm text-white font-medium text-left">{swapPayToken.symbol}</span>
+                        <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
                       </button>
@@ -1797,7 +2245,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                   </div>
 
                   {/* Swap Button */}
-                  <div className="flex justify-center -my-2 relative z-10">
+                  <div className="flex justify-center -my-1.5 relative z-10">
                     <button
                       onClick={() => {
                         const temp = swapPayToken;
@@ -1807,7 +2255,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         setSwapPayAmount(swapReceiveAmount);
                         setSwapReceiveAmount(tempAmount);
                       }}
-                      className="w-12 h-12 bg-[#0052FF] hover:bg-[#0052FF]/80 rounded-full flex items-center justify-center transition-colors shadow-lg"
+                      className="w-12 h-12 bg-[#1d4ed8] hover:bg-[#2563eb] rounded-full flex items-center justify-center transition-colors shadow-lg"
                     >
                       <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
@@ -1816,27 +2264,32 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                   </div>
 
                   {/* You Receive Card */}
-                  <div className="bg-slate-800/50 rounded-2xl p-4 mb-4 border border-slate-700/50">
-                    <div className="text-xs text-gray-400 mb-2">You Receive</div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-3xl font-bold text-white">
+                  <div className={`bg-slate-800/50 rounded-2xl border border-slate-700/50 ${isMobile ? "p-3 mb-3" : "p-4 mb-4"}`}>
+                    <div className="text-xs text-gray-400 mb-1.5">You Receive</div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className={`font-bold text-white ${isMobile ? "text-2xl" : "text-3xl"}`}>
                         {isLoadingQuote ? '...' : swapReceiveAmount || '0'}
                       </div>
                       <button 
-                        onClick={() => setShowTokenSelector('receive')}
-                        className="flex items-center space-x-2 bg-slate-700/50 hover:bg-slate-700 rounded-xl px-3 py-2 border border-slate-600/50"
+                        onClick={() => {
+                          setSelectingTokenFor('receive');
+                          setShowTokenSelector(true);
+                        }}
+                        className="flex items-center gap-2 bg-slate-700/50 hover:bg-slate-700 rounded-xl px-3 py-2 border border-slate-600/50 transition-colors"
                       >
                         {swapReceiveToken.logo ? (
-                          <img src={swapReceiveToken.logo} alt={swapReceiveToken.symbol} className="w-6 h-6 rounded-full" onError={(e) => {
+                          <img src={swapReceiveToken.logo} alt={swapReceiveToken.symbol} className="w-6 h-6 rounded-full flex-shrink-0" onError={(e) => {
                             e.currentTarget.style.display = 'none';
                             e.currentTarget.nextElementSibling?.classList.remove('hidden');
                           }} />
                         ) : null}
-                        <div className={`w-6 h-6 bg-green-500 rounded-full flex items-center justify-center ${swapReceiveToken.logo ? 'hidden' : ''}`}>
-                          <span className="text-xs text-white font-bold">{swapReceiveToken.symbol.charAt(0)}</span>
+                        <div className={`w-6 h-6 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 ${swapReceiveToken.logo ? 'hidden' : ''}`}>
+                          <span className="text-xs text-white font-bold">
+                            {swapReceiveToken.symbol.length <= 4 ? swapReceiveToken.symbol : swapReceiveToken.symbol.substring(0, 2).toUpperCase()}
+                          </span>
                         </div>
-                        <span className="text-sm text-white font-medium">{swapReceiveToken.symbol}</span>
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <span className="text-sm text-white font-medium text-left">{swapReceiveToken.symbol}</span>
+                        <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
                       </button>
@@ -1848,11 +2301,181 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                   <button
                     onClick={executeSwap}
                     disabled={!swapPayAmount || parseFloat(swapPayAmount) <= 0 || !swapReceiveToken || isSwapping}
-                    className="w-full py-4 bg-[#0052FF] hover:bg-[#0052FF]/80 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors mb-4"
+                    className={`w-full bg-[#1d4ed8] hover:bg-[#2563eb] disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors ${isMobile ? "py-3.5 mb-3" : "py-4 mb-4"}`}
                   >
                     {isSwapping ? 'Swapping...' : 'Swap'}
                   </button>
                 </div>
+
+                {/* Token Selector Dropdown - Within Wallet Component */}
+                <AnimatePresence>
+                  {showTokenSelector && (
+                    <>
+                      {/* Backdrop */}
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 bg-black/40 z-40"
+                        onClick={() => setShowTokenSelector(false)}
+                      />
+                      {/* Dropdown */}
+                      <motion.div
+                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                        className="absolute inset-x-0 top-0 bottom-0 bg-[#0b1220] border-t border-slate-700/50 z-50 flex flex-col"
+                      >
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/50 bg-[#0b1220] flex-shrink-0">
+                          <h2 className="text-base font-semibold text-white">Select Token</h2>
+                          <button
+                            onClick={() => setShowTokenSelector(false)}
+                            className="p-1.5 text-gray-400 hover:text-white transition-colors rounded-lg"
+                          >
+                            <FiX className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Search Bar */}
+                        <div className="px-4 py-3 border-b border-slate-700/50 bg-[#0b1220] flex-shrink-0">
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={tokenSearchQuery}
+                              onChange={(e) => setTokenSearchQuery(e.target.value)}
+                              placeholder="Search by name, symbol, or address"
+                              className="w-full bg-slate-800/50 border border-slate-600/50 rounded-lg px-3 py-2 pl-9 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                              autoFocus
+                            />
+                            <svg className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                            {isSearchingTokens && (
+                              <div className="absolute right-2.5 top-1/2 transform -translate-y-1/2">
+                                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Token List */}
+                        <div className="flex-1 overflow-y-auto scrollbar-hide px-4 py-2">
+                          {isLoadingTokens ? (
+                            <div className="flex items-center justify-center py-8">
+                              <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                            </div>
+                          ) : (
+                            <>
+                              {/* Search Results */}
+                              {tokenSearchQuery && tokenSearchResults.length > 0 && (
+                                <div className="mb-3">
+                                  <div className="text-xs text-gray-400 mb-2 px-2">Search Results</div>
+                                  <div className="space-y-1">
+                                    {tokenSearchResults.map((token, idx) => (
+                                      <button
+                                        key={`search-${token.address}-${idx}`}
+                                        onClick={() => handleTokenSelect(token)}
+                                        className="w-full flex items-center justify-between p-2.5 bg-slate-800/50 hover:bg-slate-700/50 rounded-lg border border-slate-700/50 transition-colors group"
+                                      >
+                                        <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                          {token.logo ? (
+                                            <img src={token.logo} alt={token.symbol} className="w-7 h-7 rounded-full flex-shrink-0" onError={(e) => {
+                                              e.currentTarget.style.display = 'none';
+                                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                            }} />
+                                          ) : null}
+                                          <div className={`w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 ${token.logo ? 'hidden' : ''}`}>
+                                            <span className="text-xs text-white font-bold">
+                                              {token.symbol.length <= 4 ? token.symbol : token.symbol.substring(0, 2).toUpperCase()}
+                                            </span>
+                                          </div>
+                                          <div className="flex-1 min-w-0 text-left">
+                                            <div className="text-white text-sm font-medium truncate">{token.symbol}</div>
+                                            <div className="text-xs text-gray-400 truncate">{token.name || token.symbol}</div>
+                                          </div>
+                                        </div>
+                                        <svg className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                        </svg>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* No Search Results */}
+                              {tokenSearchQuery && !isSearchingTokens && tokenSearchResults.length === 0 && (
+                                <div className="text-center py-8">
+                                  <div className="text-gray-400 text-sm mb-1">No tokens found</div>
+                                  <div className="text-xs text-gray-500">Try searching by symbol, name, or contract address</div>
+                                </div>
+                              )}
+
+                              {/* Recent Tokens (ETH + Recent) */}
+                              {!tokenSearchQuery && (
+                                <div>
+                                  <div className="text-xs text-gray-400 mb-2 px-2">Recent Tokens</div>
+                                  <div className="space-y-1">
+                                    {availableTokens.length === 0 ? (
+                                      <div className="text-center py-8 text-gray-400 text-sm">No recent tokens</div>
+                                    ) : (
+                                      availableTokens.map((token, idx) => {
+                                        const isSelected = (selectingTokenFor === 'pay' && swapPayToken.address.toLowerCase() === token.address.toLowerCase()) ||
+                                                          (selectingTokenFor === 'receive' && swapReceiveToken.address.toLowerCase() === token.address.toLowerCase()) ||
+                                                          (selectingTokenFor === 'send' && sendToken.address.toLowerCase() === token.address.toLowerCase());
+                                        
+                                        return (
+                                          <button
+                                            key={`token-${token.address}-${idx}`}
+                                            onClick={() => handleTokenSelect(token)}
+                                            disabled={isSelected}
+                                            className={`w-full flex items-center justify-between p-2.5 rounded-lg border transition-colors ${
+                                              isSelected 
+                                                ? 'bg-blue-500/20 border-blue-500/50 cursor-not-allowed' 
+                                                : 'bg-slate-800/50 hover:bg-slate-700/50 border-slate-700/50'
+                                            } group`}
+                                          >
+                                            <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                              {token.logo ? (
+                                                <img src={token.logo} alt={token.symbol} className="w-7 h-7 rounded-full flex-shrink-0" onError={(e) => {
+                                                  e.currentTarget.style.display = 'none';
+                                                  e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                                }} />
+                                              ) : null}
+                                              <div className={`w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 ${token.logo ? 'hidden' : ''}`}>
+                                                <span className="text-xs text-white font-bold">
+                                                  {token.symbol.length <= 4 ? token.symbol : token.symbol.substring(0, 2).toUpperCase()}
+                                                </span>
+                                              </div>
+                                              <div className="flex-1 min-w-0 text-left">
+                                                <div className="text-white text-sm font-medium truncate">{token.symbol}</div>
+                                                <div className="text-xs text-gray-400 truncate">{token.name || token.symbol}</div>
+                                              </div>
+                                            </div>
+                                            {isSelected ? (
+                                              <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                                <FiCheck className="w-2.5 h-2.5 text-white" />
+                                              </div>
+                                            ) : (
+                                              <svg className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                              </svg>
+                                            )}
+                                          </button>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
 
                 {/* Bottom Tab Navigation */}
                 <div className="border-t border-slate-700/50 px-4 py-3 flex items-center justify-around flex-shrink-0">
@@ -1861,7 +2484,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         setActiveBottomTab('home');
                         setCurrentSection('main');
                       }}
-                      className={`flex flex-col items-center space-y-1 ${activeBottomTab === 'home' ? 'text-blue-400' : 'text-gray-400'}`}
+                      className={`flex flex-col items-center space-y-1 ${(activeBottomTab as string) === 'home' ? 'text-blue-400' : 'text-gray-400'}`}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -1870,7 +2493,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                     </button>
                     <button
                       onClick={() => setActiveBottomTab('swap')}
-                      className={`flex flex-col items-center space-y-1 ${activeBottomTab === 'swap' ? 'text-blue-400 border-b-2 border-blue-400 pb-1' : 'text-gray-400'}`}
+                      className={`flex flex-col items-center space-y-1 ${(activeBottomTab as string) === 'swap' ? 'text-blue-400' : 'text-gray-400'}`}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
@@ -1883,7 +2506,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         setActiveTab('history');
                         setCurrentSection('main');
                       }}
-                      className={`flex flex-col items-center space-y-1 ${activeBottomTab === 'history' ? 'text-blue-400' : 'text-gray-400'}`}
+                      className={`flex flex-col items-center space-y-1 ${(activeBottomTab as string) === 'history' ? 'text-blue-400' : 'text-gray-400'}`}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1891,19 +2514,22 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                       <span className="text-xs">History</span>
                     </button>
                     <button
-                      onClick={() => setActiveBottomTab('search')}
-                      className={`flex flex-col items-center space-y-1 ${activeBottomTab === 'search' ? 'text-blue-400' : 'text-gray-400'}`}
+                      onClick={() => {
+                        setActiveBottomTab('send');
+                        setCurrentSection('main');
+                      }}
+                      className={`flex flex-col items-center space-y-1 ${(activeBottomTab as string) === 'send' ? 'text-blue-400' : 'text-gray-400'}`}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                       </svg>
-                      <span className="text-xs">Search</span>
+                      <span className="text-xs">Send</span>
                     </button>
                 </div>
               </div>
             )}
 
-            <div className={`flex-1 flex flex-col overflow-hidden ${currentSection === 'swap' || activeBottomTab === 'search' ? 'hidden' : ''}`}>
+            <div className={`flex-1 flex flex-col overflow-hidden bg-[#0b1220] ${currentSection === 'swap' || (activeBottomTab as string) === 'send' ? 'hidden' : ''}`}>
               {/* Wallet Loading State */}
               {walletLoading && (
                 <div className="flex items-center justify-center py-12">
@@ -1912,11 +2538,11 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
               )}
 
               {walletSystem === "self-custodial" && currentSection === 'main' && currentView === 'main' && !walletLoading && (
-                <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 flex flex-col overflow-hidden bg-[#0b1220]">
                   <div className="flex-1 overflow-y-auto scrollbar-hide">
                   {/* Balance Section */}
                   {walletData ? (
-                    <div className="px-4 py-6">
+                    <div className={`px-4 ${isMobile ? "py-3" : "py-6"}`}>
                               <div className="flex items-center justify-between mb-3">
                         <span className="text-xl font-bold text-white">
                           {getDisplayBalance()}
@@ -1948,22 +2574,24 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         </div>
                                 </div>
                   ) : (
-                    <div className="px-4 py-5 bg-[#08122d] border border-blue-900/50 text-center">
-                      <div className="w-14 h-14 bg-blue-500/10 rounded-xl flex items-center justify-center mx-auto mb-3">
-                        <FaWallet className="w-7 h-7 text-blue-300" />
-                      </div>
+                    <div className={`${isMobile ? "px-4 py-3 bg-transparent border-0 rounded-none" : "px-4 py-5 bg-[#0b1220] border border-[#1f2a44] rounded-xl"} text-center`}>
+                      {!isMobile && (
+                        <div className="w-14 h-14 bg-[#15233d] rounded-xl flex items-center justify-center mx-auto mb-3">
+                          <FaWallet className="w-7 h-7 text-[#60a5fa]" />
+                        </div>
+                      )}
                       <h3 className="text-base font-semibold text-white mb-1.5">Welcome to CypherX</h3>
-                      <p className="text-sm text-slate-200/80 mb-4">Create or import a wallet to start exploring the network.</p>
+                      <p className="text-sm text-gray-300 mb-4">Create or import a wallet to start exploring the network.</p>
                       <div className="space-y-2">
                         <button
                           onClick={createWallet}
-                          className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition-colors text-sm shadow-sm shadow-blue-900/30"
+                          className="w-full py-2.5 px-4 bg-[#1d4ed8] hover:bg-[#2563eb] text-white rounded-lg font-semibold transition-colors text-sm shadow-sm shadow-blue-900/30"
                         >
                           Create New Wallet
                         </button>
                         <button
                           onClick={importWallet}
-                          className="w-full py-2.5 px-4 bg-[#050a1a] hover:bg-[#09132c] text-slate-200 rounded-lg font-medium border border-blue-900/50 transition-colors text-sm"
+                          className="w-full py-2.5 px-4 bg-[#0b1220] hover:bg-[#0d1628] text-gray-200 rounded-lg font-medium border border-[#1f2a44] transition-colors text-sm"
                         >
                           Import Existing Wallet
                         </button>
@@ -1973,13 +2601,13 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
 
                   {/* Quick Actions */}
                   {walletData && (
-                    <div className="px-4 py-3">
+                    <div className={`px-4 ${isMobile ? "py-2" : "py-3"}`}>
                       <div className="flex items-center justify-between gap-3">
                               <button
                           onClick={handleBuySell}
                           className="flex flex-col items-center flex-1"
                         >
-                          <div className="w-12 h-12 bg-[#0052FF] rounded-full flex items-center justify-center mb-2 hover:bg-[#0052FF]/80 transition-colors">
+                          <div className="w-12 h-12 bg-[#1d4ed8] rounded-full flex items-center justify-center mb-2 hover:bg-[#2563eb] transition-colors">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                             </svg>
@@ -1990,7 +2618,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                           onClick={handleSwap}
                           className="flex flex-col items-center flex-1"
                         >
-                          <div className="w-12 h-12 bg-[#0052FF] rounded-full flex items-center justify-center mb-2 hover:bg-[#0052FF]/80 transition-colors">
+                          <div className="w-12 h-12 bg-[#1d4ed8] rounded-full flex items-center justify-center mb-2 hover:bg-[#2563eb] transition-colors">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                             </svg>
@@ -2001,7 +2629,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                           onClick={handleSend}
                           className="flex flex-col items-center flex-1"
                         >
-                          <div className="w-12 h-12 bg-[#0052FF] rounded-full flex items-center justify-center mb-2 hover:bg-[#0052FF]/80 transition-colors">
+                          <div className="w-12 h-12 bg-[#1d4ed8] rounded-full flex items-center justify-center mb-2 hover:bg-[#2563eb] transition-colors">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
                             </svg>
@@ -2012,7 +2640,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                           onClick={handleReceive}
                           className="flex flex-col items-center flex-1"
                         >
-                          <div className="w-12 h-12 bg-[#0052FF] rounded-full flex items-center justify-center mb-2 hover:bg-[#0052FF]/80 transition-colors">
+                          <div className="w-12 h-12 bg-[#1d4ed8] rounded-full flex items-center justify-center mb-2 hover:bg-[#2563eb] transition-colors">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                             </svg>
@@ -2024,7 +2652,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         )}
 
                   {/* Navigation Tabs */}
-                  <div className="px-4 py-3 border-b border-slate-700/50 rounded-t-lg">
+                  <div className={`px-4 ${isMobile ? "py-2" : "py-3"} border-b border-slate-700/50 ${isMobile ? "rounded-none" : "rounded-t-lg"}`}>
                     <div className="flex space-x-6">
                             <button
                         onClick={() => setActiveTab("overview")}
@@ -2051,7 +2679,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
 
                   {/* Content Sections */}
                   {activeTab === "overview" && (
-                    <div className="px-4 py-4 h-96 overflow-y-auto scrollbar-hide">
+                    <div className={`px-4 ${isMobile ? "py-3" : "py-4"} h-96 overflow-y-auto scrollbar-hide`}>
                       {/* Network Header */}
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center space-x-2">
@@ -2087,7 +2715,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                           {parseFloat(ethBalance) > 0 && !balanceError && (
                             <div 
                               onClick={handleEthClick}
-                              className="flex items-center justify-between p-4 bg-gray-800/50 hover:bg-gray-700/50 rounded-xl border border-gray-700/50 transition-all duration-200 group cursor-pointer"
+                              className={`flex items-center justify-between p-4 bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700/50 transition-all duration-200 group cursor-pointer ${isMobile ? "rounded-none border-l-0 border-r-0" : "rounded-xl"}`}
                               title="Click to view ETH chart"
                             >
                               <div className="flex items-center space-x-3">
@@ -2146,7 +2774,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                             <div 
                               key={token.contractAddress || index} 
                               onClick={() => handleTokenClick(token)}
-                              className="flex items-center justify-between p-4 bg-gray-800/50 hover:bg-gray-700/50 rounded-xl border border-gray-700/50 transition-all duration-200 group cursor-pointer"
+                              className={`flex items-center justify-between p-4 bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700/50 transition-all duration-200 group cursor-pointer ${isMobile ? "rounded-none border-l-0 border-r-0" : "rounded-xl"}`}
                               title={`Click to view ${token.symbol} chart`}
                             >
                                                              <div className="flex items-center space-x-3">
@@ -2232,7 +2860,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                     )}
 
                         {activeTab === "history" && !walletLoading && (
-                    <div className="px-4 py-4 h-96 overflow-y-auto scrollbar-hide">
+                    <div className={`px-4 ${isMobile ? "py-3" : "py-4"} h-96 overflow-y-auto scrollbar-hide`}>
                           <div className="space-y-3">
                             {isLoadingTransactions ? (
                               <div className="flex items-center justify-center py-8">
@@ -2249,7 +2877,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                             ) : transactions.length > 0 ? (
                           <div className="space-y-3">
                                 {transactions.map((tx, index) => (
-                              <div key={tx.hash || tx.id || index} className="flex items-center justify-between p-4 bg-gray-800/50 hover:bg-gray-700/50 rounded-xl border border-gray-700/50 transition-all duration-200">
+                              <div key={tx.hash || tx.id || index} className={`flex items-center justify-between p-4 bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700/50 transition-all duration-200 ${isMobile ? "rounded-none border-l-0 border-r-0" : "rounded-xl"}`}>
                                 <div className="flex items-center space-x-3">
                                   <div className={`w-2 h-2 rounded-full ${
                                         tx.status === 'confirmed' ? 'bg-green-400' :
@@ -2409,7 +3037,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         setCurrentSection('main');
                         setCurrentView('main');
                       }}
-                      className={`flex flex-col items-center space-y-1 ${activeBottomTab === 'home' ? 'text-blue-400' : 'text-gray-400'}`}
+                      className={`flex flex-col items-center space-y-1 ${(activeBottomTab as string) === 'home' ? 'text-blue-400' : 'text-gray-400'}`}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -2421,7 +3049,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         setActiveBottomTab('swap');
                         setCurrentSection('swap');
                       }}
-                      className={`flex flex-col items-center space-y-1 ${activeBottomTab === 'swap' ? 'text-blue-400 border-b-2 border-blue-400 pb-1' : 'text-gray-400'}`}
+                      className={`flex flex-col items-center space-y-1 ${(activeBottomTab as string) === 'swap' ? 'text-blue-400' : 'text-gray-400'}`}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
@@ -2435,7 +3063,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         setCurrentSection('main');
                         setCurrentView('main');
                       }}
-                      className={`flex flex-col items-center space-y-1 ${activeBottomTab === 'history' ? 'text-blue-400' : 'text-gray-400'}`}
+                      className={`flex flex-col items-center space-y-1 ${(activeBottomTab as string) === 'history' ? 'text-blue-400' : 'text-gray-400'}`}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -2443,13 +3071,16 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                       <span className="text-xs">History</span>
                     </button>
                     <button
-                      onClick={() => setActiveBottomTab('search')}
-                      className={`flex flex-col items-center space-y-1 ${activeBottomTab === 'search' ? 'text-blue-400' : 'text-gray-400'}`}
+                      onClick={() => {
+                        setActiveBottomTab('send');
+                        setCurrentSection('main');
+                      }}
+                      className={`flex flex-col items-center space-y-1 ${(activeBottomTab as string) === 'send' ? 'text-blue-400' : 'text-gray-400'}`}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                       </svg>
-                      <span className="text-xs">Search</span>
+                      <span className="text-xs">Send</span>
                     </button>
                   </div>
                 </div>
@@ -2457,7 +3088,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
 
               {/* Asset Details Section */}
               {walletSystem === "self-custodial" && currentSection === 'main' && currentView === 'asset-details' && selectedTokenForChart && (
-                <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 flex flex-col overflow-hidden bg-[#0b1220]">
                   <div className="flex-1 overflow-y-auto scrollbar-hide px-4 py-4">
                   {/* Header */}
                   <div className="flex items-center justify-between mb-6">
@@ -2540,7 +3171,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                     <div className="h-48 bg-gray-900 rounded-lg p-4">
                       {isLoadingChart ? (
                         <div className="flex items-center justify-center h-full">
-                          <div className="w-8 h-8 border-2 border-[#0052FF]/20 border-t-[#0052FF] rounded-full animate-spin"></div>
+                          <div className="w-8 h-8 border-2 border-[#1d4ed8]/20 border-t-[#1d4ed8] rounded-full animate-spin"></div>
                         </div>
                       ) : chartData.length > 0 ? (
                         <div className="h-full flex items-center justify-center">
@@ -2637,7 +3268,6 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                       <button 
                         onClick={() => {
                           setCurrentSection('send');
-                          setSelectedToken(selectedTokenForChart.symbol || 'ETH');
                           setCurrentView('main');
                         }}
                         className="flex flex-col items-center p-3 bg-gray-800 rounded-lg transition-colors w-full"
@@ -2711,7 +3341,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         setCurrentSection('main');
                         setCurrentView('main');
                       }}
-                      className={`flex flex-col items-center space-y-1 ${activeBottomTab === 'home' ? 'text-blue-400' : 'text-gray-400'}`}
+                      className="flex flex-col items-center space-y-1 text-gray-400"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -2723,7 +3353,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         setActiveBottomTab('swap');
                         setCurrentSection('swap');
                       }}
-                      className={`flex flex-col items-center space-y-1 ${activeBottomTab === 'swap' ? 'text-blue-400 border-b-2 border-blue-400 pb-1' : 'text-gray-400'}`}
+                      className="flex flex-col items-center space-y-1 text-gray-400"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
@@ -2737,7 +3367,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         setCurrentSection('main');
                         setCurrentView('main');
                       }}
-                      className={`flex flex-col items-center space-y-1 ${activeBottomTab === 'history' ? 'text-blue-400' : 'text-gray-400'}`}
+                      className="flex flex-col items-center space-y-1 text-gray-400"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -2746,294 +3376,15 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                     </button>
                     <button
                       onClick={() => {
-                        setActiveBottomTab('search');
+                        setActiveBottomTab('send');
                         setCurrentSection('main');
-                        setCurrentView('main');
                       }}
-                      className={`flex flex-col items-center space-y-1 ${activeBottomTab === 'search' ? 'text-blue-400' : 'text-gray-400'}`}
+                      className={`flex flex-col items-center space-y-1 ${(activeBottomTab as string) === 'send' ? 'text-blue-400' : 'text-gray-400'}`}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                       </svg>
-                      <span className="text-xs">Search</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Search Section */}
-              {walletSystem === "self-custodial" && activeBottomTab === 'search' && !walletLoading && (
-                <div className="flex-1 flex flex-col overflow-hidden">
-                  <div className="flex-1 overflow-y-auto scrollbar-hide px-4 py-4">
-                    {/* Search Header */}
-                    <div className="mb-4">
-                      <h3 className="text-lg font-semibold text-white mb-2">Search</h3>
-                      <p className="text-xs text-gray-400">Search for tokens, addresses, transactions, and blocks</p>
-                    </div>
-
-                    {/* Search Input */}
-                    <div className="mb-4">
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={tokenSearchQuery}
-                          onChange={(e) => setTokenSearchQuery(e.target.value)}
-                          placeholder="Search by name, symbol, or address..."
-                          className="w-full px-4 py-3 pl-10 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
-                        />
-                        <svg className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                      </div>
-                    </div>
-
-                    {/* Search Results */}
-                    <div className="space-y-4">
-                      {isSearchingTokens ? (
-                        <div className="flex items-center justify-center py-8">
-                          <LoadingSpinner size="md" text="Searching..." />
-                        </div>
-                      ) : tokenSearchResults.length > 0 ? (
-                        <div>
-                          <div className="text-sm font-medium text-gray-400 mb-3">
-                            Tokens ({tokenSearchResults.length})
-                          </div>
-                          <div className="space-y-2">
-                            {tokenSearchResults.map((token: any) => (
-                              <div
-                                key={token.address}
-                                onClick={() => {
-                                  // Navigate to token page or select token
-                                  window.location.href = `/explore/${token.poolAddress || token.address}`;
-                                }}
-                                className="flex items-center space-x-3 p-3 bg-slate-800/50 hover:bg-slate-800/70 rounded-xl transition-colors cursor-pointer border border-slate-700/50"
-                              >
-                                {token.logo ? (
-                                  <img 
-                                    src={token.logo} 
-                                    alt={token.symbol} 
-                                    className="w-10 h-10 rounded-full" 
-                                    onError={(e) => {
-                                      e.currentTarget.src = `https://ui-avatars.com/api/?name=${token.symbol}&background=0052FF&color=fff&size=40`;
-                                    }} 
-                                  />
-                                ) : (
-                                  <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-                                    <span className="text-sm text-white font-bold">{token.symbol?.charAt(0) || 'T'}</span>
-                                  </div>
-                                )}
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center space-x-2">
-                                    <span className="text-sm font-medium text-white">{token.symbol}</span>
-                                    {token.priceUsd && (
-                                      <span className="text-xs text-gray-400">
-                                        ${parseFloat(token.priceUsd).toFixed(6)}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="text-xs text-gray-400 truncate">{token.name}</div>
-                                  <div className="text-xs text-gray-500 font-mono truncate">
-                                    {token.address?.slice(0, 6)}...{token.address?.slice(-4)}
-                                  </div>
-                                </div>
-                                {token.priceChange && (
-                                  <div className={`text-xs font-medium ${
-                                    parseFloat(token.priceChange.h24 || '0') >= 0 ? 'text-green-400' : 'text-red-400'
-                                  }`}>
-                                    {parseFloat(token.priceChange.h24 || '0') >= 0 ? '+' : ''}
-                                    {parseFloat(token.priceChange.h24 || '0').toFixed(2)}%
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : tokenSearchQuery.length >= 2 ? (
-                        <div className="flex flex-col items-center justify-center py-12">
-                          <svg className="w-12 h-12 text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                          </svg>
-                          <p className="text-gray-400 text-sm">No results found</p>
-                          <p className="text-gray-500 text-xs mt-1">Try a different search term</p>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center justify-center py-12">
-                          <svg className="w-12 h-12 text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                          </svg>
-                          <p className="text-gray-400 text-sm">Start searching</p>
-                          <p className="text-gray-500 text-xs mt-1">Enter a token name, symbol, or address</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Bottom Tab Navigation */}
-                  <div className="border-t border-slate-700/50 px-4 py-3 flex items-center justify-around flex-shrink-0">
-                    <button
-                      onClick={() => {
-                        setActiveBottomTab('home');
-                        setCurrentSection('main');
-                        setCurrentView('main');
-                      }}
-                      className={`flex flex-col items-center space-y-1 ${activeBottomTab === 'home' ? 'text-blue-400' : 'text-gray-400'}`}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                      </svg>
-                      <span className="text-xs">Home</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveBottomTab('swap');
-                        setCurrentSection('swap');
-                      }}
-                      className={`flex flex-col items-center space-y-1 ${activeBottomTab === 'swap' ? 'text-blue-400 border-b-2 border-blue-400 pb-1' : 'text-gray-400'}`}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                      </svg>
-                      <span className="text-xs">Swap</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveBottomTab('history');
-                        setActiveTab('history');
-                        setCurrentSection('main');
-                        setCurrentView('main');
-                      }}
-                      className={`flex flex-col items-center space-y-1 ${activeBottomTab === 'history' ? 'text-blue-400' : 'text-gray-400'}`}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="text-xs">History</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveBottomTab('search');
-                        setCurrentSection('main');
-                        setCurrentView('main');
-                      }}
-                      className={`flex flex-col items-center space-y-1 ${activeBottomTab === 'search' ? 'text-blue-400' : 'text-gray-400'}`}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                      <span className="text-xs">Search</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Send Section */}
-              {walletSystem === "self-custodial" && currentSection === 'send' && !walletLoading && (
-                <div className="px-4 py-4">
-                     <div className="flex items-center space-x-3 mb-4">
-                    <button
-                      onClick={handleBackToMain}
-                      className="p-2 text-gray-400 hover:text-gray-300 hover:bg-gray-800 rounded-lg transition-colors"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                         </svg>
-                    </button>
-                    <h3 className="text-lg font-semibold text-gray-200">Send</h3>
-                       </div>
-
-                  <div className="space-y-4">
-                    {/* Token Selection */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Token</label>
-                      <select
-                        value={selectedToken}
-                        onChange={(e) => setSelectedToken(e.target.value)}
-                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 focus:outline-none focus:border-[#0052FF]"
-                      >
-                        <option value="ETH">ETH</option>
-                        {tokenHoldings.map((token) => (
-                          <option key={token.contractAddress} value={token.symbol}>
-                            {token.symbol}
-                          </option>
-                        ))}
-                      </select>
-                     </div>
-                     
-                    {/* Amount */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Amount</label>
-                      <input
-                        type="number"
-                        value={sendAmount}
-                        onChange={(e) => setSendAmount(e.target.value)}
-                        placeholder="0.0"
-                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 focus:outline-none focus:border-[#0052FF]"
-                      />
-                      <div className="text-xs text-gray-400 mt-1">
-                        Balance: {selectedToken === 'ETH' ? parseFloat(ethBalance).toFixed(6) : 
-                          tokenHoldings.find(t => t.symbol === selectedToken)?.tokenBalance || '0'} {selectedToken}
-                      </div>
-                    </div>
-
-                    {/* Address */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">To Address</label>
-                      <input
-                        type="text"
-                        value={sendAddress}
-                        onChange={(e) => setSendAddress(e.target.value)}
-                        placeholder="0x..."
-                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 focus:outline-none focus:border-[#0052FF]"
-                      />
-                    </div>
-
-                    {/* Send Button */}
-                       <button
-                      onClick={handleSendTransaction}
-                      className="w-full py-3 px-4 bg-[#0052FF] hover:bg-[#0052FF]/80 text-white rounded-lg font-medium transition-colors"
-                    >
-                      Send {selectedToken}
-                       </button>
-                   </div>
-                 </div>
-               )}
-
-              {/* Receive Section */}
-              {walletSystem === "self-custodial" && currentSection === 'receive' && !walletLoading && (
-                <div className="px-4 py-4">
-                  <div className="flex items-center space-x-3 mb-4">
-                    <button
-                      onClick={handleBackToMain}
-                      className="p-2 text-gray-400 hover:text-gray-300 hover:bg-gray-800 rounded-lg transition-colors"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </button>
-                    <h3 className="text-lg font-semibold text-gray-200">Receive</h3>
-                  </div>
-
-                  <div className="text-center space-y-4">
-                    <div className="w-16 h-16 bg-[#0052FF]/20 rounded-full flex items-center justify-center mx-auto">
-                      <svg className="w-8 h-8 text-[#0052FF]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                           </svg>
-                         </div>
-                    
-                    <div>
-                      <h4 className="text-lg font-medium text-gray-200 mb-2">Your Wallet Address</h4>
-                      <div className="bg-gray-800 p-3 rounded-lg border border-gray-700">
-                        <div className="text-sm font-mono text-gray-300 break-all">
-                          {walletData ? walletData.address : 'No wallet loaded'}
-                         </div>
-                       </div>
-                     </div>
-
-                    <button
-                      onClick={copyAddress}
-                      className="w-full py-3 px-4 bg-[#0052FF] hover:bg-[#0052FF]/80 text-white rounded-lg font-medium transition-colors"
-                    >
-                      Copy Address
+                      <span className="text-xs">Send</span>
                     </button>
                          </div>
                        </div>
@@ -3055,8 +3406,8 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                          </div>
 
                   <div className="text-center space-y-4">
-                    <div className="w-16 h-16 bg-[#0052FF]/20 rounded-full flex items-center justify-center mx-auto">
-                      <svg className="w-8 h-8 text-[#0052FF]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-16 h-16 bg-[#1d4ed8]/20 rounded-full flex items-center justify-center mx-auto">
+                      <svg className="w-8 h-8 text-[#3b82f6]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
                       </svg>
                        </div>
@@ -3068,7 +3419,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
 
                     <button
                       onClick={() => window.location.href = '/explore'}
-                      className="w-full py-3 px-4 bg-[#0052FF] hover:bg-[#0052FF]/80 text-white rounded-lg font-medium transition-colors"
+                      className="w-full py-3 px-4 bg-[#1d4ed8] hover:bg-[#2563eb] text-white rounded-lg font-medium transition-colors"
                     >
                       Go to Trade Page
                     </button>

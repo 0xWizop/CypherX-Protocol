@@ -6,16 +6,14 @@ import { onAuthStateChanged } from "firebase/auth";
 import type { User } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { WagmiProvider } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { RainbowKitProvider } from "@rainbow-me/rainbowkit";
-import { config } from "@/lib/wagmi";
-import "@rainbow-me/rainbowkit/styles.css";
 import { LoadingProvider } from "./components/LoadingProvider";
 import { Toaster } from "react-hot-toast";
 import LoginModal from "./components/LoginModal";
 import CookieBanner from "./components/CookieBanner";
 import Footer from "./components/Footer";
+import SiteBanner from "./components/SiteBanner";
+import { usePathname } from "next/navigation";
 
 // Create a new query client
 const queryClient = new QueryClient();
@@ -55,21 +53,6 @@ const WalletSystemContext = createContext<WalletSystemContextType>({
   setWalletLoading: () => {},
 });
 
-// Voting modal context
-interface VotingModalContextType {
-  showVotingModal: boolean;
-  setShowVotingModal: (show: boolean) => void;
-  selectedIndexForVoting: string;
-  setSelectedIndexForVoting: (index: string) => void;
-}
-
-const VotingModalContext = createContext<VotingModalContextType>({
-  showVotingModal: false,
-  setShowVotingModal: () => {},
-  selectedIndexForVoting: '',
-  setSelectedIndexForVoting: () => {},
-});
-
 // Login modal context
 interface LoginModalContextType {
   showLoginModal: boolean;
@@ -101,14 +84,6 @@ export const useWalletSystem = () => {
   return context;
 };
 
-export const useVotingModal = () => {
-  const context = useContext(VotingModalContext);
-  if (!context) {
-    throw new Error("useVotingModal must be used within a VotingModalProvider");
-  }
-  return context;
-};
-
 export const useLoginModal = () => {
   const context = useContext(LoginModalContext);
   if (!context) {
@@ -123,10 +98,39 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [walletSystem, setWalletSystem] = useState<"wagmi" | "self-custodial">("self-custodial");
   const [selfCustodialWallet, setSelfCustodialWallet] = useState<{ address: string; isConnected: boolean; ethBalance: string; tokenBalance: string } | null>(null);
   const [walletLoading, setWalletLoading] = useState(true);
-  const [showVotingModal, setShowVotingModal] = useState(false);
-  const [selectedIndexForVoting, setSelectedIndexForVoting] = useState('');
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [redirectTo, setRedirectTo] = useState('/');
+  const pathname = usePathname();
+  const isFullScreenLayout = pathname?.includes('/explore/') && pathname?.includes('/chart');
+  const isExplorerPage = pathname?.startsWith('/explorer');
+  const isHomepage = pathname === "/";
+  const [footerHeight, setFooterHeight] = useState(0);
+
+  useEffect(() => {
+    const updateFooterHeight = () => {
+      if (typeof window === "undefined") return;
+      const footerEl = document.getElementById("app-footer");
+      const height = footerEl?.offsetHeight ?? 0;
+      setFooterHeight(height);
+      if (typeof document !== "undefined") {
+        document.documentElement.style.setProperty("--app-footer-height", `${height}px`);
+      }
+    };
+
+    updateFooterHeight();
+    window.addEventListener("resize", updateFooterHeight);
+    let observer: MutationObserver | null = null;
+    const footerEl = typeof window !== "undefined" ? document.getElementById("app-footer") : null;
+    if (footerEl && typeof MutationObserver !== "undefined") {
+      observer = new MutationObserver(updateFooterHeight);
+      observer.observe(footerEl, { attributes: true, childList: true, subtree: true });
+    }
+
+    return () => {
+      window.removeEventListener("resize", updateFooterHeight);
+      observer?.disconnect();
+    };
+  }, [isFullScreenLayout]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -231,61 +235,54 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <LoadingProvider>
       <QueryClientProvider client={queryClient}>
-        <WagmiProvider config={config}>
-          <RainbowKitProvider>
-            <AuthContext.Provider value={{ user, loading }}>
-              <WalletSystemContext.Provider 
-                value={{ 
-                  walletSystem, 
-                  setWalletSystem, 
-                  selfCustodialWallet, 
-                  setSelfCustodialWallet,
-                  walletLoading,
-                  setWalletLoading
-                }}
-              >
-                <VotingModalContext.Provider
-                  value={{
-                    showVotingModal,
-                    setShowVotingModal,
-                    selectedIndexForVoting,
-                    setSelectedIndexForVoting
+        <AuthContext.Provider value={{ user, loading }}>
+          <WalletSystemContext.Provider 
+            value={{ 
+              walletSystem, 
+              setWalletSystem, 
+              selfCustodialWallet, 
+              setSelfCustodialWallet,
+              walletLoading,
+              setWalletLoading
+            }}
+          >
+            <LoginModalContext.Provider
+              value={{
+                showLoginModal,
+                setShowLoginModal,
+                redirectTo,
+                setRedirectTo
+              }}
+            >
+              <div className={`flex min-h-screen flex-col ${isExplorerPage ? 'bg-gray-950' : ''}`}>
+                <SiteBanner />
+                <main
+                  className={`flex-1 ${isExplorerPage ? 'bg-gray-950' : ''}`}
+                  style={{ 
+                    paddingBottom: `${isFullScreenLayout || isExplorerPage ? 0 : footerHeight ? footerHeight + 16 : 72}px` 
                   }}
                 >
-                  <LoginModalContext.Provider
-                    value={{
-                      showLoginModal,
-                      setShowLoginModal,
-                      redirectTo,
-                      setRedirectTo
-                    }}
-                  >
-                    <div className="flex min-h-screen flex-col">
-                      <main className="flex-1 pb-24 sm:pb-20">
-                        {children}
-                      </main>
-                      <Footer />
-                    </div>
-                    <LoginModal
-                      isOpen={showLoginModal}
-                      onClose={() => setShowLoginModal(false)}
-                      redirectTo={redirectTo}
-                    />
-                    <Toaster 
-                      position="bottom-left" 
-                      toastOptions={{
-                        style: {
-                          zIndex: 99999999,
-                        },
-                      }}
-                    />
-                    <CookieBanner />
-                  </LoginModalContext.Provider>
-                </VotingModalContext.Provider>
-              </WalletSystemContext.Provider>
+                  {children}
+                </main>
+                <Footer isSticky={!isHomepage} />
+              </div>
+              <LoginModal
+                isOpen={showLoginModal}
+                onClose={() => setShowLoginModal(false)}
+                redirectTo={redirectTo}
+              />
+              <Toaster 
+                position="bottom-left" 
+                toastOptions={{
+                  style: {
+                    zIndex: 99999999,
+                  },
+                }}
+              />
+              <CookieBanner />
+            </LoginModalContext.Provider>
+          </WalletSystemContext.Provider>
             </AuthContext.Provider>
-          </RainbowKitProvider>
-        </WagmiProvider>
       </QueryClientProvider>
     </LoadingProvider>
   );

@@ -128,7 +128,7 @@ export default function WalletDashboardPage() {
   }, [positions]);
 
   return (
-    <div className="h-screen bg-[#0f172a] text-gray-200 flex flex-col">
+    <div className="h-screen bg-gray-950 text-gray-200 flex flex-col">
       <Header />
 
       <main className="flex-1 max-w-[1280px] mx-auto px-5 lg:px-8 pt-6 pb-0 flex flex-col min-h-0">

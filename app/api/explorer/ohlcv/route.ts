@@ -27,13 +27,14 @@ export async function GET(request: Request) {
     const res = await fetch(gtUrl, { cache: "no-store" });
     if (res.ok) {
       const data = await res.json();
-      const list: Array<[number, number, number, number, number]> = data?.data?.attributes?.ohlcv_list || [];
-      const candles = list.map(([ts, open, high, low, close]) => ({
+      const list: Array<[number, number, number, number, number, number]> = data?.data?.attributes?.ohlcv_list || [];
+      const candles = list.map(([ts, open, high, low, close, volume]) => ({
         time: Math.floor(Number(ts)),
         open,
         high,
         low,
         close,
+        volume: volume || 0, // Include volume data
       }));
       return NextResponse.json({ candles });
     }
@@ -43,6 +44,32 @@ export async function GET(request: Request) {
     return NextResponse.json({ candles: [] }, { status: 200 });
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -3,10 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { signOut, type Auth } from "firebase/auth";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { auth as firebaseAuth, db, storage } from "@/lib/firebase";
-import { useAuth, useWalletSystem, useVotingModal } from "@/app/providers";
+import { useAuth, useWalletSystem } from "@/app/providers";
 import { useUserSettings } from "@/app/hooks/useUserSettings";
 import { motion, AnimatePresence } from "framer-motion";
 import { FiUser, FiInfo, FiX, FiCheck, FiAlertCircle } from "react-icons/fi";
@@ -16,6 +16,7 @@ import Image from "next/image";
 import { createPortal } from "react-dom";
 import TierProgressionModal from "./TierProgressionModal";
 import PointsHistoryModal from "./PointsHistoryModal";
+import PnLCalendarModal from "./PnLCalendarModal";
 
 type UserProfileDropdownProps = {
   variant?: "circle" | "rounded";
@@ -23,11 +24,23 @@ type UserProfileDropdownProps = {
 
 const auth: Auth = firebaseAuth as Auth;
 
+const DEFAULT_NOTIFICATIONS = {
+  email: true,
+  push: true,
+  trading: true,
+  news: false,
+};
+
+const DEFAULT_PRIVACY = {
+  showProfile: true,
+  showTrades: true,
+  showBalance: false,
+};
+
 const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "circle" }) => {
   const router = useRouter();
   const { user } = useAuth();
   const { selfCustodialWallet } = useWalletSystem();
-  const { setShowVotingModal, setSelectedIndexForVoting } = useVotingModal();
   const { 
     updateAlias, 
     loading: settingsLoading 
@@ -42,6 +55,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
 
   const [showTierModal, setShowTierModal] = useState(false);
   const [showPointsHistory, setShowPointsHistory] = useState(false);
+  const [showPnLCalendar, setShowPnLCalendar] = useState(false);
   const [isAuthor, setIsAuthor] = useState(false);
   const [showAliasModal, setShowAliasModal] = useState(false);
   const [showAccountSettingsModal, setShowAccountSettingsModal] = useState(false);
@@ -56,22 +70,60 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
   const [settingsStatus, setSettingsStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [settingsMessage, setSettingsMessage] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [notifications, setNotifications] = useState({
-    email: true,
-    push: true,
-    trading: true,
-    news: false
-  });
-  const [privacy, setPrivacy] = useState({
-    showProfile: true,
-    showTrades: true,
-    showBalance: false
-  });
+  const [notifications, setNotifications] = useState(() => ({ ...DEFAULT_NOTIFICATIONS }));
+  const [privacy, setPrivacy] = useState(() => ({ ...DEFAULT_PRIVACY }));
   
 
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+
+  // Disable body scroll when any modal is open
+  useEffect(() => {
+    const isAnyModalOpen = 
+      showAccountModal || 
+      showTierModal || 
+      showPointsHistory || 
+      showPnLCalendar || 
+      showAliasModal || 
+      showAccountSettingsModal || 
+      showAuthorDashboardModal;
+
+    if (isAnyModalOpen) {
+      // Save current scroll position
+      const scrollY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+    } else {
+      // Restore scroll position
+      const scrollY = document.body.style.top;
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || '0') * -1);
+      }
+    }
+
+    return () => {
+      // Cleanup on unmount
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+    };
+  }, [
+    showAccountModal,
+    showTierModal,
+    showPointsHistory,
+    showPnLCalendar,
+    showAliasModal,
+    showAccountSettingsModal,
+    showAuthorDashboardModal
+  ]);
 
   // Debug logging for Points History
   useEffect(() => {
@@ -130,6 +182,9 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
           if (userDoc.exists()) {
             const userData = userDoc.data();
             setProfilePicture(userData.profilePicture || userData.photoURL || "");
+            setDisplayName(userData.displayName || "");
+            setNotifications(userData.notifications ? { ...DEFAULT_NOTIFICATIONS, ...userData.notifications } : { ...DEFAULT_NOTIFICATIONS });
+            setPrivacy(userData.privacy ? { ...DEFAULT_PRIVACY, ...userData.privacy } : { ...DEFAULT_PRIVACY });
           }
         }
       } catch (error) {
@@ -183,10 +238,12 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
       // Start with just displayName to test if basic save works
       const settingsData = {
         displayName: displayName.trim(),
+        notifications,
+        privacy,
         updatedAt: new Date(),
       };
 
-      await updateDoc(doc(db, "users", documentId), settingsData);
+      await setDoc(doc(db, "users", documentId), settingsData, { merge: true });
       
       setSettingsStatus('success');
       setSettingsMessage('Settings saved successfully!');
@@ -240,24 +297,6 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
     return colors[tier as keyof typeof colors] || '#6B7280';
   };
 
-  const getTierGradient = (tier: string) => {
-    const gradients = {
-      normie: 'from-gray-500 to-gray-600',
-      degen: 'from-red-500 to-red-600',
-      alpha: 'from-green-500 to-green-600',
-      mogul: 'from-yellow-500 to-yellow-600',
-      titan: 'from-purple-500 to-purple-600'
-    };
-    return gradients[tier as keyof typeof gradients] || 'from-gray-500 to-gray-600';
-  };
-
-
-
-  const handleVoteAndEarn = () => {
-    setShowAccountModal(false); // Close the profile dropdown
-    setSelectedIndexForVoting('CDEX'); // Default to CDEX index
-    setShowVotingModal(true);
-  };
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -399,7 +438,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
   const renderProfileContent = () => (
     <>
       {/* Header with gradient background */}
-      <div className={`bg-gradient-to-r ${getTierGradient(tier)} p-4 relative overflow-hidden`}>
+      <div className="bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 p-4 relative overflow-hidden">
         <div className="absolute inset-0 bg-black/20"></div>
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-3">
@@ -436,7 +475,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
 
           {/* Progress to next tier */}
           {nextTier && (
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3">
+            <div className="bg-white/10 backdrop-blur-sm p-3">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-white/90 text-xs font-medium">Progress to {nextTier}</span>
                 <span className="text-white/90 text-xs font-semibold">{progress}%</span>
@@ -458,7 +497,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-4">
+      <div className="p-4 pt-8 space-y-4">
         {/* Quick Stats */}
         <div className="flex items-center justify-between text-sm">
           <span className="text-gray-400">Points</span>
@@ -481,10 +520,22 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
               setShowPointsHistory(true);
               setShowAccountModal(false);
             }}
-            className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-800/80 rounded-md transition-all duration-200"
+            className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-900 transition-all duration-200"
           >
             <span className="font-medium text-sm">Points History</span>
           </button>
+
+          {walletAddress && (
+            <button
+              onClick={() => {
+                setShowPnLCalendar(true);
+                setShowAccountModal(false);
+              }}
+              className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-900 transition-all duration-200"
+            >
+              <span className="font-medium text-sm">P&L Calendar</span>
+            </button>
+          )}
 
           {isAuthor && (
             <button
@@ -492,29 +543,32 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                 setShowAuthorDashboardModal(true);
                 setShowAccountModal(false);
               }}
-              className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-800/80 rounded-md transition-all duration-200"
+              className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-900 transition-all duration-200"
             >
               <span className="font-medium text-sm">Author Dashboard</span>
             </button>
           )}
 
           <button
-            onClick={handleVoteAndEarn}
-            className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-800/80 rounded-md transition-all duration-200"
-          >
-            <span className="font-medium text-sm">Vote & Earn</span>
-          </button>
-
-          <button
             onClick={() => setShowAliasModal(true)}
-            className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-800/80 rounded-md transition-all duration-200"
+            className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-900 transition-all duration-200"
           >
             <span className="font-medium text-sm">Set Alias</span>
           </button>
 
+          <button
+            onClick={() => {
+              setShowAccountSettingsModal(true);
+              setShowAccountModal(false);
+            }}
+            className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-900 transition-all duration-200"
+          >
+            <span className="font-medium text-sm">Account Settings</span>
+          </button>
+
           <Link
             href="/rewards"
-            className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-800/80 rounded-md transition-all duration-200"
+            className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-900 transition-all duration-200"
             onClick={() => setShowAccountModal(false)}
           >
             <span className="font-medium text-sm">Rewards & Referrals</span>
@@ -522,20 +576,20 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
         </div>
 
         {/* Logout Section */}
-        <div className="pt-3 border-t border-gray-700/50">
+        <div className="pt-3 border-t border-gray-800">
           {user ? (
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleSignOut}
-              className="flex items-center w-full p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-md transition-all duration-200"
+              className="flex items-center w-full p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-200"
             >
               <span className="font-medium text-sm">Sign Out</span>
             </motion.button>
           ) : (
             <Link
               href="/login"
-              className="flex items-center w-full p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-md transition-all duration-200"
+              className="flex items-center w-full p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-all duration-200"
               onClick={() => setShowAccountModal(false)}
             >
               <span className="font-medium text-sm">Sign In</span>
@@ -587,9 +641,9 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                   exit={{ opacity: 0, y: -8, scale: 0.98 }}
                   transition={{ duration: 0.15, ease: "easeOut" }}
                   ref={modalRef}
-                  className="fixed w-80 bg-gray-900/95 backdrop-blur-sm rounded-lg border border-gray-700/60 shadow-2xl overflow-hidden z-[9999]"
+                  className="fixed w-80 bg-gray-950 backdrop-blur-sm border border-gray-800 shadow-2xl overflow-hidden z-[9999]"
                   style={{
-                    top: buttonRef.getBoundingClientRect().bottom + 16,
+                    top: buttonRef.getBoundingClientRect().bottom + 32,
                     right: window.innerWidth - buttonRef.getBoundingClientRect().right,
                   }}
                 >
@@ -599,14 +653,14 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
             ) : (
               <>
                 <motion.div
-                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9998]"
+                  className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9998]"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   onClick={() => setShowAccountModal(false)}
                 />
                 <motion.div
-                  className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+                  className="fixed inset-0 z-[9999] sm:flex sm:items-center sm:justify-center sm:p-4"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
@@ -617,7 +671,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 16 }}
                     transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="w-full max-w-sm bg-gray-900 rounded-none border border-gray-700 shadow-2xl overflow-hidden"
+                    className="w-full h-full sm:h-auto sm:max-w-sm sm:border sm:border-gray-800 bg-gray-950 shadow-2xl overflow-hidden"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {renderProfileContent()}
@@ -651,14 +705,24 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
       , document.body
       )}
 
+      {/* P&L Calendar Modal */}
+      {showPnLCalendar && walletAddress && createPortal(
+        <PnLCalendarModal
+          isOpen={showPnLCalendar}
+          onClose={() => setShowPnLCalendar(false)}
+          walletAddress={walletAddress}
+        />
+      , document.body
+      )}
+
       {/* Alias Modal */}
       {showAliasModal && createPortal(
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999]">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-gray-900 rounded-xl p-6 w-96 border border-gray-700"
+            className="bg-gray-950 p-6 w-96 border border-gray-800"
           >
             <h3 className="text-white text-lg font-semibold mb-4">Set Your Alias</h3>
             <p className="text-gray-400 text-sm mb-4">
@@ -682,7 +746,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
             <div className="flex gap-3">
               <button
                 onClick={() => setShowAliasModal(false)}
-                className="flex-1 px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
+                className="flex-1 px-4 py-2 bg-gray-900 text-gray-300 hover:bg-gray-800 transition-colors"
               >
                 Cancel
               </button>
@@ -695,7 +759,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                   }
                 }}
                 disabled={!alias.trim() || settingsLoading}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="flex-1 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {settingsLoading ? 'Updating...' : 'Update Alias'}
               </button>
@@ -707,47 +771,54 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
 
       {/* Account Settings Modal */}
       {showAccountSettingsModal && createPortal(
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm sm:flex sm:items-center sm:justify-center z-[9999] sm:p-5">
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-gray-900 rounded-xl w-full max-w-[500px] flex flex-col border border-gray-700 max-h-[85vh]"
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            transition={{ duration: 0.2 }}
+            className="bg-gray-950 w-full h-full sm:h-auto sm:max-w-[520px] sm:mx-0 sm:border sm:border-gray-800 shadow-2xl flex flex-col sm:max-h-[82vh] sm:my-auto"
           >
-            <div className="flex items-center justify-between p-4 border-b border-gray-700">
-              <h3 className="text-white text-xl font-semibold">Account Settings</h3>
+            <div className="relative flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-800 bg-gray-950">
+              <div className="text-left">
+                <span className="text-[10px] uppercase tracking-[0.3em] text-blue-400/70 font-medium">Profile</span>
+                <h3 className="text-white text-base sm:text-2xl font-semibold mt-1">Account Settings</h3>
+              </div>
               <button
                 onClick={() => setShowAccountSettingsModal(false)}
-                className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+                className="absolute top-3 sm:top-4 right-4 sm:right-6 w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg bg-gray-900/50 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 text-gray-300 hover:text-white transition-all duration-200"
+                aria-label="Close"
               >
-                <FiX className="w-5 h-5 text-gray-400" />
+                <FiX className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-6 py-4 space-y-4 sm:space-y-6">
               {/* Profile Section */}
-              <div className="bg-gray-800/50 rounded-lg p-3">
-                <h4 className="text-white font-medium mb-2">Profile Information</h4>
-                <div className="space-y-2">
+              <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner mt-1">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                  <h4 className="text-white font-semibold text-base sm:text-lg">Profile Information</h4>
+                </div>
+                <div className="space-y-3 sm:space-y-4">
                   {/* Profile Picture */}
-                  <div className="flex items-center space-x-4">
-                    <div className="relative">
-                      <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-700 border-2 border-gray-600">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-5 gap-3 sm:gap-4">
+                    <div className="relative self-center sm:self-auto">
+                      <div className="w-14 h-14 sm:w-20 sm:h-20 overflow-hidden bg-gray-900 border border-gray-800 shadow-lg">
                         {profilePicture ? (
                           <Image
                             src={profilePicture}
                             alt="Profile"
-                            width={64}
-                            height={64}
+                            width={72}
+                            height={72}
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <FiUser className="w-8 h-8 text-gray-400" />
+                          <div className="w-full h-full flex items-center justify-center bg-gray-900">
+                            <FiUser className="w-6 h-6 text-gray-500" />
                           </div>
                         )}
                         {uploadingImage && (
-                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
                           </div>
                         )}
@@ -755,24 +826,24 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                       <button
                         onClick={() => fileInputRef.current?.click()}
                         disabled={uploadingImage}
-                        className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-full flex items-center justify-center transition-colors"
+                        className="absolute -bottom-2 -right-2 w-6 h-6 sm:w-7 sm:h-7 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 flex items-center justify-center transition-colors shadow-lg"
                       >
                         {uploadingImage ? (
                           <div className="animate-spin rounded-full h-3 w-3 border-b border-white"></div>
                         ) : (
-                          <FiUser className="w-3 h-3" />
+                          <FiUser className="w-3 h-3 text-white" />
                         )}
                       </button>
                     </div>
-                    <div className="flex-1">
-                      <h5 className="text-white font-medium text-sm">Profile Picture</h5>
-                      <p className="text-gray-400 text-xs mb-2">
-                        Upload a profile picture to personalize your account
+                    <div className="flex-1 w-full">
+                      <h5 className="text-white font-semibold text-sm sm:text-base">Profile Picture</h5>
+                      <p className="text-gray-400 text-xs sm:text-sm mb-3">
+                        Upload an image with a minimum size of 256x256 for best clarity.
                       </p>
                       <button
                         onClick={() => fileInputRef.current?.click()}
                         disabled={uploadingImage}
-                        className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-xs transition-colors"
+                        className="inline-flex items-center gap-2 px-3 py-2 bg-gray-900 border border-gray-800 hover:border-gray-600 hover:bg-gray-900/80 text-xs sm:text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {uploadingImage ? 'Uploading...' : 'Upload Image'}
                       </button>
@@ -782,16 +853,16 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                         <motion.div
                           initial={{ opacity: 0, y: -10 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className={`mt-2 p-2 rounded-lg text-xs flex items-center space-x-2 ${
+                          className={`mt-3 px-3 py-2 text-sm flex items-center gap-2 ${
                             uploadStatus === 'success' 
-                              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                              : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                              ? 'bg-green-500/15 text-green-300 border border-green-500/30'
+                              : 'bg-red-500/15 text-red-300 border border-red-500/30'
                           }`}
                         >
                           {uploadStatus === 'success' ? (
-                            <FiCheck className="w-3 h-3" />
+                            <FiCheck className="w-4 h-4" />
                           ) : (
-                            <FiAlertCircle className="w-3 h-3" />
+                            <FiAlertCircle className="w-4 h-4" />
                           )}
                           <span>{uploadMessage}</span>
                         </motion.div>
@@ -807,26 +878,33 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                     className="hidden"
                   />
 
-                  <div>
-                    <label className="block text-gray-300 text-sm mb-1">Display Name</label>
-                    <input
-                      type="text"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                      placeholder="Enter your display name"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="col-span-1 sm:col-span-2">
+                      <label className="block text-gray-300 text-xs sm:text-sm font-medium mb-2">Display Name</label>
+                      <input
+                        type="text"
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-950 border border-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/50 text-sm transition"
+                        placeholder="Enter your display name"
+                      />
+                    </div>
                   </div>
 
                 </div>
               </div>
 
               {/* Notifications Section */}
-              <div className="bg-gray-800/50 rounded-lg p-3">
-                <h4 className="text-white font-medium mb-2">Notifications</h4>
-                <div className="space-y-2">
-                  <label className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors cursor-pointer">
-                    <span className="text-gray-300 text-sm font-medium">Email Notifications</span>
+              <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                  <h4 className="text-white font-semibold text-base sm:text-lg">Notifications</h4>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                  <label className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer">
+                    <div>
+                      <span className="text-gray-200 text-sm font-medium">Email Notifications</span>
+                      <p className="text-[11px] sm:text-xs text-gray-500 mt-1">Cycle insights and important updates.</p>
+                    </div>
                     <div className="relative">
                       <input
                         type="checkbox"
@@ -834,17 +912,21 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                         onChange={(e) => setNotifications(prev => ({ ...prev, email: e.target.checked }))}
                         className="sr-only"
                       />
-                      <div className={`w-10 h-6 rounded-full transition-colors duration-200 flex items-center ${
-                        notifications.email ? 'bg-blue-600' : 'bg-gray-600'
+                      <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
+                        notifications.email ? 'bg-blue-500' : 'bg-gray-700'
                       }`}>
                         <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          notifications.email ? 'translate-x-5' : 'translate-x-1'
+                          notifications.email ? 'translate-x-5' : 'translate-x-0'
                         }`}></div>
                       </div>
                     </div>
                   </label>
-                  <label className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors cursor-pointer">
-                    <span className="text-gray-300 text-sm font-medium">Push Notifications</span>
+
+                  <label className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer">
+                    <div>
+                      <span className="text-gray-200 text-sm font-medium">Push Notifications</span>
+                      <p className="text-[11px] sm:text-xs text-gray-500 mt-1">Instant signals delivered to your device.</p>
+                    </div>
                     <div className="relative">
                       <input
                         type="checkbox"
@@ -852,17 +934,21 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                         onChange={(e) => setNotifications(prev => ({ ...prev, push: e.target.checked }))}
                         className="sr-only"
                       />
-                      <div className={`w-10 h-6 rounded-full transition-colors duration-200 flex items-center ${
-                        notifications.push ? 'bg-blue-600' : 'bg-gray-600'
+                      <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
+                        notifications.push ? 'bg-blue-500' : 'bg-gray-700'
                       }`}>
                         <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          notifications.push ? 'translate-x-5' : 'translate-x-1'
+                          notifications.push ? 'translate-x-5' : 'translate-x-0'
                         }`}></div>
                       </div>
                     </div>
                   </label>
-                  <label className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors cursor-pointer">
-                    <span className="text-gray-300 text-sm font-medium">Trading Notifications</span>
+
+                  <label className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer">
+                    <div>
+                      <span className="text-gray-200 text-sm font-medium">Trading Notifications</span>
+                      <p className="text-[11px] sm:text-xs text-gray-500 mt-1">Get notified about positions and P&L shifts.</p>
+                    </div>
                     <div className="relative">
                       <input
                         type="checkbox"
@@ -870,29 +956,33 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                         onChange={(e) => setNotifications(prev => ({ ...prev, trading: e.target.checked }))}
                         className="sr-only"
                       />
-                      <div className={`w-10 h-6 rounded-full transition-colors duration-200 flex items-center ${
-                        notifications.trading ? 'bg-blue-600' : 'bg-gray-600'
+                      <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
+                        notifications.trading ? 'bg-blue-500' : 'bg-gray-700'
                       }`}>
                         <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          notifications.trading ? 'translate-x-5' : 'translate-x-1'
+                          notifications.trading ? 'translate-x-5' : 'translate-x-0'
                         }`}></div>
                       </div>
                     </div>
                   </label>
-                  <label className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors cursor-pointer">
-                    <span className="text-gray-300 text-sm font-medium">News Notifications</span>
+
+                  <label className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer">
+                    <div>
+                      <span className="text-gray-200 text-sm font-medium">News Notifications</span>
+                      <p className="text-[11px] sm:text-xs text-gray-500 mt-1">Macro stories and curated market commentary.</p>
+                    </div>
                     <div className="relative">
-                      <input
+                    <input
                         type="checkbox"
                         checked={notifications.news}
                         onChange={(e) => setNotifications(prev => ({ ...prev, news: e.target.checked }))}
                         className="sr-only"
                       />
-                      <div className={`w-10 h-6 rounded-full transition-colors duration-200 flex items-center ${
-                        notifications.news ? 'bg-blue-600' : 'bg-gray-600'
+                      <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
+                        notifications.news ? 'bg-blue-500' : 'bg-gray-700'
                       }`}>
                         <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          notifications.news ? 'translate-x-5' : 'translate-x-1'
+                          notifications.news ? 'translate-x-5' : 'translate-x-0'
                         }`}></div>
                       </div>
                     </div>
@@ -901,11 +991,16 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
               </div>
 
               {/* Privacy Section */}
-              <div className="bg-gray-800/50 rounded-lg p-3">
-                <h4 className="text-white font-medium mb-2">Privacy</h4>
-                <div className="space-y-2">
-                  <label className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors cursor-pointer">
-                    <span className="text-gray-300 text-sm font-medium">Show Profile</span>
+              <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                  <h4 className="text-white font-semibold text-base sm:text-lg">Privacy</h4>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                  <label className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer">
+                    <div>
+                      <span className="text-gray-200 text-sm font-medium">Show Profile</span>
+                      <p className="text-[11px] sm:text-xs text-gray-500 mt-1">Allow others to discover and follow you.</p>
+                    </div>
                     <div className="relative">
                       <input
                         type="checkbox"
@@ -913,17 +1008,21 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                         onChange={(e) => setPrivacy(prev => ({ ...prev, showProfile: e.target.checked }))}
                         className="sr-only"
                       />
-                      <div className={`w-10 h-6 rounded-full transition-colors duration-200 flex items-center ${
-                        privacy.showProfile ? 'bg-blue-600' : 'bg-gray-600'
+                      <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
+                        privacy.showProfile ? 'bg-blue-500' : 'bg-gray-700'
                       }`}>
                         <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          privacy.showProfile ? 'translate-x-5' : 'translate-x-1'
+                          privacy.showProfile ? 'translate-x-5' : 'translate-x-0'
                         }`}></div>
                       </div>
                     </div>
                   </label>
-                  <label className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors cursor-pointer">
-                    <span className="text-gray-300 text-sm font-medium">Show Trades</span>
+
+                  <label className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer">
+                    <div>
+                      <span className="text-gray-200 text-sm font-medium">Show Trades</span>
+                      <p className="text-[11px] sm:text-xs text-gray-500 mt-1">Share recent trades with your followers.</p>
+                    </div>
                     <div className="relative">
                       <input
                         type="checkbox"
@@ -931,17 +1030,21 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                         onChange={(e) => setPrivacy(prev => ({ ...prev, showTrades: e.target.checked }))}
                         className="sr-only"
                       />
-                      <div className={`w-10 h-6 rounded-full transition-colors duration-200 flex items-center ${
-                        privacy.showTrades ? 'bg-blue-600' : 'bg-gray-600'
+                      <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
+                        privacy.showTrades ? 'bg-blue-500' : 'bg-gray-700'
                       }`}>
                         <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          privacy.showTrades ? 'translate-x-5' : 'translate-x-1'
+                          privacy.showTrades ? 'translate-x-5' : 'translate-x-0'
                         }`}></div>
                       </div>
                     </div>
                   </label>
-                  <label className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors cursor-pointer">
-                    <span className="text-gray-300 text-sm font-medium">Show Balance</span>
+
+                  <label className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer">
+                    <div>
+                      <span className="text-gray-200 text-sm font-medium">Show Balance</span>
+                      <p className="text-[11px] sm:text-xs text-gray-500 mt-1">Reveal your wallet balance on your profile.</p>
+                    </div>
                     <div className="relative">
                       <input
                         type="checkbox"
@@ -949,11 +1052,11 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                         onChange={(e) => setPrivacy(prev => ({ ...prev, showBalance: e.target.checked }))}
                         className="sr-only"
                       />
-                      <div className={`w-10 h-6 rounded-full transition-colors duration-200 flex items-center ${
-                        privacy.showBalance ? 'bg-blue-600' : 'bg-gray-600'
+                      <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
+                        privacy.showBalance ? 'bg-blue-500' : 'bg-gray-700'
                       }`}>
                         <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          privacy.showBalance ? 'translate-x-5' : 'translate-x-1'
+                          privacy.showBalance ? 'translate-x-5' : 'translate-x-0'
                         }`}></div>
                       </div>
                     </div>
@@ -966,10 +1069,10 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`p-3 rounded-lg text-sm flex items-center space-x-2 ${
+                  className={`p-3 sm:p-4 text-xs sm:text-sm flex items-center gap-2 sm:gap-3 border ${
                     settingsStatus === 'success' 
-                      ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                      : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                      ? 'bg-green-500/15 text-green-300 border-green-500/30'
+                      : 'bg-red-500/15 text-red-300 border-red-500/30'
                   }`}
                 >
                   {settingsStatus === 'success' ? (
@@ -982,17 +1085,17 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
               )}
 
               {/* Actions */}
-              <div className="flex gap-3 p-4 border-t border-gray-700">
+              <div className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 pt-2 sm:pt-0">
                 <button
                   onClick={() => setShowAccountSettingsModal(false)}
-                  className="flex-1 px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-gray-900 border border-gray-800 text-gray-300 hover:border-gray-600 hover:text-white transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveSettings}
                   disabled={savingSettings}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
+                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                 >
                   {savingSettings ? (
                     <>
@@ -1017,13 +1120,13 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-gray-900 rounded-xl p-6 w-[700px] max-h-[80vh] overflow-y-auto border border-gray-700"
+            className="bg-gray-950 p-6 w-[700px] max-h-[80vh] overflow-y-auto border border-gray-800"
           >
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-white text-xl font-semibold">Author Dashboard</h3>
               <button
                 onClick={() => setShowAuthorDashboardModal(false)}
-                className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+                  className="p-2 hover:bg-gray-900 transition-colors"
               >
                 <FiX className="w-5 h-5 text-gray-400" />
               </button>
@@ -1032,15 +1135,15 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
             <div className="space-y-6">
               {/* Stats Overview */}
               <div className="grid grid-cols-3 gap-4">
-                <div className="bg-gray-800/50 rounded-lg p-4 text-center">
+                <div className="bg-gray-800/50 p-4 text-center">
                   <div className="text-2xl font-bold text-blue-400">0</div>
                   <div className="text-gray-400 text-sm">Total Posts</div>
                 </div>
-                <div className="bg-gray-800/50 rounded-lg p-4 text-center">
+                <div className="bg-gray-800/50 p-4 text-center">
                   <div className="text-2xl font-bold text-green-400">0</div>
                   <div className="text-gray-400 text-sm">Total Views</div>
                 </div>
-                <div className="bg-gray-800/50 rounded-lg p-4 text-center">
+                <div className="bg-gray-800/50 p-4 text-center">
                   <div className="text-2xl font-bold text-purple-400">0</div>
                   <div className="text-gray-400 text-sm">Total Earnings</div>
                 </div>
@@ -1071,7 +1174,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
               <div className="flex justify-end pt-4">
                 <button
                   onClick={() => setShowAuthorDashboardModal(false)}
-                  className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
+                  className="px-4 py-2 bg-gray-900 text-gray-300 hover:bg-gray-800 transition-colors"
                 >
                   Close
                 </button>

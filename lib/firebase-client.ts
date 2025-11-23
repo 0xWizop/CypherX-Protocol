@@ -1,4 +1,6 @@
-console.log("Starting firebase-client.ts execution");
+if (process.env.NODE_ENV === 'development') {
+  console.log("Starting firebase-client.ts execution");
+}
 
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore as getClientFirestore, Firestore, doc, getDoc } from "firebase/firestore";

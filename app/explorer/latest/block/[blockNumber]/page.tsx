@@ -6,7 +6,7 @@ import { useRouter, useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, auth } from "../../../../../lib/firebase.ts";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { FiCopy, FiCheck, FiBox, FiArrowRight } from "react-icons/fi";
+import { FiCopy, FiCheck } from "react-icons/fi";
 import Header from "../../../../components/Header";
 import LoadingSpinner from "../../../../components/LoadingSpinner";
 
@@ -187,18 +187,37 @@ export default function BlockDetails() {
       : 0;
 
   return (
-    <div className="min-h-screen bg-[#0f172a] flex flex-col">
-      <Header />
+    <>
+      <style jsx global>{`
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
+      <div className="h-screen bg-gray-950 flex flex-col overflow-hidden">
+        <Header />
 
-      <main className="flex-1 overflow-hidden">
-        <div className="h-full w-full max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5 flex flex-col gap-3 sm:gap-4">
+        <main className="flex-1 bg-gray-950 overflow-y-auto lg:overflow-hidden min-h-0">
+        <div className="w-full max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-24 sm:pb-8 lg:pb-10 sm:py-5 flex flex-col gap-3 sm:gap-4">
+          {/* Breadcrumb Navigation */}
+          <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-400 flex-none">
+            <Link href="/explorer" className="hover:text-blue-400 transition-colors">
+              Explorer
+            </Link>
+            <span className="text-gray-600">/</span>
+            <span className="text-gray-300">Block Details</span>
+          </div>
+          
           <div className="flex flex-col gap-1 flex-none">
-            <h1 className="text-base font-normal text-white sm:text-xl">Block #{blockNumber}</h1>
-            <p className="text-gray-400 text-xs sm:text-sm">Detailed information about this Base block.</p>
+            <h1 className="text-xs sm:text-base font-normal text-white sm:text-xl">Block #{blockNumber}</h1>
+            <p className="text-gray-400 text-xs">Detailed information about this Base block.</p>
           </div>
 
           {error && (
-            <div className="bg-red-900/20 border border-red-500/30 p-4 rounded-xl text-red-400">
+            <div className="bg-red-900/20 p-4 rounded-xl text-red-400">
               <div className="flex items-center gap-2 text-sm">
                 <span className="h-2 w-2 rounded-full bg-red-400 animate-pulse" />
                 {error}
@@ -213,14 +232,14 @@ export default function BlockDetails() {
           )}
 
           {!loading && block && (
-            <div className="space-y-4 sm:space-y-6">
-              <section className="rounded-2xl border border-slate-700/60 bg-slate-900/35">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-2.5 border-b border-slate-800/50">
+            <div className="flex flex-col gap-4 sm:gap-6">
+              <section className="rounded-2xl bg-slate-900/35 flex-shrink-0">
+                <div className="flex flex-row items-start sm:items-center justify-between gap-2 px-4 py-2.5">
                   <div>
                     <h2 className="text-sm font-semibold text-white">Block Overview</h2>
-                    <p className="text-xs text-gray-400">Snapshot of key block metadata.</p>
+                    <p className="text-xs text-gray-400 hidden sm:block">Snapshot of key block metadata.</p>
                   </div>
-                  <span className="inline-flex self-start sm:self-auto items-center gap-2 rounded-full border border-green-600/40 bg-green-900/25 px-2.5 py-1 text-xs font-semibold text-green-400">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-green-900/25 px-2.5 py-1 text-xs font-semibold text-green-400 flex-shrink-0">
                     <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
                     {block.status}
                   </span>
@@ -231,24 +250,27 @@ export default function BlockDetails() {
                   {[{ label: "Block Number", value: `#${block.number.toLocaleString()}` }, { label: "Timestamp", value: block.timestamp }, { label: "Transactions", value: block.transactions.toLocaleString() }, { label: "Difficulty", value: block.difficulty }, { label: "Total Difficulty", value: block.totalDifficulty }, { label: "Size", value: block.size }].map((item) => (
                     <div key={item.label} className="flex items-center justify-between pt-3 first:pt-0">
                       <span className="text-xs text-gray-400 uppercase tracking-wide">{item.label}</span>
-                      <span className="text-sm text-white font-semibold ml-4">{item.value}</span>
+                      <span className="text-xs text-white font-semibold ml-4">{item.value}</span>
                     </div>
                   ))}
-                  {[{ label: "Block Hash", value: block.hash, field: "hash" }, { label: "Parent Hash", value: block.parentHash, field: "parentHash" }].map((item) => (
+                  {[{ label: "Block Hash", value: block.hash, field: "hash" }, { label: "Parent Hash", value: block.parentHash, field: "parentHash" }].map((item) => {
+                    const formatHash = (hash: string) => `${hash.slice(0, 8)}...${hash.slice(-6)}`;
+                    return (
                     <div key={item.label} className="flex items-center justify-between gap-3 pt-3">
                       <span className="text-xs text-gray-400 uppercase tracking-wide">{item.label}</span>
-                      <div className="flex items-center gap-2 max-w-[70%]">
-                        <span className="text-xs text-white truncate">{item.value}</span>
+                        <div className="flex items-center gap-1 max-w-[70%]">
+                          <span className="text-xs text-white font-mono truncate">{formatHash(item.value)}</span>
                         <button onClick={() => copyToClipboard(item.value, item.field)} className="text-blue-400 hover:text-blue-200 flex-shrink-0">
-                          {copiedField === item.field ? <FiCheck className="w-4 h-4" /> : <FiCopy className="w-4 h-4" />}
+                            {copiedField === item.field ? <FiCheck className="w-3 h-3" /> : <FiCopy className="w-3 h-3" />}
                         </button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                   <div className="flex items-center justify-between gap-3 pt-3">
                     <span className="text-xs text-gray-400 uppercase tracking-wide">Miner</span>
-                    <a href={`/explorer/address/${block.miner}`} className="text-xs text-blue-300 hover:text-blue-200 truncate max-w-[70%]">
-                      {block.miner}
+                    <a href={`/explorer/address/${block.miner}`} className="text-xs text-blue-300 hover:text-blue-200 font-mono truncate max-w-[70%]">
+                      {`${block.miner.slice(0, 6)}...${block.miner.slice(-4)}`}
                     </a>
                   </div>
                 </div>
@@ -296,18 +318,20 @@ export default function BlockDetails() {
                 </div>
               </section>
 
-              <section className="rounded-2xl border border-slate-700/60 bg-slate-900/35">
-                <div className="px-4 py-2.5 border-b border-slate-800/50">
+              <section className="rounded-2xl bg-slate-900/35 flex-shrink-0">
+                <div className="px-4 py-2.5">
                   <h2 className="text-sm font-semibold text-white">Gas Information</h2>
                 </div>
                 <div className="px-4 py-4 sm:hidden space-y-3">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs text-gray-400 uppercase tracking-wide">Gas Used</span>
-                    <span className="text-sm text-white">{parseInt(block.gasUsed, 10).toLocaleString()}</span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs text-gray-400 uppercase tracking-wide">Gas Limit</span>
-                    <span className="text-sm text-white">{parseInt(block.gasLimit, 10).toLocaleString()}</span>
+                  <div className="flex items-center gap-4">
+                    <div className="flex flex-col gap-1 flex-1">
+                      <span className="text-xs text-gray-400 uppercase tracking-wide">Gas Used</span>
+                      <span className="text-sm text-white">{parseInt(block.gasUsed, 10).toLocaleString()}</span>
+                    </div>
+                    <div className="flex flex-col gap-1 flex-1">
+                      <span className="text-xs text-gray-400 uppercase tracking-wide">Gas Limit</span>
+                      <span className="text-sm text-white">{parseInt(block.gasLimit, 10).toLocaleString()}</span>
+                    </div>
                   </div>
                   <div className="flex flex-col gap-1">
                     <span className="text-xs text-gray-400 uppercase tracking-wide">Utilization</span>
@@ -336,75 +360,87 @@ export default function BlockDetails() {
                 </div>
               </section>
 
-              <section className="rounded-2xl border border-slate-700/60 bg-slate-900/35 flex-1 flex flex-col">
-                <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800/50">
+              <section className="rounded-2xl bg-slate-900/35">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/50">
                   <h2 className="text-sm font-semibold text-white">Transactions ({block.transactions})</h2>
                   <span className="text-xs text-gray-400">{block.transactionList?.length || 0} loaded</span>
                 </div>
 
                 {block.transactionList && block.transactionList.length > 0 ? (
                   <>
-                    <div className="sm:hidden px-4 py-3 space-y-3">
-                      <AnimatePresence mode="popLayout">
-                        {block.transactionList.slice(0, 6).map((tx, index) => (
-                          <motion.div
-                            key={tx.hash}
-                            initial={{ opacity: 0, y: 12 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.03 }}
-                            className="rounded-xl border border-slate-700/50 bg-transparent px-3 py-3"
-                          >
-                            <div className="flex flex-col gap-2">
-                              <Link href={`/explorer/tx/${tx.hash}`} className="font-mono text-xs text-blue-300 hover:text-blue-200 truncate">
-                                {tx.hash}
-                              </Link>
-                              <div className="flex items-center gap-2">
-                                <a href={`/explorer/address/${tx.from}`} className="text-xs text-white hover:text-blue-300 truncate max-w-[140px]">
-                                  {tx.from}
-                                </a>
-                                <FiArrowRight className="w-3 h-3 text-gray-500 flex-shrink-0" />
-                                <a href={`/explorer/address/${tx.to}`} className="text-xs text-white hover:text-blue-300 truncate max-w-[140px]">
-                                  {tx.to}
-                                </a>
-                              </div>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </AnimatePresence>
+                    <div className="sm:hidden">
+                      <div className="max-h-[200px] overflow-y-auto scrollbar-hide overscroll-contain">
+                        <div className="px-4 py-3 space-y-2 pb-4">
+                          <AnimatePresence mode="popLayout">
+                            {block.transactionList.map((tx, index) => {
+                              const formatHash = (hash: string) => `${hash.slice(0, 8)}...${hash.slice(-6)}`;
+                              const formatAddress = (addr: string) => `${addr.slice(0, 4)}...${addr.slice(-4)}`;
+                              return (
+                              <motion.div
+                                key={tx.hash}
+                                initial={{ opacity: 0, y: 12 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: index * 0.03 }}
+                                className="py-2.5"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className="flex items-center flex-1 min-w-0">
+                                    <Link href={`/explorer/tx/${tx.hash}`} className="font-mono text-xs text-blue-400 hover:text-blue-300 truncate">
+                                      {formatHash(tx.hash)}
+                                    </Link>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 flex-shrink-0 min-w-0">
+                                    <a href={`/explorer/address/${tx.from}`} className="text-xs text-white hover:text-blue-300 truncate max-w-[45px]" title={tx.from}>
+                                      {formatAddress(tx.from)}
+                                    </a>
+                                    <span className="text-gray-500">→</span>
+                                    <a href={`/explorer/address/${tx.to}`} className="text-xs text-white hover:text-blue-300 truncate max-w-[45px]" title={tx.to}>
+                                      {formatAddress(tx.to)}
+                                    </a>
+                                  </div>
+                                </div>
+                              </motion.div>
+                              );
+                            })}
+                          </AnimatePresence>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="hidden sm:flex flex-col flex-1">
-                      <div className="grid grid-cols-12 px-4 py-2 text-[0.75rem] text-slate-400 border-b border-slate-800/50">
+                    <div className="hidden sm:block">
+                      <div className="grid grid-cols-12 px-4 py-2 text-[0.75rem] text-slate-400 border-b border-slate-700/50">
                         <span className="col-span-4">Hash</span>
                         <span className="col-span-3">From</span>
                         <span className="col-span-3">To</span>
                         <span className="col-span-2 text-right">Actions</span>
                       </div>
-                      <div className="flex-1 px-4 py-2">
-                        {block.transactionList.slice(0, 6).map((tx) => (
-                          <div key={tx.hash} className="grid grid-cols-12 items-center py-2 text-xs text-slate-200 border-b border-slate-800/40 last:border-b-0">
-                            <span className="col-span-4 font-mono text-blue-300 truncate pr-3">
-                              <Link href={`/explorer/tx/${tx.hash}`} className="hover:text-blue-200">
-                                {tx.hash}
-                              </Link>
-                            </span>
-                            <span className="col-span-3 truncate pr-2">
-                              <a href={`/explorer/address/${tx.from}`} className="hover:text-blue-300">
-                                {tx.from}
-                              </a>
-                            </span>
-                            <span className="col-span-3 truncate pr-2">
-                              <a href={`/explorer/address/${tx.to}`} className="hover:text-blue-300">
-                                {tx.to}
-                              </a>
-                            </span>
-                            <span className="col-span-2 text-right">
-                              <a href={`/explorer/tx/${tx.hash}`} className="inline-flex items-center gap-1 text-blue-300 hover:text-blue-100">
-                                View
-                              </a>
-                            </span>
-                          </div>
-                        ))}
+                      <div className="max-h-[200px] overflow-y-auto scrollbar-hide overscroll-contain">
+                        <div className="px-4 py-2 pb-4">
+                          {block.transactionList.map((tx) => (
+                            <div key={tx.hash} className="grid grid-cols-12 items-center py-2 text-xs text-slate-200">
+                              <span className="col-span-4 font-mono text-blue-300 truncate pr-3">
+                                <Link href={`/explorer/tx/${tx.hash}`} className="hover:text-blue-200">
+                                  {tx.hash}
+                                </Link>
+                              </span>
+                              <span className="col-span-3 truncate pr-2">
+                                <a href={`/explorer/address/${tx.from}`} className="hover:text-blue-300">
+                                  {tx.from}
+                                </a>
+                              </span>
+                              <span className="col-span-3 truncate pr-2">
+                                <a href={`/explorer/address/${tx.to}`} className="hover:text-blue-300">
+                                  {tx.to}
+                                </a>
+                              </span>
+                              <span className="col-span-2 text-right">
+                                <a href={`/explorer/tx/${tx.hash}`} className="inline-flex items-center gap-1 text-blue-300 hover:text-blue-100">
+                                  View
+                                </a>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </>
@@ -432,7 +468,7 @@ export default function BlockDetails() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.2 }}
-            className="fixed bottom-6 left-6 z-50 bg-slate-800/90 backdrop-blur-sm border border-slate-700/50 rounded-lg px-4 py-3 shadow-lg"
+            className="fixed bottom-6 left-6 z-50 bg-slate-800/90 backdrop-blur-sm rounded-lg px-4 py-3 shadow-lg"
           >
             <div className="flex items-center gap-2">
               <FiCheck className="w-4 h-4 text-green-400" />
@@ -441,6 +477,7 @@ export default function BlockDetails() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+      </div>
+    </>
   );
 }

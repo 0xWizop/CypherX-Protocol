@@ -16,16 +16,6 @@ import { EyeIcon, EyeSlashIcon, ExclamationCircleIcon, CheckCircleIcon, Envelope
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 
-// Custom CypherX text component with styled X
-const CypherXText: React.FC<{ className?: string }> = ({ className = "" }) => {
-  return (
-    <span className={className}>
-      <span className="text-blue-400">Cypher</span>
-      <span className="text-blue-300 font-bold">X</span>
-    </span>
-  );
-};
-
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -320,46 +310,52 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, redirectTo = "
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 sm:flex sm:items-center sm:justify-center sm:p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="relative w-full max-w-md mx-auto">
-              <div className="bg-gray-900/95 shadow-2xl rounded-2xl px-4 py-8 sm:px-8 sm:py-10 border border-gray-800/20 flex flex-col items-center w-full max-w-sm sm:max-w-md mx-auto relative">
+            <div className="relative w-full h-full sm:h-auto sm:max-w-md sm:mx-auto">
+              <div className="relative flex w-full h-full sm:h-auto flex-col items-center sm:rounded-2xl sm:border sm:border-blue-500/15 bg-[#070b17] px-4 py-6 sm:px-10 sm:py-10">
                 {/* Close Button */}
                 <button
                   onClick={onClose}
-                  className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-200 hover:bg-gray-800/50 rounded-lg transition-all duration-200"
+                  className="absolute top-4 right-4 w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg bg-gray-900/50 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 text-gray-300 hover:text-white transition-all duration-200"
+                  aria-label="Close"
                 >
-                  <XMarkIcon className="w-5 h-5" />
+                  <XMarkIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
 
                 {/* Logo/Brand */}
-                <div className="flex flex-col items-center mb-8">
-                  <div className="mb-2">
+                <div className="mb-8 flex flex-col items-center">
+                  <div className="mb-3 flex h-12 w-12 items-center justify-center">
                     <Image
-                      src="https://i.imgur.com/MtLzgOQ.png"
-                      alt="CypherX Logo"
-                      width={48}
-                      height={48}
-                      className="w-12 h-12 sm:w-14 sm:h-14 object-contain"
+                      src="https://i.imgur.com/d2OCO6H.png"
+                      alt="CypherX"
+                      width={40}
+                      height={40}
+                      className="h-10 w-10 object-contain"
                       priority
                     />
                   </div>
-                  <h1 className="text-2xl font-extrabold tracking-tight italic leading-none">
-                    <CypherXText />
+                  <h1
+                    className="text-xl font-bold uppercase tracking-[0.16em] text-blue-100 sm:text-2xl"
+                    style={{ fontFamily: "'Poppins', sans-serif" }}
+                  >
+                    CYPHERX
                   </h1>
-                  <span className="text-xs text-gray-400 tracking-wide mt-1">Welcome! Please log in or sign up</span>
                 </div>
 
                 {/* Tab Navigation */}
-                <div className="flex w-full mb-8 rounded-lg overflow-hidden border border-blue-500/10 bg-gray-800">
-                  {[{ key: "login", label: "Log In" }, { key: "signup", label: "Sign Up" }, { key: "forgot", label: "Forgot Password" }].map((tab, idx) => (
+                <div className="mb-6 grid w-full grid-cols-3 overflow-hidden rounded-xl border border-blue-600/20 bg-[#11182d] sm:mb-8">
+                  {[{ key: "login", label: "Login" }, { key: "signup", label: "Sign Up" }, { key: "forgot", label: "Forgot" }].map((tab) => (
                     <button
                       key={tab.key}
                       type="button"
                       onClick={() => setMode(tab.key as typeof mode)}
-                      className={`flex-1 py-2 text-xs sm:text-sm font-semibold uppercase tracking-wide transition-all duration-200 focus:outline-none ${mode === tab.key ? "bg-blue-500/20 text-blue-400 shadow-inner" : "text-gray-400 hover:text-blue-300"} ${idx !== 0 ? "border-l border-blue-500/10" : ""}`}
-                      style={{ minWidth: 0 }}
+                      className={`flex-1 py-2 font-sans text-xs font-medium transition-all duration-200 focus:outline-none sm:text-sm ${
+                        mode === tab.key
+                          ? "bg-blue-500/25 text-blue-100 shadow-[inset_0_0_10px_rgba(59,130,246,0.25)]"
+                          : "text-gray-400 hover:text-blue-200"
+                      } ${mode !== tab.key ? "border-blue-500/10" : ""}`}
                     >
                       {tab.label}
                     </button>
@@ -368,40 +364,43 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, redirectTo = "
 
                 {/* Animated Form Content */}
                 <div className="w-full transition-all duration-300">
-                  <form onSubmit={handleSubmit} className="space-y-5">
+                  <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
                     {(mode === "login" || mode === "signup" || mode === "forgot") && (
                       <div className="relative">
-                        <EnvelopeIcon className="w-5 h-5 absolute left-3 top-3 text-gray-400" />
+                        <EnvelopeIcon className="absolute left-3 top-2.5 h-5 w-5 text-gray-500" />
                         <input
                           type="email"
                           required
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           placeholder="Email"
-                          className={`pl-10 pr-3 py-2 w-full border rounded-lg bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm ${email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? "border-red-500" : "border-gray-700"}`}
+                          className={`w-full rounded-xl border bg-[#10172b] py-2 pl-11 pr-3 font-sans text-sm text-white placeholder-gray-500 shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500/60 ${
+                            email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? "border-red-500/60" : "border-blue-500/10"
+                          }`}
                         />
                         {email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) && (
-                          <ExclamationCircleIcon className="w-5 h-5 absolute right-3 top-3 text-red-400" />
+                          <ExclamationCircleIcon className="absolute right-3 top-3 h-5 w-5 text-red-400" />
                         )}
                       </div>
                     )}
 
                     {(mode === "login" || mode === "signup") && (
                       <div className="relative">
-                        <KeyIcon className="w-5 h-5 absolute left-3 top-3 text-gray-400" />
+                        <KeyIcon className="absolute left-3 top-2.5 h-5 w-5 text-gray-500" />
                         <input
                           type={showPassword ? "text" : "password"}
                           required
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="Password"
-                          className={`pl-10 pr-10 py-2 w-full border rounded-lg bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm ${mode === "signup" && password.length > 0 && password.length < 6 ? "border-red-500" : "border-gray-700"}`}
+                          className={`w-full rounded-xl border bg-[#10172b] py-2 pl-11 pr-11 font-sans text-sm text-white placeholder-gray-500 shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500/60 ${
+                            mode === "signup" && password.length > 0 && password.length < 6 ? "border-red-500/60" : "border-blue-500/10"
+                          }`}
                         />
                         <button
                           type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-2.5 text-gray-400 hover:text-blue-400"
-                          tabIndex={-1}
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          className="absolute right-3 top-2.5 text-gray-400 transition-colors duration-200 hover:text-gray-200"
                         >
                           {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
                         </button>
@@ -409,66 +408,123 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, redirectTo = "
                     )}
 
                     {mode === "signup" && (
-                      <>
-                        <div className="relative">
-                          <UserCircleIcon className="w-5 h-5 absolute left-3 top-3 text-gray-400" />
+                       <>
+                         <div className="relative">
+                          <UserCircleIcon className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
                           <input
                             type="text"
                             required
                             value={displayName}
                             onChange={(e) => setDisplayName(e.target.value)}
                             placeholder="Display Name"
-                            className={`pl-10 pr-3 py-2 w-full border rounded-lg bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm ${displayName && !displayNameRegex.test(displayName) ? "border-red-500" : "border-gray-700"}`}
+                            className={`w-full rounded-xl border bg-[#10172b] py-2 pl-11 pr-3 font-sans text-sm text-white placeholder-gray-500 shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500/60 ${
+                              displayName && !displayNameRegex.test(displayName) ? "border-red-500/60" : "border-blue-500/10"
+                            }`}
                           />
                           {displayName && !displayNameRegex.test(displayName) && (
-                            <ExclamationCircleIcon className="w-5 h-5 absolute right-3 top-3 text-red-400" />
+                            <ExclamationCircleIcon className="absolute right-3 top-3 h-5 w-5 text-red-400" />
                           )}
                         </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <div className={`h-2 w-2 rounded-full ${passwordStrength < 2 ? "bg-red-500" : passwordStrength < 3 ? "bg-yellow-400" : "bg-green-500"}`}></div>
-                          <span className="text-xs text-gray-400">{passwordStrengthLabel}</span>
-                          <span className="ml-auto text-xs text-gray-500">Min 6 chars, mix of letters, numbers, symbols</span>
+                        <div className="mt-1 flex items-center gap-2">
+                          <div className={`h-2.5 w-2.5 rounded-full ${passwordStrength < 2 ? "bg-red-500" : passwordStrength < 3 ? "bg-yellow-400" : "bg-green-500"}`}></div>
+                          <span className="font-sans text-xs text-gray-400">{passwordStrengthLabel}</span>
+                          <span className="ml-auto font-sans text-[10px] uppercase tracking-[0.24em] text-gray-600">Min 6 chars • Mix types</span>
                         </div>
                       </>
                     )}
 
                     {errorMsg && (
-                      <div className="flex items-center gap-2 p-2 border border-red-500/30 bg-red-500/20 text-red-400 rounded-lg text-sm">
+                      <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/15 p-2 font-sans text-xs text-red-400 sm:text-sm">
                         <ExclamationCircleIcon className="w-5 h-5" />
                         {errorMsg}
                       </div>
                     )}
 
                     {successMsg && (
-                      <div className="flex items-center gap-2 p-2 border border-green-500/30 bg-green-500/20 text-green-400 rounded-lg text-sm">
+                      <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/15 p-2 font-sans text-xs text-green-400 sm:text-sm">
                         <CheckCircleIcon className="w-5 h-5" />
                         {successMsg}
                       </div>
                     )}
 
-                    <button
-                      type="submit"
-                      className="w-full py-2 rounded-lg bg-blue-500/80 text-white font-medium uppercase tracking-wide hover:bg-blue-600 border border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-950 transition-all text-sm flex items-center justify-center gap-2 disabled:opacity-60"
-                      disabled={loadingAction || (mode === "signup" && (!email || !password || !displayName || !displayNameRegex.test(displayName) || password.length < 6)) || (mode === "login" && (!email || !password)) || (mode === "forgot" && !email)}
-                    >
-                      {loadingAction ? <ArrowPathIcon className="w-5 h-5 animate-spin" /> : null}
-                      {mode === "login" && "Log In"}
-                      {mode === "signup" && "Sign Up"}
-                      {mode === "forgot" && "Send Reset Email"}
-                    </button>
+                    {(mode === "login" || mode === "signup") && (
+                      <button
+                        type="submit"
+                        disabled={loadingAction}
+                        className="w-full rounded-xl bg-blue-600 py-2.5 font-sans text-sm font-semibold text-white transition-all duration-200 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {loadingAction ? (
+                          <span className="flex items-center justify-center gap-2 uppercase">
+                            <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                            Processing
+                          </span>
+                        ) : mode === "login" ? (
+                          "Login"
+                        ) : (
+                          "Create Account"
+                        )}
+                      </button>
+                    )}
 
-                    <button
-                      type="button"
-                      onClick={handleGoogleSignIn}
-                      className="w-full py-2 rounded-lg bg-white text-gray-800 font-medium uppercase tracking-wide hover:bg-blue-100 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-950 transition-all text-sm flex items-center justify-center gap-2 disabled:opacity-60"
-                      disabled={loadingAction}
-                    >
-                      <svg className="w-5 h-5" viewBox="0 0 48 48"><g><path fill="#4285F4" d="M24 9.5c3.54 0 6.7 1.22 9.19 3.23l6.85-6.85C36.68 2.7 30.74 0 24 0 14.82 0 6.71 5.8 2.69 14.09l7.98 6.2C12.13 13.13 17.62 9.5 24 9.5z"/><path fill="#34A853" d="M46.1 24.55c0-1.64-.15-3.22-.42-4.74H24v9.01h12.42c-.54 2.9-2.18 5.36-4.65 7.01l7.19 5.59C43.98 37.13 46.1 31.3 46.1 24.55z"/><path fill="#FBBC05" d="M10.67 28.29a14.5 14.5 0 0 1 0-8.58l-7.98-6.2A23.94 23.94 0 0 0 0 24c0 3.93.94 7.65 2.69 10.91l7.98-6.2z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.15 15.9-5.85l-7.19-5.59c-2.01 1.35-4.59 2.15-8.71 2.15-6.38 0-11.87-3.63-14.33-8.79l-7.98 6.2C6.71 42.2 14.82 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></g></svg>
-                      {loadingAction ? "Signing in..." : "Sign in with Google"}
-                    </button>
+                    {mode === "forgot" && (
+                      <button
+                        type="submit"
+                        disabled={loadingAction}
+                        className="w-full rounded-xl bg-blue-600 py-2.5 font-sans text-sm font-semibold text-white transition-all duration-200 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {loadingAction ? (
+                          <span className="flex items-center justify-center gap-2 uppercase">
+                            <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                            Sending
+                          </span>
+                        ) : (
+                          "Send Reset Link"
+                        )}
+                      </button>
+                    )}
+
+                    {mode === "signup" && passwordStrengthLabel && (
+                      <div className="flex items-center justify-between text-xs font-sans">
+                        <span className="text-gray-400">Password strength:</span>
+                        <span className="text-gray-300">{passwordStrengthLabel}</span>
+                      </div>
+                    )}
                   </form>
                 </div>
+
+                {(mode === "login" || mode === "signup") && (
+                  <button
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    disabled={loadingAction}
+                    className="mt-5 flex w-full items-center justify-center gap-3 rounded-xl border border-blue-500/20 bg-white/95 py-2.5 font-sans text-sm font-semibold text-gray-900 transition-all duration-200 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 sm:mt-6"
+                  >
+                    {loadingAction ? (
+                      <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Image src="https://i.imgur.com/LnrHkBv.png" alt="Google icon" width={18} height={18} className="h-4 w-4 object-contain" />
+                    )}
+                    <span className="text-xs">Google</span>
+                  </button>
+                )}
               </div>
+
+              {/* Footer helper text */}
+              {mode !== "forgot" && (
+                <p className="mt-6 text-center font-sans text-xs text-gray-500">
+                  Haven't connected your wallet yet?&nbsp;
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      router.push("/account");
+                    }}
+                    className="text-blue-400 hover:underline"
+                  >
+                    Connect Wallet
+                  </button>
+                </p>
+              )}
             </div>
           </motion.div>
         </>

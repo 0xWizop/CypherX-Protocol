@@ -5,9 +5,10 @@ let cachedResult: { txCount: number; timestamp: number } | null = null;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export async function GET(request: Request) {
+  let period = '24h';
   try {
     const { searchParams } = new URL(request.url);
-    const period = searchParams.get('period') || '24h';
+    period = searchParams.get('period') || '24h';
     
     // Return cached result if still valid
     if (cachedResult && (Date.now() - cachedResult.timestamp) < CACHE_DURATION) {
@@ -23,18 +24,6 @@ export async function GET(request: Request) {
     }
     
     const alchemyUrl = 'https://base-mainnet.g.alchemy.com/v2/8KR6qwxbLlIISgrMCZfsrYeMmn6-S-bN';
-    
-    // Calculate time range
-    const now = Math.floor(Date.now() / 1000);
-    let startTime = now;
-    
-    if (period === '24h') {
-      startTime = now - (24 * 60 * 60); // 24 hours ago
-    } else if (period === '7d') {
-      startTime = now - (7 * 24 * 60 * 60); // 7 days ago
-    } else if (period === '30d') {
-      startTime = now - (30 * 24 * 60 * 60); // 30 days ago
-    }
     
     // Get latest block number
     const blockNumberRequest = {

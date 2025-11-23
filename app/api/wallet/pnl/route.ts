@@ -163,6 +163,85 @@ async function calculateDailyPnL(trades: any[]): Promise<PnLData[]> {
   return pnlData;
 }
 
+// Calculate daily P&L change (not cumulative) - net realized P&L for trades executed each day
+async function calculateDailyPnLChange(trades: any[]): Promise<Array<{ date: string; pnl: number }>> {
+  const groupedTrades = groupTradesByDate(trades);
+  const dates = Object.keys(groupedTrades).sort();
+  
+  const dailyPnL: Array<{ date: string; pnl: number }> = [];
+  
+  // Track positions to calculate realized P&L
+  const positions = new Map<string, Array<{ price: number; amount: number; timestamp: number }>>();
+  
+  for (const date of dates) {
+    const dayTrades = groupedTrades[date];
+    let dayPnL = 0;
+    
+    for (const trade of dayTrades) {
+      // Get trade data (handle both Firestore document format and plain object)
+      const tradeData = (typeof trade.data === 'function' ? trade.data() : trade) || trade;
+      const isBuy = tradeData.inputToken === "ETH" || tradeData.inputToken === "0x0000000000000000000000000000000000000000";
+      const tokenAddress = isBuy ? tradeData.outputToken : tradeData.inputToken;
+      const outputAmount = parseFloat(tradeData.outputAmount || "0");
+      const inputAmount = parseFloat(tradeData.inputAmount || "0");
+      const amount = isBuy ? outputAmount : inputAmount;
+      const outputValue = tradeData.outputValue || 0;
+      const inputValue = tradeData.inputValue || 0;
+      const price = isBuy 
+        ? (outputAmount > 0 ? outputValue / outputAmount : 0)
+        : (inputAmount > 0 ? inputValue / inputAmount : 0);
+      const value = isBuy ? inputValue : outputValue;
+      const gasCost = tradeData.gasCostUsd || 0;
+      const timestamp = tradeData.timestamp?.toDate ? tradeData.timestamp.toDate().getTime() : Date.now();
+      
+      if (isBuy) {
+        // Buy: add to positions
+        if (!positions.has(tokenAddress)) {
+          positions.set(tokenAddress, []);
+        }
+        positions.get(tokenAddress)!.push({ price, amount, timestamp });
+        // Buy reduces P&L by the amount spent (including gas)
+        dayPnL -= (value + gasCost);
+      } else {
+        // Sell: calculate realized P&L using FIFO
+        if (positions.has(tokenAddress) && positions.get(tokenAddress)!.length > 0) {
+          const tokenPositions = positions.get(tokenAddress)!;
+          let remainingToSell = amount;
+          let realizedPnL = 0;
+          
+          while (remainingToSell > 0 && tokenPositions.length > 0) {
+            const position = tokenPositions[0];
+            const sellAmount = Math.min(remainingToSell, position.amount);
+            const costBasis = position.price * sellAmount;
+            const saleValue = (value / amount) * sellAmount;
+            realizedPnL += (saleValue - costBasis);
+            
+            position.amount -= sellAmount;
+            remainingToSell -= sellAmount;
+            
+            if (position.amount <= 0) {
+              tokenPositions.shift();
+            }
+          }
+          
+          // Add realized P&L and subtract gas cost
+          dayPnL += (realizedPnL - gasCost);
+        } else {
+          // Selling without a position (shouldn't happen, but handle it)
+          dayPnL += (value - gasCost);
+        }
+      }
+    }
+    
+    dailyPnL.push({
+      date,
+      pnl: dayPnL
+    });
+  }
+  
+  return dailyPnL;
+}
+
 
 
 export async function GET(request: Request) {
@@ -245,25 +324,131 @@ export async function GET(request: Request) {
     // Calculate PnL data
     const pnlData = await calculateDailyPnL(transactionsSnapshot.docs);
     
+    // Calculate daily P&L change (for calendar view)
+    const dailyPnLChange = await calculateDailyPnLChange(transactionsSnapshot.docs);
+    
     // Calculate totals
     const totalVolume = trades.reduce((sum, trade) => sum + trade.value, 0);
     const totalTrades = trades.length;
     
-    // Calculate total PnL
-    let totalPnL = 0;
-    for (const trade of trades) {
-      const currentPrice = await getTokenPrice(trade.token === "ETH" ? "0x0000000000000000000000000000000000000000" : trade.token);
-      totalPnL += calculateTradePnL(trade, currentPrice);
-    }
-    
-    const totalPnLPercentage = totalVolume > 0 ? (totalPnL / totalVolume) * 100 : 0;
-    
-    // Calculate additional fields for frontend
-    const winRate = totalTrades > 0 ? (trades.filter(t => calculateTradePnL(t, 0) > 0).length / totalTrades) * 100 : 0;
-    
-    // Calculate actual amounts instead of transaction counts
+    // Get buy and sell transactions for calculations (need this first)
     const buyTransactions = trades.filter(t => t.type === "buy");
     const sellTransactions = trades.filter(t => t.type === "sell");
+    
+    // Calculate total PnL properly: Realized P&L + Unrealized P&L
+    // Track positions using FIFO
+    const positions = new Map<string, Array<{ price: number; amount: number; timestamp: number }>>();
+    let totalPnL = 0; // Realized + Unrealized P&L
+    
+    // Process trades in chronological order to calculate realized and unrealized P&L
+    const sortedTrades = [...trades].sort((a, b) => a.timestamp - b.timestamp);
+    
+    for (const trade of sortedTrades) {
+      const tokenAddress = trade.token;
+      
+      if (trade.type === "buy") {
+        // Buy: add to positions
+        if (!positions.has(tokenAddress)) {
+          positions.set(tokenAddress, []);
+        }
+        positions.get(tokenAddress)!.push({
+          price: trade.price,
+          amount: trade.amount,
+          timestamp: trade.timestamp
+        });
+        // Buy doesn't directly affect P&L, we track cost basis
+        // P&L will be calculated when we sell or from current holdings
+      } else {
+        // Sell: calculate realized P&L using FIFO
+        if (positions.has(tokenAddress) && positions.get(tokenAddress)!.length > 0) {
+          const tokenPositions = positions.get(tokenAddress)!;
+          let remainingToSell = trade.amount;
+          
+          while (remainingToSell > 0 && tokenPositions.length > 0) {
+            const position = tokenPositions[0];
+            const sellAmount = Math.min(remainingToSell, position.amount);
+            const costBasis = position.price * sellAmount;
+            const saleValue = (trade.value / trade.amount) * sellAmount;
+            const realizedPnL = saleValue - costBasis - (trade.gasCost * (sellAmount / trade.amount));
+            
+            totalPnL += realizedPnL;
+            
+            position.amount -= sellAmount;
+            remainingToSell -= sellAmount;
+            
+            if (position.amount <= 0) {
+              tokenPositions.shift();
+            }
+          }
+        }
+      }
+    }
+    
+    // Calculate unrealized P&L from remaining positions (current holdings)
+    for (const [tokenAddress, tokenPositions] of positions.entries()) {
+      if (tokenPositions.length > 0) {
+        // Get current price for this token
+        const currentPrice = await getTokenPrice(tokenAddress === "ETH" ? "0x0000000000000000000000000000000000000000" : tokenAddress);
+        
+        // Calculate unrealized P&L for all remaining positions of this token
+        for (const position of tokenPositions) {
+          if (position.amount > 0 && currentPrice > 0) {
+            const unrealizedPnL = (currentPrice - position.price) * position.amount;
+            totalPnL += unrealizedPnL;
+          }
+        }
+      }
+    }
+    
+    // Calculate total P&L percentage based on total invested (bought amount)
+    const totalInvested = buyTransactions.reduce((sum, t) => sum + t.value, 0);
+    const totalPnLPercentage = totalInvested > 0 ? (totalPnL / totalInvested) * 100 : 0;
+    
+    // Calculate win rate based on realized P&L from sell transactions
+    let winRate = 0;
+    if (sellTransactions.length > 0) {
+      // Recalculate to count winning trades based on realized P&L
+      const positionsForWinRate = new Map<string, Array<{ price: number; amount: number }>>();
+      let winningTrades = 0;
+      
+      for (const trade of sortedTrades) {
+        if (trade.type === "buy") {
+          if (!positionsForWinRate.has(trade.token)) {
+            positionsForWinRate.set(trade.token, []);
+          }
+          positionsForWinRate.get(trade.token)!.push({ price: trade.price, amount: trade.amount });
+        } else if (trade.type === "sell") {
+          if (positionsForWinRate.has(trade.token) && positionsForWinRate.get(trade.token)!.length > 0) {
+            const tokenPositions = positionsForWinRate.get(trade.token)!;
+            let remainingToSell = trade.amount;
+            let tradeRealizedPnL = 0;
+            
+            while (remainingToSell > 0 && tokenPositions.length > 0) {
+              const position = tokenPositions[0];
+              const sellAmount = Math.min(remainingToSell, position.amount);
+              const costBasis = position.price * sellAmount;
+              const saleValue = (trade.value / trade.amount) * sellAmount;
+              tradeRealizedPnL += (saleValue - costBasis);
+              
+              position.amount -= sellAmount;
+              remainingToSell -= sellAmount;
+              
+              if (position.amount <= 0) {
+                tokenPositions.shift();
+              }
+            }
+            
+            if (tradeRealizedPnL > 0) {
+              winningTrades++;
+            }
+          }
+        }
+      }
+      
+      winRate = sellTransactions.length > 0 ? (winningTrades / sellTransactions.length) * 100 : 0;
+    }
+    
+    // Calculate actual amounts instead of transaction counts
     
     let bought = 0;
     let sold = 0;
@@ -390,7 +575,7 @@ export async function GET(request: Request) {
       holding,
       positionsClosed,
       completedTrades,
-      dailyPnL: pnlData.map(d => ({ date: d.date, pnl: d.pnl })),
+      dailyPnL: dailyPnLChange,
       recentTrades: trades.slice(0, 10).map(t => ({
         id: t.id,
         tokenIn: t.type === "buy" ? "ETH" : t.token,

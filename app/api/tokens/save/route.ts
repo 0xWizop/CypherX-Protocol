@@ -2,35 +2,6 @@ import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
 
-interface TokenData {
-  address: string;
-  name: string;
-  symbol: string;
-  source: string;
-  dexName: string;
-  dexId?: string;
-  chainId?: number;
-  creatorAddress?: string;
-  createdAt?: string | Date;
-  description?: string;
-  website?: string;
-  telegram?: string;
-  twitter?: string;
-  discord?: string;
-  tokenUri?: string;
-  mediaContent?: string;
-  marketCap?: number;
-  volume24h?: number;
-  uniqueHolders?: number;
-  totalSupply?: number;
-  priceUsd?: string;
-  liquidity?: { usd?: number };
-  pairAddress?: string;
-  poolAddress?: string;
-  tags?: string[];
-  [key: string]: any;
-}
-
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -167,7 +138,7 @@ export async function POST(request: Request) {
       success: true,
       saved: savedTokens.length,
       skipped: skippedTokens.length,
-      errors: errors.length,
+      errorCount: errors.length,
       savedTokens,
       skippedTokens,
       errors,
@@ -183,6 +154,11 @@ export async function POST(request: Request) {
     );
   }
 }
+
+
+
+
+
 
 
 

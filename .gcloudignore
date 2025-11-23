@@ -1,0 +1,47 @@
+# This file prevents files from being uploaded to Google Cloud
+# Firebase Cloud Build uses this to avoid permission issues
+
+# Don't try to write package-lock.json during build
+package-lock.json
+
+# Node modules (will be installed fresh)
+node_modules/
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+
+
+
+
+
+
+
+
+
+
+
+
+

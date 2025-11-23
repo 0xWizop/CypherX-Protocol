@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 const LoadingPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-      <div className="text-center">
+      <div className="text-center -mt-20">
         {/* Cool Animated Dots */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -24,7 +24,6 @@ const LoadingPage: React.FC = () => {
               transition={{ 
                 duration: 1.5, 
                 repeat: Infinity, 
-                ease: "easeInOut",
                 delay: 0
               }}
             />
@@ -37,7 +36,6 @@ const LoadingPage: React.FC = () => {
               transition={{ 
                 duration: 1.5, 
                 repeat: Infinity, 
-                ease: "easeInOut",
                 delay: 0.2
               }}
             />
@@ -50,7 +48,6 @@ const LoadingPage: React.FC = () => {
               transition={{ 
                 duration: 1.5, 
                 repeat: Infinity, 
-                ease: "easeInOut",
                 delay: 0.4
               }}
             />
@@ -71,24 +68,6 @@ const LoadingPage: React.FC = () => {
               transition={{ duration: 2, repeat: Infinity }}
             >
               Loading
-            </motion.span>
-            <motion.span
-              animate={{ opacity: [0.5, 1, 0.5] }}
-              transition={{ duration: 2, repeat: Infinity, delay: 0.5 }}
-            >
-              .
-            </motion.span>
-            <motion.span
-              animate={{ opacity: [0.5, 1, 0.5] }}
-              transition={{ duration: 2, repeat: Infinity, delay: 1 }}
-            >
-              .
-            </motion.span>
-            <motion.span
-              animate={{ opacity: [0.5, 1, 0.5] }}
-              transition={{ duration: 2, repeat: Infinity, delay: 1.5 }}
-            >
-              .
             </motion.span>
           </div>
         </motion.div>

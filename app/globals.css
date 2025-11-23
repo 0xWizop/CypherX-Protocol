@@ -214,5 +214,174 @@ body {
   }
 }
 
+/* Lightweight background orbs - CSS only, GPU accelerated */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  filter: blur(60px);
+  will-change: transform, opacity;
+  transform: translateZ(0); /* Force GPU acceleration */
+  pointer-events: none;
+}
+
+/* Desktop orbs - more variety in colors and sizes */
+.orb-1 {
+  top: 8%;
+  left: 12%;
+  width: 12rem;
+  height: 12rem;
+  background: radial-gradient(circle at 50% 35%, rgba(30, 58, 138, 0.7), rgba(29, 78, 216, 0.5), rgba(37, 99, 235, 0.3), rgba(15, 23, 42, 0.1));
+  animation: orbFloat1 18s ease-in-out infinite;
+}
+
+.orb-2 {
+  top: 25%;
+  right: 15%;
+  width: 9rem;
+  height: 9rem;
+  background: radial-gradient(circle at 50% 35%, rgba(37, 99, 235, 0.7), rgba(59, 130, 246, 0.5), rgba(30, 64, 175, 0.3), rgba(15, 23, 42, 0.1));
+  animation: orbFloat2 22s ease-in-out infinite 3s;
+}
+
+.orb-3 {
+  bottom: 20%;
+  left: 18%;
+  width: 8rem;
+  height: 8rem;
+  background: radial-gradient(circle at 50% 35%, rgba(29, 78, 216, 0.7), rgba(30, 58, 138, 0.5), rgba(37, 99, 235, 0.3), rgba(15, 23, 42, 0.1));
+  animation: orbFloat3 20s ease-in-out infinite 6s;
+}
+
+/* Mobile orbs - more variety */
+.orb-mobile-1 {
+  top: 12%;
+  left: 20%;
+  width: 7rem;
+  height: 7rem;
+  background: radial-gradient(circle at 50% 35%, rgba(30, 58, 138, 0.6), rgba(29, 78, 216, 0.4), rgba(37, 99, 235, 0.25), rgba(15, 23, 42, 0.15));
+  animation: orbFloatMobile1 14s ease-in-out infinite;
+  filter: blur(50px);
+}
+
+.orb-mobile-2 {
+  bottom: 22%;
+  right: 15%;
+  width: 6.5rem;
+  height: 6.5rem;
+  background: radial-gradient(circle at 50% 35%, rgba(37, 99, 235, 0.6), rgba(59, 130, 246, 0.4), rgba(30, 64, 175, 0.25), rgba(15, 23, 42, 0.15));
+  animation: orbFloatMobile2 16s ease-in-out infinite 2.5s;
+  filter: blur(45px);
+}
+
+/* Desktop animations - more movement, more visible */
+@keyframes orbFloat1 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+  25% {
+    transform: translate(80px, -60px) scale(1.15);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translate(-60px, 50px) scale(0.9);
+    opacity: 0.35;
+  }
+  75% {
+    transform: translate(50px, -40px) scale(1.1);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+}
+
+@keyframes orbFloat2 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+  25% {
+    transform: translate(-70px, 50px) scale(1.2);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translate(60px, -45px) scale(0.85);
+    opacity: 0.35;
+  }
+  75% {
+    transform: translate(-45px, 35px) scale(1.1);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+}
+
+@keyframes orbFloat3 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+  25% {
+    transform: translate(65px, -50px) scale(1.18);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translate(-55px, 60px) scale(0.88);
+    opacity: 0.35;
+  }
+  75% {
+    transform: translate(45px, -35px) scale(1.12);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+}
+
+/* Mobile animations - more movement */
+@keyframes orbFloatMobile1 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.25;
+  }
+  33% {
+    transform: translate(40px, -35px) scale(1.15);
+    opacity: 0.4;
+  }
+  66% {
+    transform: translate(-30px, 25px) scale(0.9);
+    opacity: 0.3;
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.25;
+  }
+}
+
+@keyframes orbFloatMobile2 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.25;
+  }
+  33% {
+    transform: translate(-35px, 30px) scale(1.15);
+    opacity: 0.4;
+  }
+  66% {
+    transform: translate(25px, -20px) scale(0.9);
+    opacity: 0.3;
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.25;
+  }
+}
+
 
 

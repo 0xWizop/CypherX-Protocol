@@ -4,13 +4,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Header from "../../../components/Header";
-import Footer from "../../../components/Footer";
 import LightweightChart, { type LightweightChartHandle } from "./LightweightChart.tsx";
 import { coinGeckoMapping } from "../../../tokenMapping";
 import dayjs from "dayjs";
 import { motion, AnimatePresence } from "framer-motion";
 import { ethers } from "ethers";
 import { OverviewIcon, PerformanceIcon, SwapArrowsIcon, TradesIcon } from "../../../components/icons";
+import { FiX, FiCheck, FiChevronDown } from "react-icons/fi";
 
 // Extend Window interface for ethereum provider
 declare global {
@@ -52,7 +52,7 @@ const MOBILE_TABS = [
   { id: "trades", label: "Trades", icon: TradesIcon },
 ] as const;
 
-const TIMEFRAME_OPTIONS = ["1m", "5m", "15m", "1h", "4h", "1d"] as const;
+const TIMEFRAME_OPTIONS = ["1m", "5m", "1h", "4h", "1d"] as const;
 const MOBILE_TAB_HEIGHT = 44;
 
 type MobileTabKey = typeof MOBILE_TABS[number]["id"];
@@ -65,11 +65,37 @@ export default function ChartV2Page() {
   const [loading, setLoading] = useState(true);
   const [, setError] = useState<string | null>(null);
   const [pair, setPair] = useState<DexPairResponse["pair"] | null>(null);
-  const [candles, setCandles] = useState<Array<{ time: number; open: number; high: number; low: number; close: number }>>([]);
+  const [candles, setCandles] = useState<Array<{ time: number; open: number; high: number; low: number; close: number; volume?: number }>>([]);
+  const [showMovingAverage, setShowMovingAverage] = useState(false);
+  const [showVWAP, setShowVWAP] = useState(false);
+  const [showRSI, setShowRSI] = useState(false);
+  const [showEMA, setShowEMA] = useState(false);
+  // Adaptive moving average period based on timeframe
+  const getAdaptivePeriod = useCallback((tf: string): number => {
+    switch (tf) {
+      case '1m': return 20; // 20 minutes
+      case '5m': return 12; // 1 hour (12 * 5min)
+      case '1h': return 24; // 24 hours
+      case '4h': return 12; // 2 days (12 * 4h)
+      case '1d': return 20; // 20 days
+      default: return 20;
+    }
+  }, []);
+  
+  const [movingAveragePeriod, setMovingAveragePeriod] = useState(20);
+  const [indicatorColors, setIndicatorColors] = useState({
+    sma: "#3b82f6",
+    ema: "#a855f7",
+    vwap: "#f59e0b",
+    rsi: "#ec4899",
+  });
   const [activeDataTab, setActiveDataTab] = useState<"orders" | "positions">("orders");
   const [activeMiddleTab, setActiveMiddleTab] = useState<"trades" | "holders">("trades");
   const [transactions, setTransactions] = useState<Array<{ hash: string; timestamp: number; tokenAmount: number; tokenSymbol?: string; tokenAddress?: string; isBuy?: boolean }>>([]);
   const [timeframe, setTimeframe] = useState<string>("1d");
+  const [yAxisMode, setYAxisMode] = useState<"price" | "marketCap">("price");
+  const [showTimeframeDropdown, setShowTimeframeDropdown] = useState(false);
+  const [showIndicatorsDropdown, setShowIndicatorsDropdown] = useState(false);
   const chartRef = React.useRef<LightweightChartHandle | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const [payAmount, setPayAmount] = useState<string>("");
@@ -98,7 +124,10 @@ export default function ChartV2Page() {
   } | null>(null);
   const [activeMobileTab, setActiveMobileTab] = useState<MobileTabKey>("overview");
   const [isMobile, setIsMobile] = useState(false);
-  const [footerHeight, setFooterHeight] = useState(56);
+  const [viewportWidth, setViewportWidth] = useState<number>(
+    typeof window !== "undefined" ? window.innerWidth : 0
+  );
+  const [footerHeight, setFooterHeight] = useState(0);
   
   // Orders and Positions state
   const [orders, setOrders] = useState<any[]>([]);
@@ -122,22 +151,41 @@ export default function ChartV2Page() {
     imageUrl?: string | null;
   }>>([]);
 
+  // Token selector state
+  const [showTokenSelector, setShowTokenSelector] = useState(false);
+  const [tokenSearchQuery, setTokenSearchQuery] = useState<string>('');
+  const [tokenSearchResults, setTokenSearchResults] = useState<any[]>([]);
+  const [isSearchingTokens, setIsSearchingTokens] = useState(false);
+  const [availableTokens, setAvailableTokens] = useState<any[]>([]);
+  const [isLoadingTokens, setIsLoadingTokens] = useState(false);
+  const [recentTokens, setRecentTokens] = useState<Array<{symbol: string; address: string; logo?: string; name?: string}>>([]);
+  const [selectedPayToken, setSelectedPayToken] = useState<{symbol: string; address: string; logo?: string; name?: string} | null>(null);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const updateLayoutMetrics = () => {
+      setViewportWidth(window.innerWidth);
       const mobile = window.innerWidth < 1024;
       setIsMobile(mobile);
       if (mobile) {
         setFooterHeight(0);
       } else {
         const footerEl = document.getElementById("app-footer");
-        setFooterHeight(footerEl?.offsetHeight ?? 56);
+        setFooterHeight(footerEl?.offsetHeight ?? 0);
       }
     };
     updateLayoutMetrics();
     window.addEventListener("resize", updateLayoutMetrics);
     return () => window.removeEventListener("resize", updateLayoutMetrics);
   }, []);
+
+  const chartPriceScalePadding = useMemo(() => {
+    if (isMobile) return 0;
+    if (viewportWidth <= 1280) return 56;
+    if (viewportWidth <= 1440) return 40;
+    if (viewportWidth <= 1600) return 32;
+    return 24;
+  }, [isMobile, viewportWidth]);
 
   const formatTimeAgo = useCallback((timestamp: number) => {
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -147,7 +195,7 @@ export default function ChartV2Page() {
     return `${Math.floor(seconds / 86400)}d ago`;
   }, []);
 
-  const chartHeight = isMobile ? 260 : 480;
+  const chartHeight = isMobile ? 380 : 480;
   const mobileBottomOffset = isMobile
     ? `calc(${footerHeight}px + ${MOBILE_TAB_HEIGHT}px + env(safe-area-inset-bottom, 0px))`
     : "0px";
@@ -155,9 +203,321 @@ export default function ChartV2Page() {
   const swapSectionSpacing = isMobile ? "mb-2" : "mb-3";
   const swapFieldPadding = isMobile ? "p-2.5" : "p-3";
   const quickButtonClass = isMobile ? "px-2 py-1 text-[10px]" : "px-2 py-1 text-[11px]";
-  const desktopScrollable = !isMobile ? "overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" : "";
+  const desktopScrollable = "";
   const visibleOrders = isMobile ? orders.slice(0, 4) : orders;
   const visiblePositions = isMobile ? positions.slice(0, 4) : positions;
+
+  const getQuoteBalance = useCallback(() => {
+    const quoteTokenAddress = (pair?.quoteToken?.address || WETH_ADDRESS).toLowerCase();
+    return quoteTokenAddress === WETH_ADDRESS.toLowerCase()
+      ? walletEthBalance
+      : walletQuoteTokenBalance;
+  }, [pair?.quoteToken?.address, walletEthBalance, walletQuoteTokenBalance]);
+
+  const formatBalance = useCallback((value: number) => {
+    if (!value || value <= 0) return "0.0000";
+    return value < 0.0001 ? value.toFixed(8) : value.toFixed(4);
+  }, []);
+
+  const handleQuickSelect = useCallback(
+    (pct: number) => {
+      const basis = isBuy ? getQuoteBalance() : walletTokenBalance;
+      if (basis && basis > 0) {
+        const amount = (basis * pct) / 100;
+        setPayAmount(amount > 0 ? amount.toFixed(6) : "");
+      }
+    },
+    [isBuy, getQuoteBalance, walletTokenBalance]
+  );
+
+  const quickButtonLabels = useMemo(() => ["25%", "50%", "75%", "MAX"], []);
+
+  const quickDisabled = useMemo(
+    () => !walletAddress || (isBuy ? getQuoteBalance() <= 0 : walletTokenBalance <= 0),
+    [walletAddress, isBuy, getQuoteBalance, walletTokenBalance]
+  );
+
+  const renderTokenIcon = useCallback(
+    (tokenType: "base" | "quote", size: "sm" | "md" = "sm") => {
+      const dimension = size === "md" ? "w-10 h-10" : "w-6 h-6";
+      const borderClasses = "border border-gray-700 rounded-full";
+
+      if (tokenType === "base") {
+        if (pair?.info?.imageUrl) {
+          return (
+            <img
+              src={pair.info.imageUrl}
+              alt={pair?.baseToken?.symbol || "Token"}
+              className={`${dimension} ${borderClasses} object-cover`}
+            />
+          );
+        }
+        return (
+          <div className={`${dimension} ${borderClasses} bg-gray-800 flex items-center justify-center text-xs text-gray-300`}>
+            {pair?.baseToken?.symbol?.[0] || "T"}
+          </div>
+        );
+      }
+
+      const quoteSymbol = pair?.quoteToken?.symbol || "Q";
+      const quoteAddress = (pair?.quoteToken?.address || WETH_ADDRESS).toLowerCase();
+
+      if (quoteAddress === WETH_ADDRESS.toLowerCase()) {
+        return (
+          <img
+            src="https://assets.coingecko.com/coins/images/2518/small/weth.png"
+            alt="WETH"
+            className={`${dimension} ${borderClasses} object-cover`}
+          />
+        );
+      }
+
+      if (quoteSymbol.toUpperCase() === "USDC") {
+        return (
+          <img
+            src="https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png"
+            alt="USDC"
+            className={`${dimension} ${borderClasses} object-cover`}
+          />
+        );
+      }
+
+      if (quoteSymbol.toUpperCase() === "USDT") {
+        return (
+          <img
+            src="https://assets.coingecko.com/coins/images/325/small/Tether-symbol-black.png"
+            alt="USDT"
+            className={`${dimension} ${borderClasses} object-cover`}
+          />
+        );
+      }
+
+      return (
+        <div className={`${dimension} ${borderClasses} bg-gray-800 flex items-center justify-center text-xs text-gray-300`}>
+          {quoteSymbol[0] || "Q"}
+        </div>
+      );
+    },
+    [pair?.info?.imageUrl, pair?.baseToken?.symbol, pair?.quoteToken?.symbol, pair?.quoteToken?.address]
+  );
+
+  const renderQuickButtons = useCallback(
+    (containerClass: string, buttonClass: string) => (
+      <div className={containerClass}>
+        {quickButtonLabels.map((label) => {
+          const pct = label === "MAX" ? 100 : parseInt(label, 10);
+          return (
+            <button
+              key={label}
+              type="button"
+              onClick={() => handleQuickSelect(pct)}
+              disabled={quickDisabled}
+              className={`${buttonClass} disabled:opacity-40 disabled:cursor-not-allowed transition-colors`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    ),
+    [quickButtonLabels, handleQuickSelect, quickDisabled]
+  );
+
+  const quoteBalance = getQuoteBalance();
+  const payBalanceDisplay = formatBalance(isBuy ? quoteBalance : walletTokenBalance);
+  // ETH token constant
+  const ETH_TOKEN = { symbol: 'ETH', address: '0x4200000000000000000000000000000000000006', name: 'Ethereum', logo: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png' };
+
+  // Determine pay token - use selected token if available, otherwise use default based on isBuy
+  const payToken = selectedPayToken || (isBuy 
+    ? { symbol: pair?.quoteToken?.symbol || "WETH", address: pair?.quoteToken?.address || WETH_ADDRESS, name: pair?.quoteToken?.symbol || "WETH" }
+    : { symbol: pair?.baseToken?.symbol || "TOKEN", address: pair?.baseToken?.address || "", name: pair?.baseToken?.name || pair?.baseToken?.symbol || "TOKEN" }
+  );
+  const payTokenSymbol = payToken.symbol;
+  const receiveTokenSymbol = isBuy ? (pair?.baseToken?.symbol || "TOKEN") : (pair?.quoteToken?.symbol || "WETH");
+  const payTokenIcon = renderTokenIcon(isBuy ? "quote" : "base", isMobile ? "md" : "sm");
+  const receiveTokenIcon = renderTokenIcon(isBuy ? "base" : "quote", isMobile ? "md" : "sm");
+
+  // Load recent tokens from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('cypherx_recent_tokens');
+      if (stored) {
+        try {
+          setRecentTokens(JSON.parse(stored));
+        } catch (e) {
+          console.error('Error loading recent tokens:', e);
+        }
+      }
+    }
+  }, []);
+
+  // Save token to recent tokens
+  const addToRecentTokens = useCallback((token: {symbol: string; address: string; logo?: string; name?: string}) => {
+    if (typeof window === 'undefined') return;
+    
+    setRecentTokens(prev => {
+      const filtered = prev.filter(t => t.address.toLowerCase() !== token.address.toLowerCase());
+      const updated = [token, ...filtered].slice(0, 10);
+      localStorage.setItem('cypherx_recent_tokens', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  // Get token logo from DexScreener
+  const getTokenLogo = useCallback(async (tokenAddress: string): Promise<string | undefined> => {
+    try {
+      const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.pairs && data.pairs.length > 0) {
+          const pair = data.pairs[0];
+          return pair.baseToken?.logoURI || pair.quoteToken?.logoURI || undefined;
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching token logo:', error);
+    }
+    return undefined;
+  }, []);
+
+  // Load available tokens (ETH + recent tokens)
+  const loadAvailableTokens = useCallback(async () => {
+    setIsLoadingTokens(true);
+    try {
+      const tokens = [ETH_TOKEN];
+      recentTokens.forEach((token) => {
+        if (token.address.toLowerCase() !== ETH_TOKEN.address.toLowerCase() && 
+            !tokens.find(t => t.address.toLowerCase() === token.address.toLowerCase())) {
+          tokens.push({
+            symbol: token.symbol,
+            address: token.address,
+            name: token.name || token.symbol,
+            logo: token.logo || ''
+          });
+        }
+      });
+      setAvailableTokens(tokens);
+    } catch (error) {
+      console.error('Error loading tokens:', error);
+    } finally {
+      setIsLoadingTokens(false);
+    }
+  }, [recentTokens]);
+
+  // Search tokens
+  const searchTokens = useCallback(async (query: string) => {
+    if (!query || query.length < 2) {
+      setTokenSearchResults([]);
+      return;
+    }
+
+    setIsSearchingTokens(true);
+    try {
+      if (query.startsWith('0x') && query.length === 42) {
+        try {
+          const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${query}`);
+          const data = await response.json();
+          
+          if (data.pairs && data.pairs.length > 0) {
+            const pair = data.pairs[0];
+            const logo = pair.baseToken?.logoURI || pair.quoteToken?.logoURI || undefined;
+            setTokenSearchResults([{
+              symbol: pair.baseToken?.symbol || 'UNKNOWN',
+              address: query,
+              name: pair.baseToken?.name || 'Unknown Token',
+              logo: logo
+            }]);
+          } else {
+            setTokenSearchResults([]);
+          }
+        } catch (error) {
+          console.error('Error searching token by address:', error);
+          setTokenSearchResults([]);
+        }
+        setIsSearchingTokens(false);
+        return;
+      }
+
+      const response = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      
+      if (data.pairs && data.pairs.length > 0) {
+        const basePairs = data.pairs.filter((pair: any) => 
+          pair.chainId === 'base' || pair.chainId === '8453'
+        );
+        
+        const uniqueTokens = new Map();
+        basePairs.forEach((pair: any) => {
+          const tokenAddress = pair.baseToken?.address?.toLowerCase();
+          if (tokenAddress && !uniqueTokens.has(tokenAddress)) {
+            const logo = pair.baseToken?.logoURI || pair.quoteToken?.logoURI || undefined;
+            uniqueTokens.set(tokenAddress, {
+              symbol: pair.baseToken?.symbol || 'UNKNOWN',
+              address: pair.baseToken?.address,
+              name: pair.baseToken?.name || pair.baseToken?.symbol || 'Unknown Token',
+              logo: logo
+            });
+          }
+        });
+        
+        setTokenSearchResults(Array.from(uniqueTokens.values()).slice(0, 20));
+      } else {
+        setTokenSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Error searching tokens:', error);
+      setTokenSearchResults([]);
+    } finally {
+      setIsSearchingTokens(false);
+    }
+  }, []);
+
+  // Handle token search input
+  useEffect(() => {
+    if (showTokenSelector && tokenSearchQuery) {
+      const timeoutId = setTimeout(() => {
+        searchTokens(tokenSearchQuery);
+      }, 300);
+      return () => clearTimeout(timeoutId);
+    } else if (showTokenSelector && !tokenSearchQuery) {
+      setTokenSearchResults([]);
+    }
+  }, [tokenSearchQuery, showTokenSelector, searchTokens]);
+
+  // Load tokens when selector opens
+  useEffect(() => {
+    if (showTokenSelector) {
+      loadAvailableTokens();
+      setTokenSearchQuery('');
+      setTokenSearchResults([]);
+    }
+  }, [showTokenSelector, loadAvailableTokens]);
+
+  // Handle token selection
+  const handleTokenSelect = useCallback(async (token: {symbol: string; address: string; logo?: string; name?: string}) => {
+    let tokenWithLogo = { ...token };
+    if (!token.logo && token.address.toLowerCase() !== ETH_TOKEN.address.toLowerCase()) {
+      const logo = await getTokenLogo(token.address);
+      if (logo) {
+        tokenWithLogo.logo = logo;
+      }
+    }
+    
+    setSelectedPayToken(tokenWithLogo);
+    
+    if (token.address.toLowerCase() !== ETH_TOKEN.address.toLowerCase()) {
+      addToRecentTokens(tokenWithLogo);
+    }
+    
+    setShowTokenSelector(false);
+    setTokenSearchQuery('');
+    setTokenSearchResults([]);
+    
+    // Clear amounts to trigger new quote
+    setPayAmount('');
+    setReceiveAmount('');
+  }, [getTokenLogo, addToRecentTokens]);
 
   // Detect connected wallet from localStorage (same key used elsewhere)
   useEffect(() => {
@@ -509,11 +869,11 @@ export default function ChartV2Page() {
         const res = await fetch(`/api/explorer/ohlcv?pool=${poolLc}&tf=${timeframe}`, { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
-          const list: Array<{time:number;open:number;high:number;low:number;close:number}> = data?.candles || [];
+          const list: Array<{time:number;open:number;high:number;low:number;close:number;volume?:number}> = data?.candles || [];
           console.log("OHLC proxy result:", JSON.stringify({ tf: timeframe, count: list?.length, sample: list?.[list.length-1], first: list?.[0], rawData: data }));
           if (!cancelled && Array.isArray(list) && list.length > 0) {
             const mapped = list
-              .map(c => ({ time: Math.floor(Number(c.time)), open: c.open, high: c.high, low: c.low, close: c.close }))
+              .map(c => ({ time: Math.floor(Number(c.time)), open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume || 0 }))
               .sort((a, b) => a.time - b.time);
             console.log("Setting candles:", mapped.length, "first:", mapped[0], "last:", mapped[mapped.length-1]);
             setCandles(mapped);
@@ -598,10 +958,10 @@ export default function ChartV2Page() {
           return;
         }
 
-        // Determine sell and buy tokens based on isBuy and pair data
+        // Determine sell and buy tokens - use selected pay token if available, otherwise use default based on isBuy
         const quoteTokenAddress = pair?.quoteToken?.address || WETH_ADDRESS; // Fallback to WETH if no quote token
         
-        const sellToken = isBuy ? quoteTokenAddress : pair.baseToken.address;
+        const sellToken = selectedPayToken ? selectedPayToken.address : (isBuy ? quoteTokenAddress : pair.baseToken.address);
         const buyToken = isBuy ? pair.baseToken.address : quoteTokenAddress;
         
         // Get correct decimals for both tokens (async fetch if needed)
@@ -693,7 +1053,7 @@ export default function ChartV2Page() {
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [payAmount, pair?.baseToken?.address, pair?.quoteToken?.address, isBuy]);
+  }, [payAmount, pair?.baseToken?.address, pair?.quoteToken?.address, isBuy, selectedPayToken]);
 
   // Quote expiration countdown timer
   useEffect(() => {
@@ -751,10 +1111,10 @@ export default function ChartV2Page() {
         setWalletAddress(wallet.address);
       }
 
-      // Prepare swap parameters
+      // Prepare swap parameters - use selected pay token if available
       const swapQuoteTokenAddress = pair?.quoteToken?.address || WETH_ADDRESS; // Fallback to WETH if no quote token
       
-      const sellToken = isBuy ? swapQuoteTokenAddress : pair.baseToken.address;
+      const sellToken = selectedPayToken ? selectedPayToken.address : (isBuy ? swapQuoteTokenAddress : pair.baseToken.address);
       const buyToken = isBuy ? pair.baseToken.address : swapQuoteTokenAddress;
       
       // Get correct decimals for the sell token (async)
@@ -1013,7 +1373,6 @@ export default function ChartV2Page() {
     const tfMap: Record<string, { path: string; agg: string; periodSec: number }> = {
       "1m": { path: "minute", agg: "1", periodSec: 60 },
       "5m": { path: "minute", agg: "5", periodSec: 300 },
-      "15m": { path: "minute", agg: "15", periodSec: 900 },
       "1h": { path: "hour", agg: "1", periodSec: 3600 },
       "4h": { path: "hour", agg: "4", periodSec: 14400 },
       "1d": { path: "day", agg: "1", periodSec: 86400 },
@@ -1456,7 +1815,7 @@ export default function ChartV2Page() {
         if (poolAddress && pair?.baseToken?.address && pair?.quoteToken?.address && !cancelled) {
           fetchTransactions();
         }
-      }, 15000);
+      }, 5000);
       return () => { cancelled = true; clearInterval(interval); };
     }
   }, [poolAddress, pair?.baseToken?.address, pair?.quoteToken?.address, pair?.priceUsd, pair?.priceNative]);
@@ -1544,38 +1903,36 @@ export default function ChartV2Page() {
     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 20 20"><rect x="3" y="7" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6"/><path d="M9 11l7-7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><path d="M13.9 3.8h2.3c.5 0 .8.4.8.8v2.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
   );
 
-  // Get token name for loading screen - try to get from pair if available, otherwise use pool address
-  const tokenName = pair?.baseToken?.symbol || pair?.baseToken?.name || poolAddress?.slice(0, 8) || 'Token';
+  const containerStyle = isMobile
+    ? { height: "100vh", overscrollBehavior: "none" as const }
+    : { height: "calc(100vh - var(--app-footer-height, 0px))", overscrollBehavior: "none" as const };
 
   if (loading || !pair) {
     return (
-      <div className="h-screen bg-gray-950 text-gray-200 flex flex-col">
+      <div className="bg-gray-950 text-gray-200 flex flex-col" style={containerStyle}>
         <Header />
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-2xl font-semibold text-white mb-2">Loading</div>
-            <div className="text-lg text-gray-400">{tokenName}</div>
-          </div>
+          {/* Loading state - no text, just empty space */}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen bg-gray-950 text-gray-200 flex flex-col overflow-hidden">
+    <div className="bg-gray-950 text-gray-200 flex flex-col overflow-hidden" style={containerStyle}>
       <Header />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 grid grid-cols-1 xl:grid-cols-[1fr_260px_440px] gap-0 overflow-hidden min-h-0">
+        <div className="flex-1 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_220px_320px] 2xl:grid-cols-[minmax(0,1fr)_260px_420px] gap-0 overflow-hidden min-h-0">
           {/* Left: Chart & PnL */}
           <div
-            className={`${(activeMobileTab === "overview" || activeMobileTab === "pnl") ? "flex" : "hidden"} flex-1 flex-col min-h-0 overflow-hidden xl:flex xl:overflow-y-auto`}
+            className={`${(activeMobileTab === "overview" || activeMobileTab === "pnl") ? "flex" : "hidden"} flex-1 flex-col min-h-0 overflow-hidden xl:flex xl:overflow-hidden`}
             style={isMobile ? { paddingBottom: mobileBottomOffset } : undefined}
           >
-          <div className={`${activeMobileTab === "overview" ? "flex flex-col" : "hidden"} xl:flex xl:flex-col`}>
+          <div className={`${activeMobileTab === "overview" ? "flex flex-col min-h-0" : "hidden"} xl:flex xl:flex-col`}>
               {/* Pair header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-950/90">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   {pair?.info?.imageUrl ? (
                     <img src={pair.info.imageUrl} alt={title} className="w-8 h-8 rounded-full border border-gray-700" />
                   ) : (
@@ -1607,7 +1964,7 @@ export default function ChartV2Page() {
                     {showTopVolume && (
                       <div className="absolute mt-3 right-4 z-30 w-[720px] bg-gray-950 border border-gray-800 shadow-2xl rounded-md" style={{ maxWidth: 'calc(100vw - 24px)' }}>
                         <div className="px-3 py-2 text-xs text-gray-400 border-b border-gray-800">Top 10 by 24h Volume</div>
-                        <div className="max-h-[70vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                        <div className="max-h-[70vh] overflow-hidden">
                           <table className="w-full text-xs">
                             <thead className="sticky top-0 bg-gray-950 border-b border-gray-800 text-gray-400">
                               <tr>
@@ -1670,7 +2027,7 @@ export default function ChartV2Page() {
                   </div>
                 </div>
                 {/* Right-side stats from Dexscreener */}
-                <div className="hidden lg:flex items-center gap-6">
+                <div className="hidden lg:flex items-center gap-4 xl:gap-5 2xl:gap-6 flex-wrap xl:flex-nowrap">
                   <div className="text-right">
                     <div className={`${(pair as any)?.priceChange?.h24 && (pair as any).priceChange.h24 >= 0 ? 'text-green-400' : 'text-red-400'} text-base sm:text-lg font-medium`}>${currentPrice.toFixed(6)}</div>
                     <div className="text-gray-500 text-[11px]">Price</div>
@@ -1699,144 +2056,310 @@ export default function ChartV2Page() {
               </div>
 
           {/* Chart */}
-          <div className="flex-shrink-0">
+          <div className="flex-1 min-h-0 flex flex-col">
             {/* Controls */}
-            <div className="px-4 py-2 bg-gray-950">
-              <div className="flex items-center gap-3 justify-between flex-nowrap overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <div className="flex items-center gap-2 flex-shrink-0 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  {TIMEFRAME_OPTIONS.map((tf) => {
-                    const isActive = timeframe === tf;
-                    return (
-                      <button
-                        key={tf}
-                        onClick={() => setTimeframe(tf)}
-                        className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
-                          isActive
-                            ? "text-blue-200 border-blue-500"
-                            : "text-gray-300 border-transparent hover:text-white hover:border-gray-600"
-                        }`}
-                      >
-                        {tf.toUpperCase()}
-                      </button>
-                    );
-                  })}
+            <div className={`${isMobile ? 'px-3 py-2' : 'px-4 py-2'} bg-gray-950 border-b border-gray-900/70 flex-shrink-0`}>
+              <div className="flex items-center gap-3 justify-between">
+                {/* Timeframe and Indicators dropdowns */}
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        setShowTimeframeDropdown(!showTimeframeDropdown);
+                        setShowIndicatorsDropdown(false);
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-800/60 hover:bg-gray-800 text-gray-200 hover:text-white transition-all border border-transparent hover:border-gray-700"
+                    >
+                      <span>{timeframe.toUpperCase()}</span>
+                      <FiChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showTimeframeDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+                    {showTimeframeDropdown && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-40" 
+                          onClick={() => setShowTimeframeDropdown(false)}
+                        />
+                        <div className="absolute top-full left-0 mt-1.5 z-50 bg-gray-800 border border-gray-700 rounded-lg shadow-xl min-w-[90px] overflow-hidden">
+                          {TIMEFRAME_OPTIONS.map((tf) => (
+                            <button
+                              key={tf}
+                              onClick={() => {
+                                setTimeframe(tf);
+                                setShowTimeframeDropdown(false);
+                                // Auto-adjust moving average period based on timeframe for better indicator behavior
+                                const adaptivePeriod = getAdaptivePeriod(tf);
+                                setMovingAveragePeriod(adaptivePeriod);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${
+                                timeframe === tf
+                                  ? "text-white bg-blue-500/20 border-l-2 border-blue-500"
+                                  : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+                              }`}
+                            >
+                              {tf.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  
+                  {/* Indicators dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        setShowIndicatorsDropdown(!showIndicatorsDropdown);
+                        setShowTimeframeDropdown(false);
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-800/60 hover:bg-gray-800 text-gray-200 hover:text-white transition-all border border-transparent hover:border-gray-700"
+                    >
+                      <span>Indicators</span>
+                      <FiChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showIndicatorsDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+                    {showIndicatorsDropdown && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-40" 
+                          onClick={() => setShowIndicatorsDropdown(false)}
+                        />
+                        <div className="absolute top-full left-0 mt-1.5 z-50 bg-gray-800 border border-gray-700 rounded-lg shadow-xl min-w-[200px] overflow-hidden">
+                          {/* Indicator Toggles */}
+                          <div className="border-b border-gray-700">
+                            <button
+                              onClick={() => {
+                                setShowMovingAverage(!showMovingAverage);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors flex items-center justify-between ${
+                                showMovingAverage
+                                  ? "text-white bg-blue-500/20 border-l-2 border-blue-500"
+                                  : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+                              }`}
+                            >
+                              <span>SMA</span>
+                              {showMovingAverage && <span className="text-blue-400">●</span>}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowEMA(!showEMA);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors flex items-center justify-between ${
+                                showEMA
+                                  ? "text-white bg-purple-500/20 border-l-2 border-purple-500"
+                                  : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+                              }`}
+                            >
+                              <span>EMA</span>
+                              {showEMA && <span className="text-purple-400">●</span>}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowVWAP(!showVWAP);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors flex items-center justify-between ${
+                                showVWAP
+                                  ? "text-white bg-amber-500/20 border-l-2 border-amber-500"
+                                  : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+                              }`}
+                            >
+                              <span>VWAP</span>
+                              {showVWAP && <span className="text-amber-400">●</span>}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowRSI(!showRSI);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors flex items-center justify-between ${
+                                showRSI
+                                  ? "text-white bg-pink-500/20 border-l-2 border-pink-500"
+                                  : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+                              }`}
+                            >
+                              <span>RSI</span>
+                              {showRSI && <span className="text-pink-400">●</span>}
+                            </button>
+                          </div>
+                          
+                          {/* Settings Section */}
+                          <div className="px-3 py-2 border-b border-gray-700">
+                            <div className="text-[10px] text-gray-500 uppercase mb-2">MA Period</div>
+                            <div className="flex gap-1">
+                              {[10, 20, 50, 200].map((period) => (
+                                <button
+                                  key={period}
+                                  onClick={() => setMovingAveragePeriod(period)}
+                                  className={`flex-1 px-2 py-1 text-[10px] font-medium rounded transition-colors ${
+                                    movingAveragePeriod === period
+                                      ? "bg-blue-500 text-white"
+                                      : "bg-gray-700/50 text-gray-300 hover:bg-gray-700"
+                                  }`}
+                                >
+                                  {period}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          
+                          {/* Color Settings */}
+                          <div className="px-3 py-2 space-y-2">
+                            <div className="text-[10px] text-gray-500 uppercase mb-1">Colors</div>
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-gray-400">SMA:</span>
+                                <input
+                                  type="color"
+                                  value={indicatorColors.sma}
+                                  onChange={(e) => setIndicatorColors({...indicatorColors, sma: e.target.value})}
+                                  className="w-6 h-6 rounded border border-gray-600 cursor-pointer"
+                                />
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-gray-400">EMA:</span>
+                                <input
+                                  type="color"
+                                  value={indicatorColors.ema}
+                                  onChange={(e) => setIndicatorColors({...indicatorColors, ema: e.target.value})}
+                                  className="w-6 h-6 rounded border border-gray-600 cursor-pointer"
+                                />
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-gray-400">VWAP:</span>
+                                <input
+                                  type="color"
+                                  value={indicatorColors.vwap}
+                                  onChange={(e) => setIndicatorColors({...indicatorColors, vwap: e.target.value})}
+                                  className="w-6 h-6 rounded border border-gray-600 cursor-pointer"
+                                />
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-gray-400">RSI:</span>
+                                <input
+                                  type="color"
+                                  value={indicatorColors.rsi}
+                                  onChange={(e) => setIndicatorColors({...indicatorColors, rsi: e.target.value})}
+                                  className="w-6 h-6 rounded border border-gray-600 cursor-pointer"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
+                {/* Right side controls */}
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => chartRef.current?.zoomIn()}
-                    className="px-3 py-1.5 text-xs font-medium rounded-full border border-gray-700 text-gray-300 hover:text-white hover:border-blue-500 transition-colors"
-                  >
-                    Zoom In
-                  </button>
-                  <button
-                    onClick={() => chartRef.current?.zoomOut()}
-                    className="px-3 py-1.5 text-xs font-medium rounded-full border border-gray-700 text-gray-300 hover:text-white hover:border-blue-500 transition-colors"
-                  >
-                    Zoom Out
-                  </button>
-                  <button
-                    onClick={() => chartRef.current?.fit()}
-                    className="px-3 py-1.5 text-xs font-medium rounded-full border border-gray-700 text-gray-300 hover:text-white hover:border-blue-500 transition-colors"
-                  >
-                    Reset
-                  </button>
+                  <div className="flex items-center gap-1 bg-gray-800/60 rounded-lg p-0.5 border border-gray-700/50">
+                    <button
+                      onClick={() => setYAxisMode("price")}
+                      className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-all ${
+                        yAxisMode === "price"
+                          ? "bg-blue-500 text-white shadow-sm"
+                          : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+                      }`}
+                    >
+                      Price
+                    </button>
+                    <button
+                      onClick={() => setYAxisMode("marketCap")}
+                      className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-all ${
+                        yAxisMode === "marketCap"
+                          ? "bg-blue-500 text-white shadow-sm"
+                          : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+                      }`}
+                    >
+                      MCap
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1 bg-gray-800/60 rounded-lg p-0.5 border border-gray-700/50">
+                    <button
+                      onClick={() => chartRef.current?.zoomIn()}
+                      className="px-2.5 py-1.5 text-xs font-medium rounded-md text-gray-300 hover:text-white hover:bg-gray-700/50 transition-all"
+                      aria-label="Zoom in"
+                    >
+                      +
+                    </button>
+                    <button
+                      onClick={() => chartRef.current?.zoomOut()}
+                      className="px-2.5 py-1.5 text-xs font-medium rounded-md text-gray-300 hover:text-white hover:bg-gray-700/50 transition-all"
+                      aria-label="Zoom out"
+                    >
+                      −
+                    </button>
+                    <button
+                      onClick={() => chartRef.current?.fit()}
+                      className="px-2.5 py-1.5 text-xs font-medium rounded-md text-gray-300 hover:text-white hover:bg-gray-700/50 transition-all"
+                    >
+                      ↻
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-            <LightweightChart ref={chartRef} height={chartHeight} theme="dark" candles={candles} />
+            <div className="flex-1 min-h-0 relative">
+              <LightweightChart
+                ref={chartRef}
+                height={isMobile ? undefined : chartHeight}
+                theme="dark"
+                candles={candles}
+                priceScalePadding={chartPriceScalePadding}
+                yAxisMode={yAxisMode}
+                currentMarketCap={pair?.marketCap}
+                currentPrice={pair?.priceUsd ? parseFloat(pair.priceUsd) : undefined}
+                showVolume={true}
+                showMovingAverage={showMovingAverage}
+                movingAveragePeriod={movingAveragePeriod}
+                timeframe={timeframe}
+                showVWAP={showVWAP}
+                showRSI={showRSI}
+                showEMA={showEMA}
+                indicatorColors={indicatorColors}
+              />
+            </div>
           </div>
 
           {/* OHLC strip */}
           {!isMobile && (
             <div className="w-full px-4 py-2 border-t border-gray-800/50 text-xs text-gray-300 bg-gray-950">
               {candles.length > 0 ? (
-                (() => { const c = candles[candles.length-1]; return (
-                  <div className="flex gap-4">
-                    <div>O <span className="text-gray-200">{c.open.toFixed(6)}</span></div>
-                    <div>H <span className="text-gray-200">{c.high.toFixed(6)}</span></div>
-                    <div>L <span className="text-gray-200">{c.low.toFixed(6)}</span></div>
-                    <div>C <span className="text-gray-200">{c.close.toFixed(6)}</span></div>
-                  </div>
-                ); })() ) : <span className="text-gray-500">No OHLC data</span>}
+                (() => { 
+                  const c = candles[candles.length-1];
+                  const currentPrice = pair?.priceUsd ? parseFloat(pair.priceUsd) : 0;
+                  const currentMarketCap = pair?.marketCap || 0;
+                  
+                  let openVal, highVal, lowVal, closeVal;
+                  if (yAxisMode === "marketCap" && currentPrice > 0 && currentMarketCap > 0) {
+                    openVal = (c.open / currentPrice) * currentMarketCap;
+                    highVal = (c.high / currentPrice) * currentMarketCap;
+                    lowVal = (c.low / currentPrice) * currentMarketCap;
+                    closeVal = (c.close / currentPrice) * currentMarketCap;
+                    const formatMcap = (val: number) => {
+                      if (val >= 1e9) return `$${(val / 1e9).toFixed(2)}B`;
+                      if (val >= 1e6) return `$${(val / 1e6).toFixed(2)}M`;
+                      if (val >= 1e3) return `$${(val / 1e3).toFixed(2)}K`;
+                      return `$${val.toFixed(2)}`;
+                    };
+                    return (
+                      <div className="flex gap-4">
+                        <div>O <span className="text-gray-200">{formatMcap(openVal)}</span></div>
+                        <div>H <span className="text-gray-200">{formatMcap(highVal)}</span></div>
+                        <div>L <span className="text-gray-200">{formatMcap(lowVal)}</span></div>
+                        <div>C <span className="text-gray-200">{formatMcap(closeVal)}</span></div>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div className="flex gap-4">
+                        <div>O <span className="text-gray-200">{c.open.toFixed(6)}</span></div>
+                        <div>H <span className="text-gray-200">{c.high.toFixed(6)}</span></div>
+                        <div>L <span className="text-gray-200">{c.low.toFixed(6)}</span></div>
+                        <div>C <span className="text-gray-200">{c.close.toFixed(6)}</span></div>
+                      </div>
+                    );
+                  }
+                })() 
+              ) : <span className="text-gray-500">No OHLC data</span>}
             </div>
           )}
-
-          {isMobile && (
-            <div className="flex-1 flex flex-col px-4 pt-1 pb-1">
-              <div className="flex-1 overflow-hidden flex flex-col -mx-4">
-                <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                  <table className="w-full text-xs table-fixed">
-                    <thead className="bg-gray-950 text-gray-400">
-                      <tr>
-                        <th className="text-left px-3 py-2 font-normal w-[38%]">USD</th>
-                        <th className="text-center px-2 py-2 font-normal w-[36%]">Size ({pair?.baseToken?.symbol || "TOKEN"})</th>
-                        <th className="text-center px-3 py-2 font-normal w-[26%]">Time</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-white">
-                      {augmentedTransactions.length === 0 && (
-                        <tr>
-                          <td className="px-3 py-5 text-center text-gray-500" colSpan={3}>
-                            No recent trades
-                          </td>
-                        </tr>
-                      )}
-                        {augmentedTransactions.slice(0, 150).map((tx) => (
-                        <tr
-                          key={`mobile-trade-${tx.hash}-${tx.timestamp}-${tx.tokenAmount}`}
-                          className="border-b border-gray-900/40 last:border-b-0"
-                        >
-                          <td className="px-3 py-2.5 relative overflow-hidden">
-                            <motion.div
-                              aria-hidden
-                              className="absolute left-0 top-0 bottom-0"
-                              style={{
-                                background: tx.isBuy ? "rgba(34, 197, 94, 0.25)" : "rgba(244, 63, 94, 0.25)",
-                                width: tx.fill === 100 ? "100%" : `${tx.fill}%`,
-                                zIndex: 0,
-                              }}
-                              initial={{ width: 0, opacity: 0 }}
-                              animate={{
-                                width: tx.fill === 100 ? "100%" : `${tx.fill}%`,
-                                opacity: 1,
-                              }}
-                              transition={{
-                                duration: 0.6,
-                                ease: [0.4, 0, 0.2, 1],
-                                opacity: { duration: 0.3 },
-                              }}
-                            />
-                            <span className={`relative z-10 ${tx.isBuy ? "text-green-400" : "text-red-400"}`}>
-                              {tx.usdLabel}
-                            </span>
-                          </td>
-                          <td className="px-2 py-2.5 text-center text-white">
-                            {tx.tokenAmount > 0 ? (
-                              tx.tokenAmount >= 1
-                                ? tx.tokenAmount.toLocaleString(undefined, {
-                                    maximumFractionDigits: 2,
-                                    minimumFractionDigits: 0,
-                                  })
-                                : tx.tokenAmount.toLocaleString(undefined, {
-                                    maximumFractionDigits: 6,
-                                    minimumFractionDigits: 0,
-                                  })
-                            ) : (
-                              "0"
-                            )}
-                          </td>
-                          <td className="px-3 py-2.5 text-center text-gray-400">
-                            <span>{formatTimeAgo(tx.timestamp)}</span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
           </div>
 
           {/* Data sections below chart */}
@@ -1845,21 +2368,27 @@ export default function ChartV2Page() {
               <button onClick={() => setActiveDataTab("orders")} className={`pb-2 transition-colors ${activeDataTab==='orders' ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-300'}`}>Orders</button>
               <button onClick={() => setActiveDataTab("positions")} className={`pb-2 transition-colors ${activeDataTab==='positions' ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-300'}`}>Positions</button>
             </div>
-            <div className="px-4 py-4 text-sm text-white bg-gray-950 min-h-[160px] flex-1 min-h-0 overflow-hidden">
+            <div className="px-4 pt-4 text-sm text-white bg-gray-950 min-h-[160px] flex-1 min-h-0 overflow-hidden flex flex-col">
               {activeDataTab === 'orders' && (
-                <div className="w-full">
+                <div className="w-full flex-1 flex flex-col">
                   {ordersLoading ? (
-                    <div className="p-6 text-center text-gray-400">
+                    <div className="p-6 text-center text-gray-400 flex-1 flex flex-col items-center justify-center">
                       <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
                       <p className="text-sm">Loading orders...</p>
                     </div>
                   ) : orders.length === 0 ? (
-                    <div className="p-6 text-center text-gray-400">
-                      <p className="text-sm">No orders available</p>
+                    <div className="flex-1 flex flex-col items-center justify-center text-center" style={{ paddingBottom: !isMobile && footerHeight > 0 ? `${footerHeight + 20}px` : '20px' }}>
+                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-800/50 flex items-center justify-center">
+                        <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <p className="text-sm font-medium text-gray-300 mb-1">No orders available</p>
+                      <p className="text-xs text-gray-500">Your order history will appear here once you place trades</p>
                     </div>
                   ) : (
-                    <div className="w-full -mx-4">
-                      <div className="w-full border-b border-gray-700/50 mb-3">
+                    <div className="w-full -mx-4 flex-1 min-h-0 flex flex-col overflow-hidden">
+                      <div className="w-full border-b border-gray-700/50 mb-3 flex-shrink-0">
                         <div className="grid grid-cols-5 gap-4 px-4 py-2.5 text-xs text-gray-400">
                           <div>Time</div>
                           <div>Type</div>
@@ -1868,7 +2397,7 @@ export default function ChartV2Page() {
                           <div>Status</div>
                         </div>
                       </div>
-                      <div className={`space-y-0 flex-1 min-h-0 ${desktopScrollable}`}>
+                      <div className={`space-y-0 flex-1 min-h-0 overflow-y-auto ${desktopScrollable}`} style={{ paddingBottom: !isMobile && footerHeight > 0 ? `${footerHeight + 8}px` : '8px' }}>
                         {visibleOrders.map((order, idx) => {
                           const orderColor = order.type === 'buy' ? "text-green-400" : "text-red-400";
                           const orderLabel = order.type === 'buy' ? "BUY" : "SELL";
@@ -1916,15 +2445,21 @@ export default function ChartV2Page() {
                 </div>
               )}
               {activeDataTab === 'positions' && (
-                <div className="w-full">
+                <div className="w-full flex-1 flex flex-col">
                   {positionsLoading ? (
-                    <div className="p-6 text-center text-gray-400">
+                    <div className="p-6 text-center text-gray-400 flex-1 flex flex-col items-center justify-center">
                       <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
                       <p className="text-sm">Loading positions...</p>
                     </div>
                   ) : positions.length === 0 ? (
-                    <div className="p-6 text-center text-gray-400">
-                      <p className="text-sm">No active positions for this token.</p>
+                    <div className="flex-1 flex flex-col items-center justify-center text-center" style={{ paddingBottom: !isMobile && footerHeight > 0 ? `${footerHeight + 20}px` : '20px' }}>
+                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-800/50 flex items-center justify-center">
+                        <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                      </div>
+                      <p className="text-sm font-medium text-gray-300 mb-1">No active positions</p>
+                      <p className="text-xs text-gray-500">Your open positions for this token will appear here</p>
                     </div>
                   ) : (
                     <div className="w-full -mx-4">
@@ -2012,11 +2547,11 @@ export default function ChartV2Page() {
 
         {/* Middle: Transactions and Holders */}
         <div
-          className={`${activeMobileTab === "trades" ? "flex" : "hidden"} xl:flex flex-col bg-gray-950 border-t border-gray-900/60 xl:border-t-0 xl:border-l xl:border-gray-800 w-full xl:w-[260px] xl:max-w-[260px] overflow-hidden min-h-0 h-full xl:overflow-y-auto`}
+          className={`${activeMobileTab === "trades" ? "flex" : "hidden"} xl:flex flex-col bg-gray-950 border-t border-gray-900/60 xl:border-t-0 xl:border-l xl:border-gray-800 w-full xl:w-[220px] xl:max-w-[220px] 2xl:w-[260px] 2xl:max-w-[260px] overflow-hidden min-h-0 h-full relative`}
           style={isMobile ? { paddingBottom: mobileBottomOffset } : undefined}
         >
           {/* Tab selector */}
-          <div className="px-4 pt-3 pb-0 flex gap-2 text-sm border-b border-gray-800/50 h-[70px] items-end">
+          <div className="px-4 pt-3 pb-0 flex gap-2 text-sm border-b border-gray-800/50 h-[70px] items-end relative z-10">
             <button 
               onClick={() => setActiveMiddleTab("trades")} 
               className={`pb-2 flex-1 w-full text-center transition-colors ${activeMiddleTab === 'trades' ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-300'}`}
@@ -2042,7 +2577,7 @@ export default function ChartV2Page() {
               }}
             >
               <table className="w-full text-xs" style={{ position: 'relative' }}>
-                <thead className="text-gray-300 bg-gray-950 border-b border-gray-800 sticky top-0 z-20">
+                <thead className="text-gray-300 bg-gray-950 border-b border-gray-800 sticky top-0 z-20" style={{ marginTop: '-112px', paddingTop: '112px', paddingBottom: '42px', borderBottomWidth: '1px' }}>
                   <tr>
                     <th className="text-left px-3 py-3 font-normal">USD</th>
                     <th className="text-center px-2 py-3 font-normal">Size ({pair?.baseToken?.symbol || "TOKEN"})</th>
@@ -2059,12 +2594,14 @@ export default function ChartV2Page() {
                       className="border-b border-gray-800/60"
                     >
                       {/* USD Value with improved animated bar - extends full width for large orders */}
-                      <td className="px-3 py-2.5 relative" style={{ overflow: tx.fill === 100 ? 'visible' : 'hidden', position: 'relative' }}>
+                      <td className="px-3 py-3 relative" style={{ overflow: tx.fill === 100 ? 'visible' : 'hidden' }}>
                         <motion.div 
                           aria-hidden 
                           className="absolute left-0 top-0 bottom-0"
                           style={{ 
-                            background: tx.isBuy ? 'rgba(34, 197, 94, 0.3)' : 'rgba(244, 63, 94, 0.3)',
+                            background: tx.isBuy 
+                              ? 'linear-gradient(90deg, rgba(34, 197, 94, 0.4) 0%, rgba(34, 197, 94, 0.2) 100%)' 
+                              : 'linear-gradient(90deg, rgba(244, 63, 94, 0.4) 0%, rgba(244, 63, 94, 0.2) 100%)',
                             zIndex: 0,
                             // For orders >= $5k, extend from left of USD cell all the way to right edge of Time cell
                             // This spans the entire row width (all 3 columns)
@@ -2080,16 +2617,19 @@ export default function ChartV2Page() {
                             opacity: 1 
                           }}
                           transition={{ 
-                            duration: 0.6, 
+                            duration: 0.8, 
                             ease: [0.4, 0, 0.2, 1],
-                            opacity: { duration: 0.3 }
+                            opacity: { duration: 0.4 }
                           }}
                         />
-                        <span 
-                          className={`relative z-10 ${tx.isBuy ? 'text-green-400' : 'text-red-400'}`}
+                        <motion.span 
+                          className={`relative z-10 font-medium ${tx.isBuy ? 'text-green-400' : 'text-red-400'}`}
+                          initial={{ opacity: 0, x: -5 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.2, duration: 0.3 }}
                         >
                           {tx.usdLabel}
-                        </span>
+                        </motion.span>
                       </td>
                       <td className="px-2 py-2.5 text-center text-white">
                         {tx.tokenAmount > 0 ? (
@@ -2119,11 +2659,11 @@ export default function ChartV2Page() {
           {/* Holders content */}
           {activeMiddleTab === 'holders' && (
             <div
-              className="flex-1 overflow-y-auto px-4 py-4 text-sm text-white [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+              className="flex-1 px-4 py-4 text-sm text-white"
               style={{
                 scrollbarWidth: 'none',
                 msOverflowStyle: 'none',
-                paddingBottom: isMobile ? mobileBottomOffset : undefined
+                paddingBottom: isMobile ? mobileBottomOffset : undefined,
               }}
             >
               <div className="text-gray-300">Holders data will appear here.</div>
@@ -2133,278 +2673,603 @@ export default function ChartV2Page() {
 
         {/* Right: Swap panel (refined UI) */}
         <aside
-          className={`${activeMobileTab === "swap" ? "flex" : "hidden"} xl:flex flex-col bg-gray-950 border-t border-gray-900/60 xl:border-t-0 xl:border-l xl:border-gray-800 w-full xl:min-w-[440px] overflow-hidden ${isMobile ? "" : "xl:overflow-y-auto"}`}
-          style={isMobile ? { paddingBottom: mobileBottomOffset } : undefined}
+          className={`${activeMobileTab === "swap" ? "flex" : "hidden"} xl:flex flex-col bg-gray-950 border-t border-gray-900/60 xl:border-t-0 xl:border-l xl:border-gray-800 w-full xl:min-w-[320px] 2xl:min-w-[400px] overflow-hidden`}
+          style={isMobile ? { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" } : undefined}
         >
-          {/* Token Info Header */}
-          <div className="px-4 py-3 pb-4">
-            <div className="flex items-center gap-3">
-              {pair?.info?.imageUrl ? (
-                <img src={pair.info.imageUrl} alt={title} className="w-10 h-10 rounded-full border border-gray-700" />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold">
-                  {pair?.baseToken?.symbol?.[0] || "T"}
-                </div>
-              )}
-              <div className="flex-1">
-                <div className="text-white font-semibold text-sm">{title}</div>
-                <div className="text-xs text-gray-400">{pair?.baseToken?.name || pair?.baseToken?.symbol || "Token"}</div>
-              </div>
-            </div>
-            {/* Social Links */}
-            {(tokenInfo?.website || tokenInfo?.twitter || tokenInfo?.telegram) && (
-              <div className="flex items-center gap-3 mt-3">
-                {tokenInfo.website && (
-                  <a
-                    href={tokenInfo.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-white transition-colors text-xs"
-                  >
-                    🌐 Website
-                  </a>
-                )}
-                {tokenInfo.twitter && (
-                  <a
-                    href={tokenInfo.twitter.startsWith('http') ? tokenInfo.twitter : `https://twitter.com/${tokenInfo.twitter}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-white transition-colors text-xs"
-                  >
-                    🐦 Twitter
-                  </a>
-                )}
-                {tokenInfo.telegram && (
-                  <a
-                    href={tokenInfo.telegram.startsWith('http') ? tokenInfo.telegram : `https://t.me/${tokenInfo.telegram}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-white transition-colors text-xs"
-                  >
-                    💬 Telegram
-                  </a>
-                )}
-              </div>
-            )}
-          </div>
-          
-          {/* Full-width separator - matches left side pattern */}
-          <div className="border-t border-gray-800"></div>
-
-          {/* Buy/Sell and Swap Interface */}
-          <div className={`px-4 ${isMobile ? "py-2" : "py-3"} flex-1 flex flex-col`}>
-            <div className={`flex items-center justify-between ${swapSectionSpacing}`}>
-              <div className="w-full bg-gray-900/40 backdrop-blur supports-[backdrop-filter]:bg-gray-900/30 border border-gray-800 flex">
-                <button onClick={()=>setIsBuy(true)} className={`flex-1 ${swapButtonHeight} text-sm font-semibold ${isBuy ? 'bg-green-500/20 text-green-300' : 'text-gray-300 hover:text-white hover:bg-gray-800/50'}`}>Buy</button>
-                <button onClick={()=>setIsBuy(false)} className={`flex-1 ${swapButtonHeight} text-sm font-semibold ${!isBuy ? 'bg-red-500/20 text-red-300' : 'text-gray-300 hover:text-white hover:bg-gray-800/50'}`}>Sell</button>
-              </div>
-            </div>
-            <div className="text-[10px] text-gray-500 mb-2">Powered by 0x</div>
-
-            {/* You Pay */}
-            <div className={`bg-gray-900/50 border border-gray-800 ${swapFieldPadding}`}>
-              <div className="flex items-center justify-between">
-                <div className="text-xs text-gray-400">You Pay</div>
-                <div className="flex items-center gap-2 text-[11px] text-gray-300">
-                  {isBuy ? (
-                    (() => {
-                      const quoteTokenAddress = pair?.quoteToken?.address || WETH_ADDRESS;
-                      // Show appropriate icon for quote token (WETH, USDC, etc.)
-                      if (quoteTokenAddress.toLowerCase() === WETH_ADDRESS.toLowerCase()) {
-                        return <img src={'https://assets.coingecko.com/coins/images/2518/small/weth.png'} alt="WETH" className="w-4 h-4 border border-gray-700" />;
-                      }
-                      // For USDC or other tokens, try to show their icon or use a placeholder
-                      return pair?.quoteToken?.symbol === 'USDC' ? (
-                        <img src={'https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png'} alt="USDC" className="w-4 h-4 border border-gray-700" />
-                      ) : (
-                        <div className="w-4 h-4 border border-gray-700 rounded-full bg-gray-800 flex items-center justify-center text-[8px] text-gray-400">
-                          {pair?.quoteToken?.symbol?.[0] || 'Q'}
-                        </div>
-                      );
-                    })()
+          {!isMobile && (
+            <>
+              <div className="px-4 py-3 pb-4">
+                <div className="flex items-center gap-3">
+                  {pair?.info?.imageUrl ? (
+                    <img src={pair.info.imageUrl} alt={title} className="w-10 h-10 rounded-full border border-gray-700" />
                   ) : (
-                    pair?.info?.imageUrl ? (
-                      <img src={pair.info.imageUrl} alt={pair?.baseToken?.symbol || 'Token'} className="w-4 h-4 border border-gray-700" />
-                    ) : null
+                    <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold">
+                      {pair?.baseToken?.symbol?.[0] || "T"}
+                    </div>
                   )}
-                  <span>{isBuy ? (pair?.quoteToken?.symbol || 'WETH') : (pair?.baseToken?.symbol || 'TOKEN')}</span>
-                  {walletAddress && (
-                    <span className="text-[10px] text-gray-500 ml-1">
-                      ({isBuy 
-                        ? (() => {
-                            const quoteTokenAddress = pair?.quoteToken?.address || WETH_ADDRESS;
-                            const balance = quoteTokenAddress.toLowerCase() === WETH_ADDRESS.toLowerCase() 
-                              ? walletEthBalance 
-                              : walletQuoteTokenBalance;
-                            return balance > 0 ? (balance < 0.0001 ? balance.toFixed(8) : balance.toFixed(4)) : '0.0000';
-                          })()
-                        : (walletTokenBalance > 0 ? (walletTokenBalance < 0.0001 ? walletTokenBalance.toFixed(8) : walletTokenBalance.toFixed(4)) : '0.0000')
-                      })
-                    </span>
-                  )}
+                  <div className="flex-1">
+                    <div className="text-white font-semibold text-sm">{title}</div>
+                    <div className="text-xs text-gray-400">{pair?.baseToken?.name || pair?.baseToken?.symbol || "Token"}</div>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center justify-between mt-1 h-12">
-                <input value={payAmount} onChange={(e)=>setPayAmount(e.target.value)} className="bg-transparent text-white text-lg focus:outline-none placeholder-gray-500 w-full" placeholder="0.0" />
-              </div>
-            </div>
-
-            {/* Quick % below You Pay */}
-              <div className="flex gap-2 mt-2 mb-2">
-              {['25%','50%','75%','MAX'].map((v, i) => {
-                const pct = i < 3 ? (i+1)*25 : 100;
-                return (
-                  <button key={v} onClick={()=>{
-                    const quoteTokenAddress = pair?.quoteToken?.address || WETH_ADDRESS;
-                    const quoteBalance = quoteTokenAddress.toLowerCase() === WETH_ADDRESS.toLowerCase()
-                      ? walletEthBalance 
-                      : walletQuoteTokenBalance;
-                    const basis = isBuy ? quoteBalance : walletTokenBalance;
-                    if (basis > 0) {
-                      const amount = (basis * pct) / 100;
-                      setPayAmount(amount.toFixed(6));
-                    }
-                  }} disabled={!walletAddress || (() => {
-                    const quoteTokenAddress = pair?.quoteToken?.address || WETH_ADDRESS;
-                    const quoteBalance = quoteTokenAddress.toLowerCase() === WETH_ADDRESS.toLowerCase()
-                      ? walletEthBalance 
-                      : walletQuoteTokenBalance;
-                    return isBuy ? quoteBalance <= 0 : walletTokenBalance <= 0;
-                  })()} className={`${quickButtonClass} bg-gray-800/60 text-gray-300 hover:text-white hover:bg-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed`}>{v}</button>
-                );
-              })}
-            </div>
-
-            {/* Swap arrows */}
-            <div className="flex items-center justify-center my-2">
-              <button onClick={()=>{ 
-                setIsBuy(prev=>!prev); 
-                const a = payAmount; 
-                setPayAmount(receiveAmount); 
-                setReceiveAmount(a);
-                // Refresh balances when flipping
-                if (walletAddress) {
-                  const quoteTokenAddress = pair?.quoteToken?.address || WETH_ADDRESS;
-                  fetchQuoteTokenBalance(walletAddress, quoteTokenAddress);
-                  if (pair?.baseToken?.address) {
-                    fetchTokenBalance(walletAddress, pair.baseToken.address);
-                  }
-                }
-              }} className="w-10 h-10 border border-gray-800 bg-gray-900/60 text-gray-300 hover:text-white flex items-center justify-center">
-                <SwapArrowsIcon className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* You Receive */}
-            <div className={`bg-gray-900/50 border border-gray-800 ${swapFieldPadding} ${isMobile ? "mb-2" : "mb-3"}`}>
-              <div className="flex items-center justify-between">
-                <div className="text-xs text-gray-400">You Receive</div>
-                <div className="flex items-center gap-2 text-[11px] text-gray-300">
-                  {isBuy ? (
-                    pair?.info?.imageUrl ? (
-                      <img src={pair.info.imageUrl} alt={pair?.baseToken?.symbol || 'Token'} className="w-4 h-4 border border-gray-700" />
-                    ) : null
-                  ) : (
-                    (() => {
-                      const quoteTokenAddress = pair?.quoteToken?.address || WETH_ADDRESS;
-                      // Show appropriate icon for quote token (WETH, USDC, etc.)
-                      if (quoteTokenAddress.toLowerCase() === WETH_ADDRESS.toLowerCase()) {
-                        return <img src={'https://assets.coingecko.com/coins/images/2518/small/weth.png'} alt="WETH" className="w-4 h-4 border border-gray-700" />;
-                      }
-                      // For USDC or other tokens, try to show their icon or use a placeholder
-                      return pair?.quoteToken?.symbol === 'USDC' ? (
-                        <img src={'https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png'} alt="USDC" className="w-4 h-4 border border-gray-700" />
-                      ) : (
-                        <div className="w-4 h-4 border border-gray-700 rounded-full bg-gray-800 flex items-center justify-center text-[8px] text-gray-400">
-                          {pair?.quoteToken?.symbol?.[0] || 'Q'}
-                        </div>
-                      );
-                    })()
-                  )}
-                  <span>{isBuy ? (pair?.baseToken?.symbol || 'TOKEN') : (pair?.quoteToken?.symbol || 'WETH')}</span>
-                </div>
-              </div>
-              <div className={`flex items-center justify-between mt-1 ${swapButtonHeight} relative`}>
-                <input value={receiveAmount || ''} readOnly className="bg-transparent text-white text-lg w-full pr-20" placeholder="Enter amount above" />
-                {/* Quote expiration timer inline with amount */}
-                {quoteExpiresAt && receiveAmount && (
-                  <div className="absolute right-0 text-xs">
-                    {isQuoteExpired ? (
-                      <span className="text-red-400">Expired</span>
-                    ) : (
-                      <span className="text-gray-500">
-                        <span className="text-yellow-400">{quoteCountdown}s</span>
-                      </span>
+                {(tokenInfo?.website || tokenInfo?.twitter || tokenInfo?.telegram) && (
+                  <div className="flex items-center gap-3 mt-3">
+                    {tokenInfo.website && (
+                      <a
+                        href={tokenInfo.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-400 hover:text-white transition-colors text-xs"
+                      >
+                        🌐 Website
+                      </a>
+                    )}
+                    {tokenInfo.twitter && (
+                      <a
+                        href={tokenInfo.twitter.startsWith('http') ? tokenInfo.twitter : `https://twitter.com/${tokenInfo.twitter}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-400 hover:text-white transition-colors text-xs"
+                      >
+                        🐦 Twitter
+                      </a>
+                    )}
+                    {tokenInfo.telegram && (
+                      <a
+                        href={tokenInfo.telegram.startsWith('http') ? tokenInfo.telegram : `https://t.me/${tokenInfo.telegram}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-400 hover:text-white transition-colors text-xs"
+                      >
+                        💬 Telegram
+                      </a>
                     )}
                   </div>
                 )}
               </div>
-            </div>
+              <div className="border-t border-gray-800"></div>
+            </>
+          )}
 
-            {/* Action */}
-            {walletAddress ? (
-              <>
-                {swapError && (
-                  <div className="mb-2 text-xs text-red-400 text-center">{swapError}</div>
-                )}
-                <button 
-                  onClick={executeSwap}
-                  disabled={
-                    !payAmount || 
-                    !receiveAmount ||
-                    parseFloat(payAmount || "0") <= 0 || 
-                    parseFloat(receiveAmount || "0") <= 0 || 
-                    isQuoteExpired ||
-                    !pair?.baseToken?.address ||
-                    isSwapping
-                  } 
-                  className={`w-full py-3 disabled:opacity-50 disabled:cursor-not-allowed transition-colors select-none focus:outline-none ${
-                    isBuy 
-                      ? 'bg-green-600/30 hover:bg-green-600/40 active:bg-green-600/40 focus:bg-green-600/40 text-green-400' 
-                      : 'bg-red-600/30 hover:bg-red-600/40 active:bg-red-600/40 focus:bg-red-600/40 text-red-400'
-                  }`}
-                >
-                  {isSwapping ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      <span>Processing...</span>
+          {/* Buy/Sell and Swap Interface */}
+          <div className={`px-4 ${isMobile ? "py-4" : "py-3"} flex-1 flex flex-col relative`}>
+            {isMobile ? (
+              <div className="flex-1 flex flex-col min-h-0">
+                <div className="space-y-2.5">
+                  <div className="rounded-xl border border-gray-800 bg-gray-900/85 px-3 py-2 shadow-sm">
+                    <div className="flex items-center justify-between text-[10px] text-gray-400 mb-2">
+                      <span>Buy / Sell</span>
+                      <span className="text-gray-500">Powered by 0x</span>
                     </div>
-                  ) : isQuoteExpired ? (
-                    "Quote Expired"
-                  ) : (
-                    `${isBuy ? 'Buy' : 'Sell'} ${isBuy ? (pair?.baseToken?.symbol || 'TOKEN') : (pair?.quoteToken?.symbol || 'WETH')}`
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsBuy(true)}
+                        className={`rounded-lg py-2 text-xs font-semibold border transition-colors ${
+                          isBuy
+                            ? "bg-green-500/20 border-green-500/40 text-green-200 shadow-inner"
+                            : "bg-gray-900/60 border-transparent text-gray-300 hover:border-gray-700"
+                        }`}
+                      >
+                        Buy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsBuy(false)}
+                        className={`rounded-lg py-2 text-xs font-semibold border transition-colors ${
+                          !isBuy
+                            ? "bg-red-500/20 border-red-500/40 text-red-200 shadow-inner"
+                            : "bg-gray-900/60 border-transparent text-gray-300 hover-border-gray-700"
+                        }`}
+                      >
+                        Sell
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-gray-800 bg-gray-900/75 p-3 shadow-sm">
+                    <div className="flex items-center justify-between text-[11px] text-gray-400 mb-2">
+                      <span>You Pay</span>
+                      <span className="text-[11px] text-gray-500">
+                        Balance {walletAddress ? payBalanceDisplay : "0.0000"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2.5 min-w-0">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="flex-shrink-0">{payTokenIcon}</div>
+                        <div className="text-sm font-semibold text-white">{payTokenSymbol}</div>
+                      </div>
+                      <input
+                        value={payAmount}
+                        onChange={(e) => setPayAmount(e.target.value)}
+                        inputMode="decimal"
+                        className="flex-1 min-w-0 bg-transparent text-right text-xl font-semibold text-white focus:outline-none placeholder-gray-600"
+                        placeholder="0"
+                      />
+                    </div>
+                    {renderQuickButtons(
+                      "grid grid-cols-4 gap-1.5 mt-3",
+                      "rounded-full bg-gray-900/60 border border-gray-800 px-2.5 py-1.5 text-[11px] font-medium text-gray-300 hover:bg-blue-500/15 hover:text-blue-200"
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsBuy((prev) => !prev);
+                      const currentPay = payAmount;
+                      setPayAmount(receiveAmount);
+                      setReceiveAmount(currentPay);
+                      if (walletAddress) {
+                        const quoteTokenAddress = pair?.quoteToken?.address || WETH_ADDRESS;
+                        fetchQuoteTokenBalance(walletAddress, quoteTokenAddress);
+                        if (pair?.baseToken?.address) {
+                          fetchTokenBalance(walletAddress, pair.baseToken.address);
+                        }
+                      }
+                    }}
+                    className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-gray-800 bg-gray-900/70 text-gray-300 hover:text-white shadow-sm"
+                    aria-label="Flip trade direction"
+                  >
+                    <SwapArrowsIcon className="w-4 h-4" />
+                  </button>
+
+                  <div className="rounded-xl border border-gray-800 bg-gray-900/75 p-3 shadow-sm">
+                    <div className="flex items-center justify-between text-[11px] text-gray-400 mb-2">
+                      <span>You Receive</span>
+                      {quoteExpiresAt && receiveAmount && (
+                        <span className={`text-[11px] ${isQuoteExpired ? "text-red-400" : "text-gray-500"}`}>
+                          {isQuoteExpired ? "Expired" : `Quote ${quoteCountdown}s`}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between gap-2.5 min-w-0">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="flex-shrink-0">{receiveTokenIcon}</div>
+                        <div className="text-sm font-semibold text-white">{receiveTokenSymbol}</div>
+                      </div>
+                      <input
+                        value={receiveAmount || ""}
+                        readOnly
+                        className="flex-1 min-w-0 bg-transparent text-right text-xl font-semibold text-white placeholder-gray-600"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-gray-800 bg-gray-900/75 px-3 py-2 flex items-center justify-between text-[10px] text-gray-400">
+                    <span>Slippage</span>
+                    <div className="inline-flex gap-1.5">
+                      {[0.5, 1, 2].map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setSlippage(s)}
+                          className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                            slippage === s
+                              ? "bg-blue-500/25 text-blue-100 border border-blue-500/40"
+                              : "text-gray-300 border border-gray-700 hover:bg-blue-500/10 hover:text-blue-200"
+                          }`}
+                        >
+                          {s}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {swapError && (
+                    <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs text-red-300 text-center">
+                      {swapError}
+                    </div>
                   )}
-                </button>
-              </>
+                </div>
+
+                <div className="pt-3">
+                  {walletAddress ? (
+                    <button
+                      type="button"
+                      onClick={executeSwap}
+                      disabled={
+                        !payAmount ||
+                        !receiveAmount ||
+                        parseFloat(payAmount || "0") <= 0 ||
+                        parseFloat(receiveAmount || "0") <= 0 ||
+                        isQuoteExpired ||
+                        !pair?.baseToken?.address ||
+                        isSwapping
+                      }
+                      className={`w-full rounded-xl py-2.5 font-semibold text-xs uppercase tracking-wide disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${
+                        isBuy
+                          ? "bg-green-500/25 border border-green-500/40 text-green-200 hover:bg-green-500/35"
+                          : "bg-red-500/25 border border-red-500/40 text-red-200 hover:bg-red-500/35"
+                      }`}
+                    >
+                      {isSwapping
+                        ? "Processing..."
+                        : isQuoteExpired
+                          ? "Quote Expired"
+                          : `${isBuy ? "Buy" : "Sell"} ${receiveTokenSymbol}`}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          (window as any).dispatchEvent(new CustomEvent("open-wallet"));
+                        } catch {}
+                      }}
+                      className="w-full rounded-xl bg-blue-600 text-white py-2.5 font-semibold text-xs uppercase tracking-wide hover:bg-blue-500 transition-colors"
+                    >
+                      Connect Wallet
+                    </button>
+                  )}
+                </div>
+              </div>
             ) : (
-              <button onClick={()=>{ try { (window as any).dispatchEvent(new CustomEvent('open-wallet')); } catch {} }} className="w-full bg-blue-600/90 hover:bg-blue-600 text-white py-3">Connect Wallet</button>
+              <div className="flex-1 flex flex-col">
+                <div className={`flex items-center justify-between ${swapSectionSpacing}`}>
+                  <div className="w-full bg-gray-900/40 backdrop-blur supports-[backdrop-filter]:bg-gray-900/30 border border-gray-800 flex">
+                    <button
+                      type="button"
+                      onClick={() => setIsBuy(true)}
+                      className={`flex-1 ${swapButtonHeight} text-sm font-semibold ${
+                        isBuy ? "bg-green-500/20 text-green-300" : "text-gray-300 hover:text-white hover:bg-gray-800/50"
+                      }`}
+                    >
+                      Buy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsBuy(false)}
+                      className={`flex-1 ${swapButtonHeight} text-sm font-semibold ${
+                        !isBuy ? "bg-red-500/20 text-red-300" : "text-gray-300 hover:text-white hover:bg-gray-800/50"
+                      }`}
+                    >
+                      Sell
+                    </button>
+                  </div>
+                </div>
+                <div className="text-[10px] text-gray-500 mb-2">Powered by 0x</div>
+
+                <div className={`bg-gray-900/50 border border-gray-800 ${swapFieldPadding}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-gray-400">You Pay</div>
+                    <button
+                      onClick={() => setShowTokenSelector(true)}
+                      className="flex items-center gap-2 text-[11px] text-gray-300 hover:opacity-80 transition-opacity"
+                    >
+                      {payToken.logo ? (
+                        <img src={payToken.logo} alt={payToken.symbol} className="w-5 h-5 rounded-full flex-shrink-0" onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                        }} />
+                      ) : null}
+                      <div className={`w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 ${payToken.logo ? 'hidden' : ''}`}>
+                        <span className="text-[10px] text-white font-bold">
+                          {payToken.symbol.length <= 4 ? payToken.symbol : payToken.symbol.substring(0, 2).toUpperCase()}
+                        </span>
+                      </div>
+                      <span className="text-left">{payTokenSymbol}</span>
+                      {walletAddress && (
+                        <span className="text-[10px] text-gray-500 ml-1">({payBalanceDisplay})</span>
+                      )}
+                      <svg className="w-3 h-3 text-gray-400 flex-shrink-0 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between mt-1 h-12">
+                    <input
+                      value={payAmount}
+                      onChange={(e) => setPayAmount(e.target.value)}
+                      className="bg-transparent text-white text-lg focus:outline-none placeholder-gray-500 w-full"
+                      placeholder="0.0"
+                    />
+                  </div>
+                </div>
+
+                {renderQuickButtons(
+                  "flex gap-2 mt-2 mb-2",
+                  `${quickButtonClass} bg-gray-800/60 text-gray-300 hover:text-white hover:bg-blue-500/20`
+                )}
+
+                <div className="flex items-center justify-center my-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsBuy((prev) => !prev);
+                      const currentPay = payAmount;
+                      setPayAmount(receiveAmount);
+                      setReceiveAmount(currentPay);
+                      if (walletAddress) {
+                        const quoteTokenAddress = pair?.quoteToken?.address || WETH_ADDRESS;
+                        fetchQuoteTokenBalance(walletAddress, quoteTokenAddress);
+                        if (pair?.baseToken?.address) {
+                          fetchTokenBalance(walletAddress, pair.baseToken.address);
+                        }
+                      }
+                    }}
+                    className="w-10 h-10 border border-gray-800 bg-gray-900/60 text-gray-300 hover:text-white flex items-center justify-center"
+                  >
+                    <SwapArrowsIcon className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className={`bg-gray-900/50 border border-gray-800 ${swapFieldPadding} ${isMobile ? "mb-2" : "mb-3"}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-gray-400">You Receive</div>
+                    <div className="flex items-center gap-2 text-[11px] text-gray-300">
+                      <div className="flex-shrink-0">{receiveTokenIcon}</div>
+                      <span>{receiveTokenSymbol}</span>
+                    </div>
+                  </div>
+                  <div className={`flex items-center justify-between mt-1 ${swapButtonHeight} relative`}>
+                    <input
+                      value={receiveAmount || ""}
+                      readOnly
+                      className="bg-transparent text-white text-lg w-full pr-20"
+                      placeholder="Enter amount above"
+                    />
+                    {quoteExpiresAt && receiveAmount && (
+                      <div className="absolute right-0 text-xs">
+                        {isQuoteExpired ? (
+                          <span className="text-red-400">Expired</span>
+                        ) : (
+                          <span className="text-gray-500">
+                            <span className="text-yellow-400">{quoteCountdown}s</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {walletAddress ? (
+                  <>
+                    {swapError && (
+                      <div className="mb-2 text-xs text-red-400 text-center">{swapError}</div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={executeSwap}
+                      disabled={
+                        !payAmount ||
+                        !receiveAmount ||
+                        parseFloat(payAmount || "0") <= 0 ||
+                        parseFloat(receiveAmount || "0") <= 0 ||
+                        isQuoteExpired ||
+                        !pair?.baseToken?.address ||
+                        isSwapping
+                      }
+                      className={`w-full py-3 disabled:opacity-50 disabled:cursor-not-allowed transition-colors select-none focus:outline-none ${
+                        isBuy
+                          ? "bg-green-600/30 hover:bg-green-600/40 active:bg-green-600/40 focus:bg-green-600/40 text-green-400"
+                          : "bg-red-600/30 hover:bg-red-600/40 active:bg-red-600/40 focus:bg-red-600/40 text-red-400"
+                      }`}
+                    >
+                      {isSwapping ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span>Processing...</span>
+                        </div>
+                      ) : isQuoteExpired ? (
+                        "Quote Expired"
+                      ) : (
+                        `${isBuy ? "Buy" : "Sell"} ${receiveTokenSymbol}`
+                      )}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        (window as any).dispatchEvent(new CustomEvent("open-wallet"));
+                      } catch {}
+                    }}
+                    className="w-full bg-blue-600/90 hover:bg-blue-600 text-white py-3"
+                  >
+                    Connect Wallet
+                  </button>
+                )}
+
+                <div className="flex items-center justify-between text-[11px] text-gray-500 mt-2">
+                  <span>Slippage</span>
+                  <div className="inline-flex border border-gray-800">
+                    {[0.5, 1, 2].map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setSlippage(s)}
+                        className={`px-2 py-1 ${slippage === s ? "bg-blue-500/20 text-blue-300" : "text-gray-300 hover:bg-blue-500/10 hover:text-blue-200"}`}
+                      >
+                        {s}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             )}
 
-            <div className="flex items-center justify-between text-[11px] text-gray-500 mt-2">
-              <span>Slippage</span>
-              <div className="inline-flex border border-gray-800">
-                {[0.5,1,2].map(s => (
-                  <button key={s} onClick={()=>setSlippage(s)} className={`px-2 py-1 ${slippage===s ? 'bg-blue-500/20 text-blue-300' : 'text-gray-300 hover:bg-blue-500/10 hover:text-blue-200'}`}>{s}%</button>
-                ))}
-              </div>
-            </div>
+            {/* Token Selector Dropdown - Within Swap Panel */}
+            <AnimatePresence>
+              {showTokenSelector && (
+                <>
+                  {/* Backdrop - only covers swap panel */}
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 bg-black/40"
+                    onClick={() => setShowTokenSelector(false)}
+                    style={{ zIndex: 30 }}
+                  />
+                  {/* Dropdown - positioned within swap panel */}
+                  <motion.div
+                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                    className="absolute inset-0 bg-gray-950 flex flex-col"
+                    style={{ zIndex: 40 }}
+                  >
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-950 flex-shrink-0">
+                      <h2 className="text-base font-semibold text-white">Select Token</h2>
+                      <button
+                        onClick={() => setShowTokenSelector(false)}
+                        className="p-1.5 text-gray-400 hover:text-white transition-colors rounded-lg"
+                      >
+                        <FiX className="w-4 h-4" />
+                      </button>
           </div>
 
-          {!isMobile && (
-            <div className="px-4 py-4 border-t border-gray-800 text-xs text-gray-400">
-              <div className="flex items-center justify-between mb-2"><span>Liquidity</span><span>{pair?.liquidity?.usd ? `$${pair.liquidity.usd.toLocaleString()}` : '-'}</span></div>
-              <div className="flex items-center justify-between mb-2"><span>24h Txns</span><span>{pair?.txns?.h24 ? pair.txns.h24.buys + pair.txns.h24.sells : '-'}</span></div>
-            </div>
-          )}
+                    {/* Search Bar */}
+                    <div className="px-4 py-3 border-b border-gray-800 bg-gray-950 flex-shrink-0 border-t-0">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={tokenSearchQuery}
+                          onChange={(e) => setTokenSearchQuery(e.target.value)}
+                          placeholder="Search by name, symbol, or address"
+                          className="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-3 py-2 pl-9 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                          autoFocus
+                        />
+                        <svg className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        {isSearchingTokens && (
+                          <div className="absolute right-2.5 top-1/2 transform -translate-y-1/2">
+                            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Token List */}
+                    <div className="flex-1 overflow-y-auto scrollbar-hide px-4 py-2">
+                      {isLoadingTokens ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Search Results */}
+                          {tokenSearchQuery && tokenSearchResults.length > 0 && (
+                            <div className="mb-3">
+                              <div className="text-xs text-gray-400 mb-2 px-2">Search Results</div>
+                              <div className="space-y-1">
+                                {tokenSearchResults.map((token, idx) => (
+                                  <button
+                                    key={`search-${token.address}-${idx}`}
+                                    onClick={() => handleTokenSelect(token)}
+                                    className="w-full flex items-center justify-between p-2.5 bg-gray-900/50 hover:bg-gray-800/50 rounded-lg border border-gray-700/50 transition-colors group"
+                                  >
+                                    <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                      {token.logo ? (
+                                        <img src={token.logo} alt={token.symbol} className="w-7 h-7 rounded-full flex-shrink-0" onError={(e) => {
+                                          e.currentTarget.style.display = 'none';
+                                          e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                        }} />
+                                      ) : null}
+                                      <div className={`w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 ${token.logo ? 'hidden' : ''}`}>
+                                        <span className="text-xs text-white font-bold">
+                                          {token.symbol.length <= 4 ? token.symbol : token.symbol.substring(0, 2).toUpperCase()}
+                                        </span>
+                                      </div>
+                                      <div className="flex-1 min-w-0 text-left">
+                                        <div className="text-white text-sm font-medium truncate">{token.symbol}</div>
+                                        <div className="text-xs text-gray-400 truncate">{token.name || token.symbol}</div>
+                                      </div>
+                                    </div>
+                                    <svg className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* No Search Results */}
+                          {tokenSearchQuery && !isSearchingTokens && tokenSearchResults.length === 0 && (
+                            <div className="text-center py-8">
+                              <div className="text-gray-400 text-sm mb-1">No tokens found</div>
+                              <div className="text-xs text-gray-500">Try searching by symbol, name, or contract address</div>
+                            </div>
+                          )}
+
+                          {/* Recent Tokens (ETH + Recent) */}
+                          {!tokenSearchQuery && (
+                            <div>
+                              <div className="text-xs text-gray-400 mb-2 px-2">Recent Tokens</div>
+                              <div className="space-y-1">
+                                {availableTokens.length === 0 ? (
+                                  <div className="text-center py-8 text-gray-400 text-sm">No recent tokens</div>
+                                ) : (
+                                  availableTokens.map((token, idx) => {
+                                    const isSelected = payToken.address.toLowerCase() === token.address.toLowerCase();
+                                    
+                                    return (
+                                      <button
+                                        key={`token-${token.address}-${idx}`}
+                                        onClick={() => handleTokenSelect(token)}
+                                        disabled={isSelected}
+                                        className={`w-full flex items-center justify-between p-2.5 rounded-lg border transition-colors ${
+                                          isSelected 
+                                            ? 'bg-blue-500/20 border-blue-500/50 cursor-not-allowed' 
+                                            : 'bg-gray-900/50 hover:bg-gray-800/50 border-gray-700/50'
+                                        } group`}
+                                      >
+                                        <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                          {token.logo ? (
+                                            <img src={token.logo} alt={token.symbol} className="w-7 h-7 rounded-full flex-shrink-0" onError={(e) => {
+                                              e.currentTarget.style.display = 'none';
+                                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                            }} />
+                                          ) : null}
+                                          <div className={`w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 ${token.logo ? 'hidden' : ''}`}>
+                                            <span className="text-xs text-white font-bold">
+                                              {token.symbol.length <= 4 ? token.symbol : token.symbol.substring(0, 2).toUpperCase()}
+                                            </span>
+                                          </div>
+                                          <div className="flex-1 min-w-0 text-left">
+                                            <div className="text-white text-sm font-medium truncate">{token.symbol}</div>
+                                            <div className="text-xs text-gray-400 truncate">{token.name || token.symbol}</div>
+                                          </div>
+                                        </div>
+                                        {isSelected ? (
+                                          <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                            <FiCheck className="w-2.5 h-2.5 text-white" />
+                                          </div>
+                                        ) : (
+                                          <svg className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                          </svg>
+                                        )}
+                                      </button>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
         </aside>
 
         </div>
 
         <div
-          className="xl:hidden fixed inset-x-0 z-50 border-t border-gray-900 bg-gray-950"
+          className="xl:hidden fixed inset-x-0 z-[60] border-t border-gray-900 bg-gray-950"
           style={{ bottom: `calc(${footerHeight}px + env(safe-area-inset-bottom, 0px))` }}
         >
           <div
@@ -2436,8 +3301,6 @@ export default function ChartV2Page() {
           </div>
         </div>
       </div>
-
-      {!isMobile && <Footer />}
 
       {/* Success Banner - Bottom Left */}
       <AnimatePresence>

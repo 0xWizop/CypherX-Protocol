@@ -1,5 +1,4 @@
 import { adminDb } from '@/lib/firebase-admin';
-import { Timestamp } from 'firebase-admin/firestore';
 
 /**
  * Helper function to get or create user by wallet address
@@ -225,7 +224,7 @@ export async function updateUserRewards(
   userId: string,
   swapValueUSD: number,
   cashbackAmount: number,
-  platformFee: number
+  _platformFee: number
 ): Promise<void> {
   const db = adminDb();
   if (!db) {

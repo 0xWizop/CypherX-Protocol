@@ -192,12 +192,14 @@ let adminInitialized = false;
 if (typeof window === "undefined" && !adminInitialized) {
   (async () => {
     try {
-      console.log("Starting Firebase Admin initialization...");
-      console.log("Raw Firebase Admin Env Vars:", {
-        FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || "Missing",
-        FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL || "Missing",
-        FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY ? "Set" : "Missing",
-      });
+      if (process.env.NODE_ENV === 'development') {
+        console.log("Starting Firebase Admin initialization...");
+        console.log("Raw Firebase Admin Env Vars:", {
+          FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || "Missing",
+          FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL || "Missing",
+          FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY ? "Set" : "Missing",
+        });
+      }
 
       const requiredEnvVars = {
         FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
@@ -211,7 +213,9 @@ if (typeof window === "undefined" && !adminInitialized) {
         throw new Error(errorMessage);
       }
 
-      console.log("Attempting to import firebase-admin modules...");
+      if (process.env.NODE_ENV === 'development') {
+        console.log("Attempting to import firebase-admin modules...");
+      }
       const {
         initializeApp: initializeAdminApp,
         getApps: getAdminApps,
@@ -227,7 +231,9 @@ if (typeof window === "undefined" && !adminInitialized) {
           .replace(/\\r/g, "")
           .replace(/\n+/g, "\n")
           .trim();
-        console.log("Raw Private Key Length:", normalizedKey.length);
+        if (process.env.NODE_ENV === 'development') {
+          console.log("Raw Private Key Length:", normalizedKey.length);
+        }
         if (!normalizedKey.startsWith("-----BEGIN PRIVATE KEY-----\n")) {
           normalizedKey = "-----BEGIN PRIVATE KEY-----\n" + normalizedKey;
         }
@@ -237,15 +243,21 @@ if (typeof window === "undefined" && !adminInitialized) {
         if (!normalizedKey.includes("PRIVATE KEY")) {
           throw new Error("FIREBASE_PRIVATE_KEY is malformed: Missing expected key structure");
         }
-        console.log("Normalized Private Key Length:", normalizedKey.length, "Sample:", normalizedKey.substring(0, 20) + "...");
+        if (process.env.NODE_ENV === 'development') {
+          console.log("Normalized Private Key Length:", normalizedKey.length, "Sample:", normalizedKey.substring(0, 20) + "...");
+        }
         return normalizedKey;
       };
 
       const privateKey = normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY);
-      console.log("Private Key normalized successfully");
+      if (process.env.NODE_ENV === 'development') {
+        console.log("Private Key normalized successfully");
+      }
 
       if (!getAdminApps().length) {
-        console.log("Initializing Firebase Admin app...");
+        if (process.env.NODE_ENV === 'development') {
+          console.log("Initializing Firebase Admin app...");
+        }
         adminApp = initializeAdminApp({
           credential: cert({
             projectId: process.env.FIREBASE_PROJECT_ID!,
@@ -254,14 +266,20 @@ if (typeof window === "undefined" && !adminInitialized) {
           }),
           storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
         });
-        console.log("Firebase Admin app initialized successfully");
+        if (process.env.NODE_ENV === 'development') {
+          console.log("Firebase Admin app initialized successfully");
+        }
       } else {
         adminApp = getAdminApps()[0];
-        console.log("Firebase Admin app already initialized");
+        if (process.env.NODE_ENV === 'development') {
+          console.log("Firebase Admin app already initialized");
+        }
       }
 
       adminDb = getAdminFirestore();
-      console.log("Admin Firestore initialized: Success");
+      if (process.env.NODE_ENV === 'development') {
+        console.log("Admin Firestore initialized: Success");
+      }
 
       // Enable ignoreUndefinedProperties to prevent undefined value errors
       // Only set settings if not already set
@@ -270,25 +288,35 @@ if (typeof window === "undefined" && !adminInitialized) {
           ignoreUndefinedProperties: true
         });
       } catch (error) {
-        console.log("Firestore settings already configured, skipping...");
+        if (process.env.NODE_ENV === 'development') {
+          console.log("Firestore settings already configured, skipping...");
+        }
       }
 
       adminStorage = getAdminStorage(adminApp);
-      console.log("Admin Storage initialized: Success, Bucket:", adminStorage.bucket().name);
+      if (process.env.NODE_ENV === 'development') {
+        console.log("Admin Storage initialized: Success, Bucket:", adminStorage.bucket().name);
+      }
 
       // Test Firestore connectivity
-      console.log("Testing Firestore connectivity...");
+      if (process.env.NODE_ENV === 'development') {
+        console.log("Testing Firestore connectivity...");
+      }
       await adminDb.collection("test").doc("init-check").set({
         timestamp: new Date(),
         initializedBy: "firebase.ts",
       });
-      console.log("Admin SDK connectivity test: Firestore write successful");
+      if (process.env.NODE_ENV === 'development') {
+        console.log("Admin SDK connectivity test: Firestore write successful");
+      }
 
       // Mark as initialized
       adminInitialized = true;
 
       // Test Storage connectivity
-      console.log("Testing Storage connectivity...");
+      if (process.env.NODE_ENV === 'development') {
+        console.log("Testing Storage connectivity...");
+      }
       try {
         const bucket = adminStorage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!);
         const [exists] = await bucket.exists();
@@ -296,10 +324,12 @@ if (typeof window === "undefined" && !adminInitialized) {
           throw new Error("Storage bucket does not exist: " + process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
         }
         const [metadata] = await bucket.getMetadata();
-        console.log("Admin Storage connectivity test: Metadata retrieved", {
-          bucket: metadata.name,
-          location: metadata.location,
-        });
+        if (process.env.NODE_ENV === 'development') {
+          console.log("Admin Storage connectivity test: Metadata retrieved", {
+            bucket: metadata.name,
+            location: metadata.location,
+          });
+        }
       } catch (error: unknown) {
         console.error("Admin Storage connectivity test failed:", {
           message: error instanceof Error ? error.message : String(error),

@@ -3,8 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { ChevronDownIcon } from "@heroicons/react/24/solid";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import { useAuth, useLoginModal, useWalletSystem } from "@/app/providers";
@@ -18,7 +17,7 @@ import GlobalSearch from "./GlobalSearch";
 import UserProfileDropdown from "./UserProfileDropdown";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { FiBarChart, FiMenu, FiX, FiStar, FiTrash2, FiUser, FiSettings, FiCheck, FiAlertCircle } from "react-icons/fi";
+import { FiMenu, FiX, FiStar, FiTrash2, FiUser, FiSettings, FiCheck, FiAlertCircle } from "react-icons/fi";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 
@@ -57,9 +56,9 @@ const FavoriteTokenItem = ({ poolAddress, onRemove }: { poolAddress: string; onR
 
   if (loading) {
     return (
-      <div className="flex items-center justify-between p-3 bg-gray-800/50 backdrop-blur-sm border border-gray-700/30 rounded-xl">
+      <div className="flex items-center justify-between p-3 bg-gray-800/50 backdrop-blur-sm border border-gray-700/30">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gray-700/50 rounded-full animate-pulse"></div>
+          <div className="w-10 h-10 bg-gray-700/50 animate-pulse"></div>
           <div className="space-y-2">
             <div className="h-4 bg-gray-700/50 rounded w-20 animate-pulse"></div>
             <div className="h-3 bg-gray-700/50 rounded w-16 animate-pulse"></div>
@@ -72,16 +71,16 @@ const FavoriteTokenItem = ({ poolAddress, onRemove }: { poolAddress: string; onR
 
   if (!tokenData) {
     return (
-      <div className="flex items-center justify-between p-3 bg-gray-800/50 backdrop-blur-sm border border-gray-700/30 rounded-xl">
+      <div className="flex items-center justify-between p-3 bg-gray-800/50 backdrop-blur-sm border border-gray-700/30">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gray-700/50 rounded-full"></div>
+          <div className="w-10 h-10 bg-gray-700/50"></div>
           <div className="text-gray-400 text-sm">
             {poolAddress.slice(0, 8)}...{poolAddress.slice(-6)}
           </div>
         </div>
         <button
           onClick={onRemove}
-          className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all duration-200"
+          className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
         >
           <FiTrash2 className="w-4 h-4" />
         </button>
@@ -93,9 +92,9 @@ const FavoriteTokenItem = ({ poolAddress, onRemove }: { poolAddress: string; onR
   const priceChangeColor = priceChange >= 0 ? 'text-green-400' : 'text-red-400';
 
   return (
-    <div className="flex items-center justify-between p-3 bg-gray-800/50 backdrop-blur-sm border border-gray-700/30 rounded-xl hover:bg-gray-800/70 transition-all duration-200">
+    <div className="flex items-center justify-between p-3 bg-gray-800/50 backdrop-blur-sm border border-gray-700/30 hover:bg-gray-800/70 transition-all duration-200">
       <div className="flex items-center space-x-3">
-        <div className="relative w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
+        <div className="relative w-10 h-10 overflow-hidden bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
           {tokenData.info?.imageUrl && (
             <img src={tokenData.info.imageUrl} alt={tokenData.baseToken?.symbol || 'Token'} className="w-full h-full object-cover" />
           )}
@@ -132,7 +131,7 @@ const FavoriteTokenItem = ({ poolAddress, onRemove }: { poolAddress: string; onR
         </div>
         <button
           onClick={onRemove}
-          className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all duration-200"
+          className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
         >
           <FiTrash2 className="w-4 h-4" />
         </button>
@@ -159,8 +158,47 @@ const Header: React.FC = () => {
   const { setShowLoginModal, setRedirectTo } = useLoginModal();
 
 
+  const navLinks: Array<{ href: string; label: string; isActive: (path: string) => boolean }> = [
+    {
+      href: "/explore",
+      label: "Trade",
+      isActive: (path) =>
+        path === "/explore" ||
+        (path.startsWith("/explore/") && !path.startsWith("/explorer")),
+    },
+    {
+      href: "/dashboard",
+      label: "Dashboard",
+      isActive: (path) => path === "/dashboard" || path.startsWith("/dashboard/"),
+    },
+    {
+      href: "/radar",
+      label: "Radar",
+      isActive: (path) => path === "/radar" || path.startsWith("/radar/"),
+    },
+    {
+      href: "/rewards",
+      label: "Rewards",
+      isActive: (path) => path === "/rewards" || path.startsWith("/rewards/"),
+    },
+    {
+      href: "/insights",
+      label: "Insights",
+      isActive: (path) => path === "/insights" || path.startsWith("/insights/"),
+    },
+    {
+      href: "/explorer",
+      label: "Explorer",
+      isActive: (path) => path === "/explorer" || path.startsWith("/explorer/"),
+    },
+  ];
+
+  const currentPath = pathname ?? "";
+
   const walletDropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const [headerHeight, setHeaderHeight] = useState<number>(72);
 
   // Fetch user stats from API
   useEffect(() => {
@@ -218,9 +256,47 @@ const Header: React.FC = () => {
     handleRouteChange();
   }, [pathname]);
 
+  // Measure header height
+  useEffect(() => {
+    const updateHeaderHeight = () => {
+      if (headerRef.current) {
+        const height = headerRef.current.offsetHeight;
+        setHeaderHeight(height);
+        document.documentElement.style.setProperty('--header-height', `${height}px`);
+      }
+    };
+    updateHeaderHeight();
+    window.addEventListener('resize', updateHeaderHeight);
+    return () => window.removeEventListener('resize', updateHeaderHeight);
+  }, []);
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (isMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMenuOpen]);
+
+  // Listen for 'open-wallet' event to open wallet dropdown
+  useEffect(() => {
+    const handleOpenWallet = () => {
+      setShowWalletDropdown(true);
+    };
+
+    window.addEventListener('open-wallet', handleOpenWallet as EventListener);
+    return () => {
+      window.removeEventListener('open-wallet', handleOpenWallet as EventListener);
+    };
+  }, []);
+
   return (
     <>
-            <header className="bg-gray-950 border-b border-gray-800/20 sticky top-0 z-50">
+            <header ref={headerRef} className="bg-gray-950 border-b border-gray-800/20 sticky top-0 z-40">
         <div className="w-full">
                      <div className="flex items-center justify-between px-4 py-3 lg:px-6 lg:py-4">
             {/* Left Side - Menu, Logo & Navigation */}
@@ -290,77 +366,26 @@ const Header: React.FC = () => {
               </div>
 
                               {/* Desktop Navigation */}
-               <nav className="hidden lg:flex items-center space-x-8">
+              <nav className="hidden lg:flex items-center gap-2">
+                {navLinks.map(({ href, label, isActive }) => {
+                  const active = isActive(currentPath);
+                  const baseClasses =
+                    "text-sm font-medium px-3 py-2 transition-all duration-200";
+                  const stateClasses = active
+                    ? "text-blue-300"
+                    : "text-white hover:text-blue-300";
+
+                  return (
                  <Link
-                   href="/explore"
-                   className="text-white text-sm font-normal hover:text-blue-300 transition-all duration-200 group"
+                      key={href}
+                      href={href}
+                      className={`${baseClasses} ${stateClasses}`}
                    prefetch={true}
                  >
-                   <span className="relative">
-                     Trade
-                     <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-400 group-hover:w-full transition-all duration-300"></span>
-                   </span>
+                      {label}
                  </Link>
-
-                 <Link
-                   href="/radar"
-                   className="text-white text-sm font-normal hover:text-blue-300 transition-all duration-200 group"
-                   prefetch={true}
-                 >
-                   <span className="relative">
-                     Radar
-                     <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-400 group-hover:w-full transition-all duration-300"></span>
-                   </span>
-                 </Link>
-
-                                   <Link
-                    href="/events"
-                    className="text-white text-sm font-normal hover:text-blue-300 transition-all duration-200 group"
-                    prefetch={true}
-                  >
-                    <span className="relative">
-                      Events
-                      <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-400 group-hover:w-full transition-all duration-300"></span>
-                    </span>
-                  </Link>
-
-                  <Link
-                    href="/rewards"
-                    className="text-white text-sm font-normal hover:text-blue-300 transition-all duration-200 group"
-                    prefetch={true}
-                  >
-                    <span className="relative">
-                      <span>Rewards</span>
-                      <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-400 group-hover:w-full transition-all duration-300"></span>
-                    </span>
-                  </Link>
-
-
-                 <Link
-                   href="/insights"
-                   className="text-white text-sm font-normal hover:text-blue-300 transition-all duration-200 group"
-                   prefetch={true}
-                 >
-                   <span className="relative">
-                     Insights
-                     <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-400 group-hover:w-full transition-all duration-300"></span>
-                   </span>
-                 </Link>
-
-                 <Link
-                   href="/explorer"
-                   className="text-white text-sm font-normal hover:text-blue-300 transition-all duration-200 group"
-                   prefetch={true}
-                 >
-                   <span className="relative">
-                     Explorer
-                     <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-400 group-hover:w-full transition-all duration-300"></span>
-                   </span>
-                 </Link>
-
-
-
-
+                  );
+                })}
                </nav>
              </div>
 
@@ -448,80 +473,120 @@ const Header: React.FC = () => {
            </div>
 
           {/* Mobile Menu */}
-          <AnimatePresence>
-            {isMenuOpen && (
-              <motion.div
-                ref={mobileMenuRef}
-                                 className="xl:hidden border-t border-gray-800/20 bg-gray-950"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.3, ease: "easeInOut" }}
-              >
-                <div className="px-4 py-4 space-y-4">
-                  {/* Mobile Search */}
-                  <div className="mb-4">
-                    <GlobalSearch 
-                      placeholder="Search tokens, addresses, transactions..."
-                      variant="header"
-                    />
-                  </div>
-
-                  {/* Mobile Navigation Links */}
-                  <div className="space-y-3">
-                    {[{
-                      href: "/explore",
-                      label: "Explore",
-                      delay: 0.1
-                    }, {
-                      href: "/radar",
-                      label: "Radar",
-                      delay: 0.15
-                    }, {
-                      href: "/events",
-                      label: "Events",
-                      delay: 0.2
-                    }, {
-                      href: "/rewards",
-                      label: "Rewards",
-                      delay: 0.25
-                    }, {
-                      href: "/insights",
-                      label: "Insights",
-                      delay: 0.3
-                    }, {
-                      href: "/explorer",
-                      label: "Explorer",
-                      delay: 0.35
-                    }].map(({ href, label, delay }, index) => (
-                      <motion.div
-                        key={href}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay }}
-                      >
-                        <Link
-                          href={href}
-                          className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-gray-700/30 transition-all duration-200"
-                          prefetch={true}
+          {typeof document !== 'undefined' && createPortal(
+            <AnimatePresence>
+              {isMenuOpen && (
+                <>
+                  {/* Backdrop */}
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+                    onClick={() => setIsMenuOpen(false)}
+                  />
+                  {/* Menu */}
+                  <motion.div
+                    ref={mobileMenuRef}
+                    className="fixed left-0 right-0 bottom-0 z-50 bg-gray-950 lg:hidden overflow-hidden"
+                    style={{ top: `${headerHeight}px` }}
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                  >
+                    <div className="h-full overflow-y-auto px-4 py-5 space-y-5">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-white text-xs font-semibold tracking-[0.3em] uppercase">
+                          Menu
+                        </h3>
+                        <button
                           onClick={() => setIsMenuOpen(false)}
+                          className="text-gray-400 hover:text-white transition-colors"
+                          aria-label="Close menu"
                         >
-                          <span className="text-white text-sm font-normal">{label}</span>
-                        </Link>
-                        {index < 5 && <div className="h-px bg-gray-800/60 mt-1" />}
-                      </motion.div>
-                    ))}
-                  </div>
+                          <FiX className="w-4 h-4" />
+                        </button>
+                      </div>
 
-                  {/* Mobile Dropdowns */}
-                  <div className="space-y-2">
+                      <GlobalSearch 
+                        placeholder="Search tokens, addresses, transactions..."
+                        variant="header"
+                      />
 
-                    
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                      <div className="space-y-2">
+                        {[{
+                          href: "/explore",
+                          label: "Explore",
+                          delay: 0.05
+                        }, {
+                          href: "/dashboard",
+                          label: "Dashboard",
+                          delay: 0.075
+                        }, {
+                          href: "/radar",
+                          label: "Radar",
+                          delay: 0.1
+                        }, {
+                          href: "/rewards",
+                          label: "Rewards",
+                          delay: 0.15
+                        }, {
+                          href: "/insights",
+                          label: "Insights",
+                          delay: 0.25
+                        }, {
+                          href: "/explorer",
+                          label: "Explorer",
+                          delay: 0.3
+                        }].map(({ href, label, delay }, index) => (
+                          <motion.div
+                            key={href}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay }}
+                          >
+                            <Link
+                              href={href}
+                              className="block px-2 py-2 text-white text-sm font-medium tracking-wide hover:text-blue-300 transition-colors"
+                              prefetch={true}
+                              onClick={() => setIsMenuOpen(false)}
+                            >
+                              {label}
+                            </Link>
+                            {index < 5 && <div className="h-px bg-gray-800/60" />}
+                          </motion.div>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <button
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            setShowWatchlistsModal(true);
+                          }}
+                          className="px-3 py-2 rounded-lg bg-gray-900/50 text-white text-xs font-medium hover:bg-gray-900/80 transition-colors"
+                        >
+                          Watchlists
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            setShowSettingsModal(true);
+                          }}
+                          className="px-3 py-2 rounded-lg bg-gray-900/50 text-white text-xs font-medium hover:bg-gray-900/80 transition-colors"
+                        >
+                          Settings
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>,
+            document.body
+          )}
         </div>
       </header>
     
@@ -537,42 +602,43 @@ const Header: React.FC = () => {
       <AnimatePresence>
         {showWatchlistsModal && (
           <motion.div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 sm:flex sm:items-center sm:justify-center sm:p-6"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setShowWatchlistsModal(false)}
           >
             <motion.div
-              className="bg-gray-900/95 backdrop-blur-xl border border-gray-700/50 rounded-none p-6 w-full max-w-md shadow-2xl"
+              className="bg-gray-950 sm:border sm:border-gray-800 w-full h-full sm:h-auto sm:max-w-lg sm:max-w-xl shadow-2xl p-5 sm:p-6 flex flex-col sm:max-h-[85vh]"
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-100">
+              <div className="relative flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">
                   My Watchlists
                 </h3>
                 <button
                   onClick={() => setShowWatchlistsModal(false)}
-                  className="text-gray-400 hover:text-gray-200 transition-colors"
+                  className="absolute top-0 right-0 w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg bg-gray-900/50 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 text-gray-300 hover:text-white transition-all duration-200"
+                  aria-label="Close"
                 >
-                  <FiX className="w-5 h-5" />
+                  <FiX className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
               </div>
-              <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+              <div className="space-y-4 overflow-y-auto scrollbar-hide pr-0.5">
                 {/* Default Watchlist (Favorites) */}
-                <div className="bg-gray-800/50 rounded-none p-3 border border-gray-700/30">
+                <div className="bg-gray-900/50 border border-gray-800 p-3 sm:p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-gray-200">
+                    <h4 className="text-sm font-medium text-gray-100">
                       Favorites
                     </h4>
                     <span className="text-xs text-gray-400">{favorites.length} tokens</span>
                   </div>
                   {favorites.length === 0 ? (
                     <div className="text-gray-400 text-xs">
-                      No tokens in your favorites yet. Click the star icon on any token to add it.
+                      No tokens in your favorites yet. Tap the star icon on any token to add it.
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -618,21 +684,21 @@ const Header: React.FC = () => {
                 {/* Custom Watchlists */}
                 {watchlists.length > 0 && (
                   <div className="space-y-3">
-                    <h4 className="text-sm font-medium text-gray-300 border-t border-gray-700/30 pt-3">Custom Watchlists</h4>
+                    <h4 className="text-sm font-medium text-gray-300">Custom Watchlists</h4>
                     {watchlists.map((watchlist) => (
-                      <div key={watchlist.id} className="bg-gray-800/50 rounded-none p-3 border border-gray-700/30">
-                        <div className="flex items-center justify-between mb-2">
+                      <div key={watchlist.id} className="bg-gray-900/50 border border-gray-800 p-3 sm:p-4">
+                        <div className="flex items-center justify-between mb-2 gap-2">
                           <button
                             onClick={() => setExpandedWatchlist(expandedWatchlist === watchlist.id ? null : watchlist.id)}
-                            className="text-sm font-medium text-gray-200 hover:text-white transition-colors cursor-pointer"
+                            className="text-sm font-medium text-gray-200 hover:text-white transition-colors cursor-pointer text-left flex-1"
                           >
                             {watchlist.name}
                           </button>
-                          <span className="text-xs text-gray-400">{watchlist.tokens.length} tokens</span>
+                          <span className="text-xs text-gray-400 whitespace-nowrap">{watchlist.tokens.length} tokens</span>
                         </div>
                         <div className="space-y-2">
                           {expandedWatchlist === watchlist.id ? (
-                            <div className="max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                            <div className="max-h-48 overflow-y-auto scrollbar-hide pr-0.5">
                               {watchlist.tokens.map((poolAddress) => (
                                 <div key={poolAddress} className="flex items-center justify-between text-xs py-1">
                                   <span className="text-gray-300 truncate">{poolAddress.slice(0, 8)}...{poolAddress.slice(-6)}</span>
@@ -714,17 +780,19 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
   const [settingsStatus, setSettingsStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [settingsMessage, setSettingsMessage] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [notifications, setNotifications] = useState({
+  const DEFAULT_NOTIFICATIONS = {
     email: true,
     push: true,
     trading: true,
-    news: false
-  });
-  const [privacy, setPrivacy] = useState({
+    news: false,
+  } as const;
+  const DEFAULT_PRIVACY = {
     showProfile: true,
     showTrades: true,
-    showBalance: false
-  });
+    showBalance: false,
+  } as const;
+  const [notifications, setNotifications] = useState(() => ({ ...DEFAULT_NOTIFICATIONS }));
+  const [privacy, setPrivacy] = useState(() => ({ ...DEFAULT_PRIVACY }));
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -742,6 +810,8 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
             const userData = userDoc.data();
             setProfilePicture(userData.profilePicture || userData.photoURL || "");
             setDisplayName(userData.displayName || "");
+            setNotifications(userData.notifications ? { ...DEFAULT_NOTIFICATIONS, ...userData.notifications } : { ...DEFAULT_NOTIFICATIONS });
+            setPrivacy(userData.privacy ? { ...DEFAULT_PRIVACY, ...userData.privacy } : { ...DEFAULT_PRIVACY });
           }
         } catch (error) {
           console.error("Error fetching profile:", error);
@@ -761,6 +831,36 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen, onClose]);
+
+  // Disable body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      // Save current scroll position
+      const scrollY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+    } else {
+      // Restore scroll position
+      const scrollY = document.body.style.top;
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || '0') * -1);
+      }
+    }
+
+    return () => {
+      // Cleanup on unmount
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -821,10 +921,12 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
     
     try {
       const documentId = user.uid;
-      await updateDoc(doc(db, "users", documentId), {
+      await setDoc(doc(db, "users", documentId), {
         displayName: displayName.trim(),
+        notifications,
+        privacy,
         updatedAt: new Date(),
-      });
+      }, { merge: true });
       
       setSettingsStatus('success');
       setSettingsMessage('Settings saved successfully!');
@@ -850,7 +952,7 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] sm:flex sm:items-center sm:justify-center sm:p-5"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -858,62 +960,77 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
       >
         <motion.div
           ref={modalRef}
-          className="bg-gray-900 rounded-xl w-full max-w-[500px] flex flex-col border border-gray-700 max-h-[85vh]"
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.9, opacity: 0 }}
+          className="bg-gray-950 w-full h-full sm:h-auto sm:max-w-[520px] sm:mx-0 sm:border sm:border-gray-800 shadow-2xl flex flex-col sm:max-h-[82vh] sm:my-auto"
+          initial={{ scale: 0.9, opacity: 0, y: 20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.9, opacity: 0, y: 20 }}
+          transition={{ duration: 0.2 }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between p-4 border-b border-gray-700">
-            <h3 className="text-white text-xl font-semibold">Account Settings</h3>
+          <div className="relative flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-800 bg-gray-950">
+            <div className="text-left">
+              <span className="text-[10px] uppercase tracking-[0.3em] text-blue-400/70 font-medium">Profile</span>
+              <h3 className="text-white text-base sm:text-2xl font-semibold mt-1">Account Settings</h3>
+            </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+              className="absolute top-3 sm:top-4 right-4 sm:right-6 w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg bg-gray-900/50 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 text-gray-300 hover:text-white transition-all duration-200"
+              aria-label="Close"
             >
-              <FiX className="w-5 h-5 text-gray-400" />
+              <FiX className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-6 py-4 space-y-4 sm:space-y-6">
             {/* Profile Section */}
-            <div className="bg-gray-800/50 rounded-lg p-3">
-              <h4 className="text-white font-medium mb-2">Profile Information</h4>
-              <div className="space-y-2">
-                <div className="flex items-center space-x-4">
-                  <div className="relative">
-                    <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-700 border-2 border-gray-600">
+            <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner mt-1">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <h4 className="text-white font-semibold text-base sm:text-lg">Profile Information</h4>
+              </div>
+              <div className="space-y-3 sm:space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-5 gap-3 sm:gap-4">
+                  <div className="relative self-center sm:self-auto">
+                    <div className="w-14 h-14 sm:w-20 sm:h-20 overflow-hidden bg-gray-900 border border-gray-800 shadow-lg">
                       {profilePicture ? (
                         <Image
                           src={profilePicture}
                           alt="Profile"
-                          width={64}
-                          height={64}
+                          width={72}
+                          height={72}
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <FiUser className="w-8 h-8 text-gray-400" />
+                        <div className="w-full h-full flex items-center justify-center bg-gray-900">
+                          <FiUser className="w-6 h-6 text-gray-500" />
+                        </div>
+                      )}
+                      {uploadingImage && (
+                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
                         </div>
                       )}
                     </div>
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingImage}
-                      className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-full flex items-center justify-center transition-colors"
+                      className="absolute -bottom-2 -right-2 w-6 h-6 sm:w-7 sm:h-7 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 flex items-center justify-center transition-colors shadow-lg"
                     >
                       {uploadingImage ? (
                         <div className="animate-spin rounded-full h-3 w-3 border-b border-white"></div>
                       ) : (
-                        <FiUser className="w-3 h-3 text-white" />
+                        <FiUser className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
                       )}
                     </button>
                   </div>
-                  <div className="flex-1">
-                    <h5 className="text-white font-medium text-sm">Profile Picture</h5>
+                  <div className="flex-1 w-full">
+                    <h5 className="text-white font-semibold text-sm sm:text-base">Profile Picture</h5>
+                    <p className="text-gray-400 text-xs sm:text-sm mb-3">
+                      Upload an image with a minimum size of 256x256 for best clarity.
+                    </p>
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingImage}
-                      className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-xs transition-colors mt-2"
+                      className="inline-flex items-center gap-2 px-3 py-2 bg-gray-900 border border-gray-800 hover:border-gray-600 hover:bg-gray-900/80 text-xs sm:text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-1"
                     >
                       {uploadingImage ? 'Uploading...' : 'Upload Image'}
                     </button>
@@ -921,16 +1038,16 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                       <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className={`mt-2 p-2 rounded-lg text-xs flex items-center space-x-2 ${
+                        className={`mt-3 px-3 py-2 text-xs sm:text-sm flex items-center gap-2 border ${
                           uploadStatus === 'success' 
-                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                            : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            ? 'bg-green-500/15 text-green-300 border-green-500/30'
+                            : 'bg-red-500/15 text-red-300 border-red-500/30'
                         }`}
                       >
                         {uploadStatus === 'success' ? (
-                          <FiCheck className="w-3 h-3" />
+                          <FiCheck className="w-4 h-4" />
                         ) : (
-                          <FiAlertCircle className="w-3 h-3" />
+                          <FiAlertCircle className="w-4 h-4" />
                         )}
                         <span>{uploadMessage}</span>
                       </motion.div>
@@ -946,70 +1063,99 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                   className="hidden"
                 />
 
-                <div>
-                  <label className="block text-gray-300 text-sm mb-1">Display Name</label>
-                  <input
-                    type="text"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    placeholder="Enter your display name"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="col-span-1 sm:col-span-2">
+                    <label className="block text-gray-300 text-xs sm:text-sm font-medium mb-2">Display Name</label>
+                    <input
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-950 border border-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/50 text-sm transition"
+                      placeholder="Enter your display name"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Notifications Section */}
-            <div className="bg-gray-800/50 rounded-lg p-3">
-              <h4 className="text-white font-medium mb-2">Notifications</h4>
-              <div className="space-y-2">
-                {Object.entries(notifications).map(([key, value]) => (
-                  <label key={key} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors cursor-pointer">
-                    <span className="text-gray-300 text-sm font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
-                    <div className="relative">
-                      <input
-                        type="checkbox"
-                        checked={value}
-                        onChange={(e) => setNotifications(prev => ({ ...prev, [key]: e.target.checked }))}
-                        className="sr-only"
-                      />
-                      <div className={`w-10 h-6 rounded-full transition-colors duration-200 flex items-center ${
-                        value ? 'bg-blue-600' : 'bg-gray-600'
-                      }`}>
-                        <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          value ? 'translate-x-5' : 'translate-x-1'
-                        }`}></div>
+            <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <h4 className="text-white font-semibold text-base sm:text-lg">Notifications</h4>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                {Object.entries(notifications).map(([key, value]) => {
+                  const label = key.replace(/([A-Z])/g, ' $1').trim();
+                  const descriptions: Record<string, string> = {
+                    email: 'Cycle insights and important updates.',
+                    push: 'Instant signals delivered to your device.',
+                    trading: 'Get notified about positions and P&L shifts.',
+                    news: 'Macro stories and curated market commentary.'
+                  };
+                  return (
+                    <label key={key} className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer capitalize">
+                      <div>
+                        <span className="text-gray-200 text-sm font-medium">{label}</span>
+                        <p className="text-[11px] sm:text-xs text-gray-500 mt-1">{descriptions[key] || 'Stay in the loop without the noise.'}</p>
                       </div>
-                    </div>
-                  </label>
-                ))}
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          checked={value}
+                          onChange={(e) => setNotifications(prev => ({ ...prev, [key]: e.target.checked }))}
+                          className="sr-only"
+                        />
+                        <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
+                          value ? 'bg-blue-500' : 'bg-gray-700'
+                        }`}>
+                          <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                            value ? 'translate-x-5' : 'translate-x-0'
+                          }`}></div>
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             </div>
 
             {/* Privacy Section */}
-            <div className="bg-gray-800/50 rounded-lg p-3">
-              <h4 className="text-white font-medium mb-2">Privacy</h4>
-              <div className="space-y-2">
-                {Object.entries(privacy).map(([key, value]) => (
-                  <label key={key} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors cursor-pointer">
-                    <span className="text-gray-300 text-sm font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
-                    <div className="relative">
-                      <input
-                        type="checkbox"
-                        checked={value}
-                        onChange={(e) => setPrivacy(prev => ({ ...prev, [key]: e.target.checked }))}
-                        className="sr-only"
-                      />
-                      <div className={`w-10 h-6 rounded-full transition-colors duration-200 flex items-center ${
-                        value ? 'bg-blue-600' : 'bg-gray-600'
-                      }`}>
-                        <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          value ? 'translate-x-5' : 'translate-x-1'
-                        }`}></div>
+            <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <h4 className="text-white font-semibold text-base sm:text-lg">Privacy</h4>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                {Object.entries(privacy).map(([key, value]) => {
+                  const label = key.replace(/([A-Z])/g, ' $1').trim();
+                  const descriptions: Record<string, string> = {
+                    showProfile: 'Allow others to discover and follow you.',
+                    showTrades: 'Share recent trades with your followers.',
+                    showBalance: 'Reveal your wallet balance on your profile.'
+                  };
+                  return (
+                    <label key={key} className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer capitalize">
+                      <div>
+                        <span className="text-gray-200 text-sm font-medium">{label}</span>
+                        <p className="text-[11px] sm:text-xs text-gray-500 mt-1">{descriptions[key] || 'Fine-tune visibility to match your comfort.'}</p>
                       </div>
-                    </div>
-                  </label>
-                ))}
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          checked={value}
+                          onChange={(e) => setPrivacy(prev => ({ ...prev, [key]: e.target.checked }))}
+                          className="sr-only"
+                        />
+                        <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
+                          value ? 'bg-blue-500' : 'bg-gray-700'
+                        }`}>
+                          <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                            value ? 'translate-x-5' : 'translate-x-0'
+                          }`}></div>
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             </div>
 
@@ -1018,10 +1164,10 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`p-3 rounded-lg text-sm flex items-center space-x-2 ${
+                className={`p-3 sm:p-4 text-xs sm:text-sm flex items-center gap-2 sm:gap-3 border ${
                   settingsStatus === 'success' 
-                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                    : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                    ? 'bg-green-500/15 text-green-300 border-green-500/30'
+                    : 'bg-red-500/15 text-red-300 border-red-500/30'
                 }`}
               >
                 {settingsStatus === 'success' ? (
@@ -1034,17 +1180,17 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
             )}
 
             {/* Actions */}
-            <div className="flex gap-3 p-4 border-t border-gray-700">
+            <div className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 pt-2 sm:pt-0">
               <button
                 onClick={onClose}
-                className="flex-1 px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
+                className="flex-1 px-4 py-2.5 bg-gray-900 border border-gray-800 text-gray-300 hover:border-gray-600 hover:text-white transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveSettings}
                 disabled={savingSettings}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
               >
                 {savingSettings ? (
                   <>

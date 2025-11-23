@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { WalletOrder, WalletPosition, WalletTransaction } from "@/types/firestore";
+import { Timestamp } from "firebase-admin/firestore";
 import { 
   getUserByWalletAddress, 
   calculateCashback, 
@@ -45,8 +44,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Database connection failed" }, { status: 500 });
     }
 
-    // Use Timestamp.now() if serverTimestamp doesn't work
-    const now = FieldValue.serverTimestamp() as any;
     const timestampNow = Timestamp.now();
 
     // 1. Save Order

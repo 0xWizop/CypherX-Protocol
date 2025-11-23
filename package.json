@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
+  "engines": {
+    "node": "20",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
@@ -10,18 +14,17 @@
     "lint": "next lint",
     "lint:fix": "next lint --fix",
     "type-check": "tsc --noEmit",
-    "aggregator": "node runAggregator.cjs",
-    "aggregator:start": "scripts\\start-aggregator.bat",
-    "aggregator:dev": "ts-node aggregator.ts",
-    "zora-fetch": "node scripts/zora-fetcher.cjs",
-    "add-articles": "node scripts/add-sample-articles.js",
-    "monitor-tokens": "node scripts/monitorNewTokens.cjs",
-    "setup-indexes": "node scripts/setup-wallet-indexes.js",
     "firebase:setup-service": "node scripts/setup-service-account.js",
     "firebase:remove-old": "node scripts/remove-old-collections.js",
     "firebase:create-collections": "node scripts/create-collections-and-indexes.js",
-    "firebase:add-events": "node scripts/add-events-to-calendar.js",
+    "firebase:create-banner": "node scripts/create-banner-collection.js",
     "firebase:deploy-indexes": "firebase deploy --only firestore:indexes",
+    "firebase:deploy-rules": "firebase deploy --only firestore:rules,storage:rules",
+    "firebase:deploy-hosting": "firebase deploy --only hosting",
+    "firebase:deploy-all": "firebase deploy",
+    "firebase:deploy-functions": "firebase deploy --only functions",
+    "predeploy": "npm run build",
+    "deploy": "npm run predeploy && firebase deploy --except firestore:indexes",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky install"
@@ -35,6 +38,7 @@
     "@next-auth/mongodb-adapter": "^1.1.3",
     "@radix-ui/react-tooltip": "^1.1.8",
     "@rainbow-me/rainbowkit": "^2.2.5",
+    "@react-native-async-storage/async-storage": "^2.2.0",
     "@reown/appkit": "^1.7.0",
     "@tanstack/react-query": "^5.75.7",
     "@types/lodash": "^4.17.16",
@@ -46,7 +50,6 @@
     "@wagmi/connectors": "^5.1.12",
     "@wagmi/core": "^2.13.6",
     "@web3modal/wagmi": "^5.1.11",
-    "@zoralabs/coins-sdk": "^0.2.9",
     "alchemy-sdk": "^3.5.4",
     "apexcharts": "^4.7.0",
     "axios": "^1.8.4",
@@ -76,7 +79,7 @@
     "next-auth": "^4.24.11",
     "node-fetch": "^3.3.2",
     "node-schedule": "^2.1.1",
-    "nodemailer": "^6.10.0",
+    "nodemailer": "^7.0.7",
     "p-retry": "^6.2.1",
     "pino-pretty": "^13.0.0",
     "react": "^18.3.1",
@@ -131,7 +134,7 @@
     "@types/mongoose": "^5.11.97",
     "@types/node": "^20.17.30",
     "@types/node-schedule": "^2.1.8",
-    "@types/nodemailer": "^6.4.16",
+    "@types/nodemailer": "^7.0.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/react-google-recaptcha": "^2.1.9",
@@ -161,5 +164,8 @@
   "ts-node": {
     "esm": true,
     "experimentalSpecifierResolution": "node"
+  },
+  "optionalDependencies": {
+    "@zoralabs/coins-sdk": "^0.2.9"
   }
 }

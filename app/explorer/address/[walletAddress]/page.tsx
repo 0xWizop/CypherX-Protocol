@@ -587,7 +587,7 @@ export default function WalletPage() {
         tokens = await Promise.all(tokenPromises);
         
         // Calculate total token value after all promises resolve
-        totalTokenValue = tokens.reduce((sum, token) => sum + (token.usdValue || 0), 0);
+        totalTokenValue = tokens.reduce((sum: number, token: Token) => sum + (token.usdValue || 0), 0);
         
         // Filter out tokens with ridiculous values and spam
         tokens = tokens.filter((token: Token) => {
@@ -740,7 +740,7 @@ export default function WalletPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen w-full flex flex-col bg-[#0f172a]">
+      <div className="min-h-screen w-full flex flex-col bg-gray-950">
         <Header />
         <div className="flex-1 flex items-center justify-center">
           <LoadingSpinner variant="dots" size="lg" text={`Loading wallet ${decodedAddress?.slice(0, 10) || '...'}...`} />
@@ -752,7 +752,7 @@ export default function WalletPage() {
 
   if (error || !walletData) {
     return (
-      <div className="min-h-screen w-full flex flex-col bg-[#0f172a]">
+      <div className="min-h-screen w-full flex flex-col bg-gray-950">
         <Header />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
@@ -771,12 +771,21 @@ export default function WalletPage() {
   }
 
   return (
-    <div className="h-screen w-full flex flex-col bg-[#0f172a] overflow-hidden">
+    <div className="h-screen w-full flex flex-col bg-gray-950 overflow-hidden">
       <Header />
       
-      <main className="flex-1 bg-[#0f172a] overflow-hidden">
-        <div className="h-full max-w-[1400px] mx-auto px-4 lg:px-6 pt-4 pb-4 flex flex-col">
+      <main className="flex-1 bg-gray-950 overflow-hidden">
+        <div className="h-full max-w-[1400px] mx-auto px-4 lg:px-6 pt-4 pb-6 flex flex-col">
           <div className="flex-1 flex flex-col min-h-0">
+            {/* Breadcrumb Navigation */}
+            <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-400 mb-3 flex-shrink-0">
+              <Link href="/explorer" className="hover:text-blue-400 transition-colors">
+                Explorer
+              </Link>
+              <span className="text-gray-600">/</span>
+              <span className="text-gray-300">Address Details</span>
+            </div>
+            
             {/* Header */}
             <div className="text-left mb-3 flex-shrink-0">
               <div className="flex items-center gap-2 mb-1">
@@ -794,11 +803,11 @@ export default function WalletPage() {
             </div>
 
             {/* Combined Information Card */}
-            <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-3 mb-3 flex-shrink-0">
+            <div className="bg-slate-800/30 rounded-lg p-3 mb-3 flex-shrink-0">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Overview Section */}
-                <div className="md:border-r border-gray-700/50 md:pr-4">
-                  <h3 className="text-sm text-white mb-4 pb-3 border-b border-gray-700/50">
+                <div className="md:pr-4">
+                  <h3 className="text-sm text-white mb-4 pb-3">
                     Overview
                   </h3>
                   <div className="space-y-2">
@@ -828,8 +837,8 @@ export default function WalletPage() {
                 </div>
 
                 {/* Chain Info Section */}
-                <div className="md:border-r border-gray-700/50 md:pr-4">
-                  <h3 className="text-sm text-white mb-4 pb-3 border-b border-gray-700/50">
+                <div className="md:pr-4">
+                  <h3 className="text-sm text-white mb-4 pb-3">
                     Chain Info
                   </h3>
                   <div className="space-y-2">
@@ -862,7 +871,7 @@ export default function WalletPage() {
 
                 {/* Multichain Info Section */}
                 <div>
-                  <h3 className="text-sm text-white mb-4 pb-3 border-b border-gray-700/50">
+                  <h3 className="text-sm text-white mb-4 pb-3">
                     Multichain Info
                   </h3>
                   <div className="space-y-2">
@@ -883,7 +892,7 @@ export default function WalletPage() {
             <div className="flex-1 flex flex-col min-h-0">
               <div className="flex-1 flex flex-col space-y-2 sm:space-y-3 lg:space-y-4 min-h-0">
                 {/* Tab Navigation */}
-                <div className="flex bg-slate-800/30 border border-slate-700/50 rounded-lg p-1 mb-3 overflow-x-auto flex-shrink-0">
+                <div className="flex bg-slate-800/30 rounded-lg p-1 mb-3 overflow-x-auto flex-shrink-0">
                   {[
                     { 
                       id: 'tokens', 
@@ -946,13 +955,13 @@ export default function WalletPage() {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="bg-gray-900/50 border border-gray-700/50 rounded-lg p-3 mb-3"
+                    className="bg-gray-900/50 rounded-lg p-3 mb-3"
                   >
                     <h4 className="text-white font-medium mb-3">Advanced Filter Options</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                       <div>
                         <label className="block text-gray-400 text-sm mb-2">Transaction Type</label>
-                        <select className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm">
+                        <select className="w-full bg-gray-800 rounded px-3 py-2 text-white text-sm">
                           <option value="all">All Transactions</option>
                           <option value="incoming">Incoming</option>
                           <option value="outgoing">Outgoing</option>
@@ -961,7 +970,7 @@ export default function WalletPage() {
                       </div>
                       <div>
                         <label className="block text-gray-400 text-sm mb-2">Date Range</label>
-                        <select className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm">
+                        <select className="w-full bg-gray-800 rounded px-3 py-2 text-white text-sm">
                           <option value="all">All Time</option>
                           <option value="24h">Last 24 Hours</option>
                           <option value="7d">Last 7 Days</option>
@@ -970,7 +979,7 @@ export default function WalletPage() {
                       </div>
                       <div>
                         <label className="block text-gray-400 text-sm mb-2">Amount Range</label>
-                        <select className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm">
+                        <select className="w-full bg-gray-800 rounded px-3 py-2 text-white text-sm">
                           <option value="all">All Amounts</option>
                           <option value="small">Small (&lt; 0.1 ETH)</option>
                           <option value="medium">Medium (0.1 - 1 ETH)</option>
@@ -1006,18 +1015,18 @@ export default function WalletPage() {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.2 }}
-                    className="flex-1 flex flex-col bg-slate-800/30 border border-slate-700/50 rounded-lg p-3 min-h-0"
+                    className="flex-1 flex flex-col bg-slate-800/30 rounded-lg p-3 min-h-0"
                   >
                     {activeTab === 'overview' && (
                       <div className="flex-1 space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent pr-2">
-                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-700/50 flex-shrink-0">
+                        <div className="flex items-center justify-between mb-3 pb-2 flex-shrink-0">
                           <h3 className="text-sm text-white">Portfolio Overview</h3>
                         </div>
                         
                         {/* Enhanced Portfolio Stats */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {/* Portfolio Allocation */}
-                          <div className="bg-gray-900/50 border border-gray-700/50 rounded-lg p-3">
+                          <div className="bg-gray-900/50 rounded-lg p-3">
                             <h4 className="text-sm text-white mb-3 pb-2 border-b border-gray-700/50">
                               Portfolio Allocation
                             </h4>
@@ -1040,7 +1049,7 @@ export default function WalletPage() {
                           </div>
 
                           {/* Wallet Stats */}
-                          <div className="bg-gray-900/50 border border-gray-700/50 rounded-lg p-3">
+                          <div className="bg-gray-900/50 rounded-lg p-3">
                             <h4 className="text-sm text-white mb-3 pb-2 border-b border-gray-700/50">
                               Wallet Stats
                             </h4>
