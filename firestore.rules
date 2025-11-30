@@ -1051,6 +1051,27 @@ service cloud.firestore {
     }
 
     // Collection: wallet_transactions
+    // Collection: limit_orders
+    match /limit_orders/{orderId} {
+      allow read: if isOwnUser(userId) || isAdmin();
+      allow create: if isAuthenticated() && validateLimitOrder();
+      allow update: if isOwnUser(userId) || isAdmin();
+      allow delete: if isOwnUser(userId) || isAdmin();
+
+      function validateLimitOrder() {
+        let data = request.resource.data;
+        return data.walletAddress is string &&
+          data.orderType is string &&
+          data.orderType in ['LIMIT_BUY', 'LIMIT_SELL', 'STOP_LOSS', 'STOP_LIMIT'] &&
+          data.tokenIn is string &&
+          data.tokenOut is string &&
+          data.amountIn is string &&
+          parseFloat(data.amountIn) > 0 &&
+          data.status == 'PENDING' &&
+          data.createdAt is timestamp;
+      }
+    }
+
     match /wallet_transactions/{transactionId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && validateWalletTransaction();

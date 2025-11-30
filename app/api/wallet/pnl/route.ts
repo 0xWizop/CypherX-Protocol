@@ -257,12 +257,51 @@ export async function GET(request: Request) {
       );
     }
     
-    const db = adminDb();
+    let db;
+    try {
+      db = adminDb();
+    } catch (dbError) {
+      console.error("Firebase Admin initialization error:", dbError);
+      // Return empty data instead of 500 error for better UX
+      return NextResponse.json({
+        pnlData: [],
+        trades: [],
+        totalPnL: 0,
+        totalPnLPercentage: 0,
+        totalVolume: 0,
+        totalTrades: 0,
+        winRate: 0,
+        bought: 0,
+        sold: 0,
+        holding: 0,
+        positionsClosed: 0,
+        completedTrades: 0,
+        dailyPnL: [],
+        recentTrades: [],
+        positionsHistory: [],
+        error: "Database temporarily unavailable"
+      });
+    }
+    
     if (!db) {
-      return NextResponse.json(
-        { error: "Database connection failed" },
-        { status: 500 }
-      );
+      return NextResponse.json({
+        pnlData: [],
+        trades: [],
+        totalPnL: 0,
+        totalPnLPercentage: 0,
+        totalVolume: 0,
+        totalTrades: 0,
+        winRate: 0,
+        bought: 0,
+        sold: 0,
+        holding: 0,
+        positionsClosed: 0,
+        completedTrades: 0,
+        dailyPnL: [],
+        recentTrades: [],
+        positionsHistory: [],
+        error: "Database connection failed"
+      });
     }
     
     // Fetch wallet transactions for specific token if provided
@@ -515,52 +554,180 @@ export async function GET(request: Request) {
       holding = parseFloat(totalHoldingValue.toFixed(1));
     }
     
-    // 🔧 NEW: Calculate positions closed and completed trades
-    const positionsClosed = sellTransactions.length; // Count of sell transactions
+    // Calculate positions closed and completed trades
     const completedTrades = totalTrades; // All trades are completed
     
-    // 🔧 NEW: Generate positions history
-    const positionsHistory = [];
-    const tokenGroups = new Map();
+    // Generate positions history - track both open and closed positions
+    const positionsHistory: Array<{
+      tokenAddress: string;
+      tokenSymbol: string;
+      entryPrice: number;
+      exitPrice: number;
+      amount: number;
+      pnl: number;
+      pnlPercentage: number;
+      entryDate: string;
+      exitDate: string;
+      status: 'open' | 'closed';
+      currentValue?: number;
+      costBasis?: number;
+    }> = [];
+    const tokenGroups = new Map<string, { buys: Trade[], sells: Trade[] }>();
     
-    // Group trades by token
+    // Group trades by token (excluding ETH as it's the base currency)
     for (const trade of trades) {
+      // Skip ETH - it's the base currency, not a position
+      if (trade.token === "0x0000000000000000000000000000000000000000" || 
+          trade.token === "ETH" ||
+          trade.token === "0x4200000000000000000000000000000000000006") { // WETH on Base
+        continue;
+      }
+      
       if (!tokenGroups.has(trade.token)) {
         tokenGroups.set(trade.token, { buys: [], sells: [] });
       }
       if (trade.type === 'buy') {
-        tokenGroups.get(trade.token).buys.push(trade);
+        tokenGroups.get(trade.token)!.buys.push(trade);
       } else {
-        tokenGroups.get(trade.token).sells.push(trade);
+        tokenGroups.get(trade.token)!.sells.push(trade);
       }
     }
     
     // Calculate position history for each token
-    for (const [tokenAddr, trades] of tokenGroups) {
-      const { buys, sells } = trades;
-      const totalBought = buys.reduce((sum: number, t: Trade) => sum + t.amount, 0);
-      const totalSold = sells.reduce((sum: number, t: Trade) => sum + t.amount, 0);
+    for (const [tokenAddr, tokenTrades] of tokenGroups) {
+      const { buys, sells } = tokenTrades;
       
-      if (totalSold > 0) { // Only show tokens that have been sold
-        const avgEntryPrice = buys.reduce((sum: number, t: Trade) => sum + t.price * t.amount, 0) / totalBought;
-        const avgExitPrice = sells.reduce((sum: number, t: Trade) => sum + t.price * t.amount, 0) / totalSold;
-        const pnl = (avgExitPrice - avgEntryPrice) * totalSold;
-        const pnlPercentage = avgEntryPrice > 0 ? (pnl / (avgEntryPrice * totalSold)) * 100 : 0;
+      // Skip if no buys - user never purchased this token (just received it)
+      if (buys.length === 0) continue;
+      
+      const totalBoughtAmount = buys.reduce((sum: number, t: Trade) => sum + t.amount, 0);
+      const totalSoldAmount = sells.reduce((sum: number, t: Trade) => sum + t.amount, 0);
+      const remainingAmount = totalBoughtAmount - totalSoldAmount;
+      
+      // Calculate cost basis (total ETH spent on buys) - convert from wei to ETH
+      const WEI_TO_ETH = 1e18;
+      const totalCostBasis = buys.reduce((sum: number, t: Trade) => sum + (t.value / WEI_TO_ETH), 0);
+      const avgEntryPrice = totalBoughtAmount > 0 ? totalCostBasis / totalBoughtAmount : 0;
+      
+      // Skip tokens with zero cost basis (airdrops, received tokens - not purchased)
+      if (totalCostBasis === 0) {
+        console.log(`🔧 Skipping position for ${tokenAddr}: no cost basis (airdrop/received)`);
+        continue;
+      }
+      
+      // Calculate total received from sells - convert from wei to ETH
+      const totalSellValue = sells.reduce((sum: number, t: Trade) => sum + (t.value / WEI_TO_ETH), 0);
+      const avgExitPrice = totalSoldAmount > 0 ? totalSellValue / totalSoldAmount : 0;
+      
+      // Determine if position is open or closed
+      const isOpen = remainingAmount > 0.000001; // Small threshold for dust
+      
+      if (isOpen) {
+        // OPEN POSITION - has remaining tokens
+        // Get current price for unrealized P&L
+        const currentPrice = await getTokenPrice(tokenAddr);
+        const currentValue = remainingAmount * currentPrice;
+        const costBasisForRemaining = avgEntryPrice * remainingAmount;
+        const unrealizedPnL = currentValue - costBasisForRemaining;
+        
+        // Calculate percentage with sanity checks
+        // If cost basis is very small (< $0.01), skip percentage or cap it
+        let unrealizedPnLPercentage = 0;
+        if (costBasisForRemaining >= 0.01) {
+          unrealizedPnLPercentage = (unrealizedPnL / costBasisForRemaining) * 100;
+          // Cap at reasonable values
+          unrealizedPnLPercentage = Math.max(-9999, Math.min(9999, unrealizedPnLPercentage));
+        } else if (currentValue > 0.01) {
+          // Essentially free tokens that now have value = "infinite" gain, cap at 9999%
+          unrealizedPnLPercentage = 9999;
+        }
         
         positionsHistory.push({
-          tokenAddress: tokenAddr as string,
-          tokenSymbol: tokenAddr === "0x0000000000000000000000000000000000000000" ? "ETH" : (tokenAddr as string).slice(0, 6) + "...",
+          tokenAddress: tokenAddr,
+          tokenSymbol: tokenAddr.slice(0, 6) + "..." + tokenAddr.slice(-4),
+          entryPrice: avgEntryPrice,
+          exitPrice: currentPrice, // Current price for open positions
+          amount: remainingAmount,
+          pnl: unrealizedPnL,
+          pnlPercentage: unrealizedPnLPercentage,
+          entryDate: buys[buys.length - 1]?.timestamp ? new Date(buys[buys.length - 1].timestamp).toISOString() : "",
+          exitDate: "", // No exit date for open positions
+          status: 'open',
+          currentValue,
+          costBasis: costBasisForRemaining
+        });
+      }
+      
+      if (totalSoldAmount > 0.000001) {
+        // CLOSED POSITION (or partially closed) - calculate realized P&L
+        // Use FIFO to calculate realized P&L
+        const WEI_TO_ETH_CLOSED = 1e18;
+        let realizedPnL = 0;
+        const buyQueue = buys.map(b => ({ ...b, remainingAmount: b.amount }));
+        
+        for (const sell of sells) {
+          let sellRemaining = sell.amount;
+          const sellPricePerUnit = (sell.value / WEI_TO_ETH_CLOSED) / sell.amount;
+          
+          while (sellRemaining > 0 && buyQueue.length > 0) {
+            const oldestBuy = buyQueue[0];
+            if (oldestBuy.remainingAmount <= 0) {
+              buyQueue.shift();
+              continue;
+            }
+            
+            const matchAmount = Math.min(sellRemaining, oldestBuy.remainingAmount);
+            const buyPricePerUnit = (oldestBuy.value / WEI_TO_ETH_CLOSED) / oldestBuy.amount;
+            const costBasis = matchAmount * buyPricePerUnit;
+            const saleProceeds = matchAmount * sellPricePerUnit;
+            realizedPnL += (saleProceeds - costBasis);
+            
+            oldestBuy.remainingAmount -= matchAmount;
+            sellRemaining -= matchAmount;
+            
+            if (oldestBuy.remainingAmount <= 0) {
+              buyQueue.shift();
+            }
+          }
+        }
+        
+        const totalCostForSold = avgEntryPrice * totalSoldAmount;
+        
+        // Calculate percentage with sanity checks
+        let realizedPnLPercentage = 0;
+        if (totalCostForSold >= 0.01) {
+          realizedPnLPercentage = (realizedPnL / totalCostForSold) * 100;
+          // Cap at reasonable values
+          realizedPnLPercentage = Math.max(-9999, Math.min(9999, realizedPnLPercentage));
+        } else if (totalSellValue > 0.01) {
+          // Tokens that were essentially free but sold for value
+          realizedPnLPercentage = realizedPnL > 0 ? 9999 : (realizedPnL < 0 ? -9999 : 0);
+        }
+        
+        positionsHistory.push({
+          tokenAddress: tokenAddr,
+          tokenSymbol: tokenAddr.slice(0, 6) + "..." + tokenAddr.slice(-4),
           entryPrice: avgEntryPrice,
           exitPrice: avgExitPrice,
-          amount: totalSold,
-          pnl,
-          pnlPercentage,
+          amount: totalSoldAmount,
+          pnl: realizedPnL,
+          pnlPercentage: realizedPnLPercentage,
           entryDate: buys[0]?.timestamp ? new Date(buys[0].timestamp).toISOString() : "",
-          exitDate: sells[0]?.timestamp ? new Date(sells[0].timestamp).toISOString() : "",
-          status: (totalBought > totalSold ? 'open' : 'closed') as 'open' | 'closed'
+          exitDate: sells[sells.length - 1]?.timestamp ? new Date(sells[sells.length - 1].timestamp).toISOString() : "",
+          status: 'closed'
         });
       }
     }
+    
+    // Sort positions: open first, then by date
+    positionsHistory.sort((a, b) => {
+      if (a.status === 'open' && b.status === 'closed') return -1;
+      if (a.status === 'closed' && b.status === 'open') return 1;
+      return new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime();
+    });
+    
+    // Count actual closed positions
+    const positionsClosed = positionsHistory.filter(p => p.status === 'closed').length;
     
     const response: PnLResponse = {
       pnlData,

@@ -5,24 +5,7 @@ import Link from "next/link";
 import { db } from "@/lib/firebase-client";
 import { doc, onSnapshot } from "firebase/firestore";
 import { FiX } from "react-icons/fi";
-
-// Megaphone icon SVG
-const MegaphoneIcon = ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-  <svg 
-    className={className}
-    style={style}
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round"
-  >
-    <path d="M11 5L6 9H2v6h4l5 4V5z"/>
-    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-  </svg>
-);
+import { FaBullhorn } from "react-icons/fa";
 
 interface BannerAsset {
   name: string;
@@ -86,7 +69,7 @@ const SiteBanner: React.FC = () => {
       style={{ backgroundColor, color: textColor }}
     >
       <div className="max-w-[1400px] mx-auto px-4 py-1.5 flex items-center justify-center gap-2 relative">
-        <MegaphoneIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: linkColor }} />
+        <FaBullhorn className="w-3.5 h-3.5 flex-shrink-0" style={{ color: linkColor }} />
         <span className="text-xs sm:text-sm font-medium">
           {bannerData.message}
         </span>
@@ -98,7 +81,7 @@ const SiteBanner: React.FC = () => {
             return (
               <span key={asset.symbol} className="flex items-center gap-1">
                 <Link
-                  href={`/explore/${asset.poolAddress}/chart`}
+                  href={`/discover/${asset.poolAddress}/chart`}
                   className="text-xs sm:text-sm font-semibold hover:underline transition-all"
                   style={{ color: linkColor }}
                   onClick={(e: React.MouseEvent) => {

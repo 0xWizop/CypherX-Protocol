@@ -3,7 +3,7 @@
 import { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { SiEthereum, SiBitcoin } from "react-icons/si";
-import { FiBarChart, FiTrendingUp, FiEye, FiCompass, FiGift } from "react-icons/fi";
+import { FiBarChart, FiTrendingUp, FiEye, FiCompass, FiGift, FiZap } from "react-icons/fi";
 
 type FooterProps = {
   desktopAddon?: ReactNode;
@@ -141,7 +141,7 @@ const Footer: React.FC<FooterProps> = ({ desktopAddon, isSticky = true }) => {
   return (
     <footer
       id="app-footer"
-      className={`${isSticky ? "fixed inset-x-0 bottom-0" : "relative"} z-40 bg-gray-950 border-t border-gray-800 text-gray-300 text-xs px-4 py-2`}
+      className={`${isSticky ? "fixed inset-x-0 bottom-0" : "relative"} z-40 ${isSticky ? "bg-gray-950" : "bg-[#070c14]"} border-t border-gray-800 text-gray-300 text-xs px-4 py-2`}
     >
       {desktopAddon && (
         <div className="hidden sm:flex items-center justify-center border-b border-gray-900/60 px-3 py-2">
@@ -182,12 +182,12 @@ const Footer: React.FC<FooterProps> = ({ desktopAddon, isSticky = true }) => {
         {/* Center Section - Navigation Links (match header) */}
         <div className="flex items-center gap-8">
           <Link 
-            href="/explore" 
+            href="/discover" 
             className="flex items-center space-x-1 hover:text-blue-400 transition-colors duration-200"
             prefetch={true}
           >
             <FiBarChart className="w-3 h-3" />
-            <span>Trade</span>
+            <span>Discover</span>
           </Link>
 
           <Link 
@@ -200,21 +200,21 @@ const Footer: React.FC<FooterProps> = ({ desktopAddon, isSticky = true }) => {
           </Link>
 
           <Link 
+            href="/predict" 
+            className="flex items-center space-x-1 hover:text-blue-400 transition-colors duration-200"
+            prefetch={true}
+          >
+            <FiZap className="w-3 h-3" />
+            <span>Predict</span>
+          </Link>
+
+          <Link 
             href="/rewards" 
             className="flex items-center space-x-1 hover:text-blue-400 transition-colors duration-200"
             prefetch={true}
           >
             <FiGift className="w-3 h-3" />
             <span>Rewards</span>
-          </Link>
-
-          <Link 
-            href="/insights" 
-            className="flex items-center space-x-1 hover:text-blue-400 transition-colors duration-200"
-            prefetch={true}
-          >
-            <FiTrendingUp className="w-3 h-3" />
-            <span>Insights</span>
           </Link>
 
           <Link 

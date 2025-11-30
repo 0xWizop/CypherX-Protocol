@@ -8,7 +8,18 @@
 body {
   font-family: 'Inter', sans-serif;
   /* Tailwind @apply directive - valid and processed by Tailwind */
-  @apply bg-gray-900 text-gray-200 font-sans antialiased;
+  @apply text-gray-200 font-sans antialiased;
+  background-color: #0a0e17;
+}
+
+/* Hide scrollbars globally */
+html, body {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+html::-webkit-scrollbar, body::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 /* Custom utilities for text truncation and overflow */
@@ -163,6 +174,14 @@ body {
   .scrollbar-track-transparent::-webkit-scrollbar-track {
     background: transparent;
   }
+  
+  /* Force wallet dropdown below header separator - desktop only */
+  @media (min-width: 769px) {
+    [data-wallet-dropdown].fixed.right-8 {
+      top: 85px !important;
+      transform: translateY(0) !important;
+    }
+  }
 }
 
 /* Radar sweep animation */
@@ -231,8 +250,9 @@ body {
   left: 12%;
   width: 12rem;
   height: 12rem;
-  background: radial-gradient(circle at 50% 35%, rgba(30, 58, 138, 0.7), rgba(29, 78, 216, 0.5), rgba(37, 99, 235, 0.3), rgba(15, 23, 42, 0.1));
+  background: radial-gradient(circle at 50% 35%, rgba(59, 130, 246, 0.85), rgba(37, 99, 235, 0.65), rgba(30, 64, 175, 0.45), rgba(15, 23, 42, 0.2));
   animation: orbFloat1 18s ease-in-out infinite;
+  filter: blur(60px);
 }
 
 .orb-2 {
@@ -278,23 +298,23 @@ body {
 @keyframes orbFloat1 {
   0% {
     transform: translate(0, 0) scale(1);
-    opacity: 0.3;
+    opacity: 0.5;
   }
   25% {
     transform: translate(80px, -60px) scale(1.15);
-    opacity: 0.45;
+    opacity: 0.65;
   }
   50% {
     transform: translate(-60px, 50px) scale(0.9);
-    opacity: 0.35;
+    opacity: 0.55;
   }
   75% {
     transform: translate(50px, -40px) scale(1.1);
-    opacity: 0.4;
+    opacity: 0.6;
   }
   100% {
     transform: translate(0, 0) scale(1);
-    opacity: 0.3;
+    opacity: 0.5;
   }
 }
 
@@ -383,5 +403,84 @@ body {
   }
 }
 
+/* Shimmer/Chrome reflection animation for badges */
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
 
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(59, 130, 246, 0.1) 0%,
+    rgba(59, 130, 246, 0.3) 50%,
+    rgba(59, 130, 246, 0.1) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+/* Chrome reflection animation */
+@keyframes chrome-reflection {
+  0% {
+    transform: translateX(-100%) translateY(-100%) rotate(45deg);
+  }
+  100% {
+    transform: translateX(200%) translateY(200%) rotate(45deg);
+  }
+}
+
+.chrome-reflection {
+  position: relative;
+  overflow: hidden;
+}
+
+.chrome-reflection::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.3) 45%,
+    rgba(255, 255, 255, 0.5) 50%,
+    rgba(255, 255, 255, 0.3) 55%,
+    transparent 70%
+  );
+  animation: chrome-reflection 3s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Background grid pattern */
+.bg-grid-pattern {
+  background-image: 
+    linear-gradient(rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* Background line patterns */
+.bg-line-pattern {
+  position: relative;
+}
+
+.bg-line-pattern::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(to right, rgba(59, 130, 246, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(59, 130, 246, 0.05) 1px, transparent 1px);
+  background-size: 100px 100px;
+  pointer-events: none;
+  z-index: 0;
+}
 

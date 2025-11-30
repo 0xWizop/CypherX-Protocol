@@ -9,12 +9,12 @@ import type { Auth, User } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 import type { FirebaseStorage } from "firebase/storage";
 
-// Client-side Firebase configuration
+// Client-side Firebase configuration - REQUIRES environment variables
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: "homebase-dapp.firebaseapp.com",
-  projectId: "homebase-dapp",
-  storageBucket: "homebase-dapp.firebasestorage.app",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
@@ -87,7 +87,7 @@ try {
 
 let storage: FirebaseStorage;
 try {
-  storage = getStorage(clientApp, "homebase-dapp.appspot.com");
+  storage = getStorage(clientApp, firebaseConfig.storageBucket);
   console.log("Client-side Storage initialized: Success, Bucket:", firebaseConfig.storageBucket);
 } catch (error: unknown) {
   console.error("Client-side Storage initialization failed:", error);

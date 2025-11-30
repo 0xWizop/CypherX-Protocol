@@ -25,21 +25,47 @@ export async function GET(request: Request) {
 
     console.log('🔄 Starting scheduled token sync...');
 
-    // Import sync route handler
-    const syncModule = await import('../sync/route');
-    const syncTokens = syncModule.GET;
-    const syncRequest = new Request(
-      new URL('/api/tokens/sync?sources=zora,clanker&limit=50', 
-        process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000')
-    );
-    
-    const syncResponse = await syncTokens(syncRequest);
-    const syncResult = await syncResponse.json();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const results: any = {};
+
+    // Step 1: Sync tokens from sources
+    try {
+      const syncModule = await import('../sync/route');
+      const syncTokens = syncModule.GET;
+      const syncRequest = new Request(
+        new URL('/api/tokens/sync?sources=zora,clanker&limit=50', baseUrl)
+      );
+      
+      const syncResponse = await syncTokens(syncRequest);
+      const syncResult = await syncResponse.json();
+      results.sync = syncResult;
+      console.log('✅ Token sync completed');
+    } catch (syncError) {
+      console.error('❌ Token sync failed:', syncError);
+      results.sync = { error: syncError instanceof Error ? syncError.message : 'Sync failed' };
+    }
+
+    // Step 2: Auto-add qualifying tokens to pairs (new coins that meet thresholds)
+    try {
+      const autoAddModule = await import('../auto-add/route');
+      const autoAddTokens = autoAddModule.GET;
+      const autoAddRequest = new Request(
+        new URL('/api/tokens/auto-add', baseUrl)
+      );
+      
+      const autoAddResponse = await autoAddTokens(autoAddRequest);
+      const autoAddResult = await autoAddResponse.json();
+      results.autoAdd = autoAddResult;
+      console.log('✅ Auto-add completed');
+    } catch (autoAddError) {
+      console.error('❌ Auto-add failed:', autoAddError);
+      results.autoAdd = { error: autoAddError instanceof Error ? autoAddError.message : 'Auto-add failed' };
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Token sync completed',
-      result: syncResult,
+      message: 'Token sync and auto-add completed',
+      results,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

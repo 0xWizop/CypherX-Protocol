@@ -101,8 +101,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [redirectTo, setRedirectTo] = useState('/');
   const pathname = usePathname();
-  const isFullScreenLayout = pathname?.includes('/explore/') && pathname?.includes('/chart');
+  const isFullScreenLayout = pathname?.includes('/discover/') && pathname?.includes('/chart');
   const isExplorerPage = pathname?.startsWith('/explorer');
+  const isPredictPage = pathname?.startsWith('/predict');
+  const isDashboardPage = pathname?.startsWith('/dashboard');
   const isHomepage = pathname === "/";
   const [footerHeight, setFooterHeight] = useState(0);
 
@@ -259,7 +261,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 <main
                   className={`flex-1 ${isExplorerPage ? 'bg-gray-950' : ''}`}
                   style={{ 
-                    paddingBottom: `${isFullScreenLayout || isExplorerPage ? 0 : footerHeight ? footerHeight + 16 : 72}px` 
+                    paddingBottom: `${isFullScreenLayout || isExplorerPage || isPredictPage || isDashboardPage ? 0 : footerHeight ? footerHeight + 16 : 72}px` 
                   }}
                 >
                   {children}

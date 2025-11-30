@@ -122,10 +122,26 @@ async function searchTokens(query: string, baseUrl: string): Promise<TokenSearch
   const results: TokenSearchResult[] = [];
   
   try {
-    // Only search in our tokens collection - use absolute URL
+    console.log('[Search API] Searching tokens with query:', query, 'baseUrl:', baseUrl);
+    
+    // First, try to search in our tokens collection
     const tokensUrl = `${baseUrl}/api/tokens?search=${encodeURIComponent(query)}&limit=10`;
-    const response = await fetch(tokensUrl);
-    if (response.ok) {
+    console.log('[Search API] Fetching from:', tokensUrl);
+    
+    let response;
+    try {
+      response = await fetch(tokensUrl, {
+        headers: {
+          'Accept': 'application/json',
+        },
+        signal: AbortSignal.timeout(8000), // 8 second timeout
+      });
+    } catch (fetchError) {
+      console.error('[Search API] Failed to fetch from internal tokens API:', fetchError);
+      // Fall through to DexScreener search
+    }
+    
+    if (response?.ok) {
       const data = await response.json();
       if (data.tokens) {
         // Enhance our tokens with DexScreener data using the same pattern as token screener
@@ -411,8 +427,52 @@ async function searchTokens(query: string, baseUrl: string): Promise<TokenSearch
         }
       }
     }
-  } catch (error) {
-    console.error("Error searching CypherX tokens:", error);
+  } catch (error: any) {
+    console.error("[Search API] Error searching tokens:", error?.message || error);
+  }
+
+  // If no results from our DB, try DexScreener direct search as fallback
+  if (results.length === 0 && query.length >= 2) {
+    try {
+      console.log('[Search API] No internal results, trying DexScreener search');
+      const dexSearchUrl = `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(query)}`;
+      const dexResponse = await fetch(dexSearchUrl, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(5000),
+      });
+      
+      if (dexResponse.ok) {
+        const dexData = await dexResponse.json();
+        const pairs = dexData?.pairs || [];
+        const basePairs = pairs.filter((p: any) => p.chainId === 'base').slice(0, 10);
+        
+        for (const pair of basePairs) {
+          if (!pair.baseToken?.address) continue;
+          results.push({
+            type: "token",
+            address: pair.baseToken.address,
+            poolAddress: pair.pairAddress,
+            name: pair.baseToken.name || 'Unknown',
+            symbol: pair.baseToken.symbol || '???',
+            marketCap: pair.marketCap || pair.fdv || 0,
+            volume24h: pair.volume?.h24 || 0,
+            priceUsd: pair.priceUsd,
+            liquidity: pair.liquidity,
+            source: 'dexscreener',
+            imageUrl: pair.info?.imageUrl,
+            priceChange: pair.priceChange,
+            volume: pair.volume,
+            txns: pair.txns,
+            fdv: pair.fdv,
+            pairCreatedAt: pair.pairCreatedAt,
+            dexId: pair.dexId,
+            url: pair.url,
+          });
+        }
+      }
+    } catch (dexError) {
+      console.error('[Search API] DexScreener fallback failed:', dexError);
+    }
   }
 
   return results.slice(0, 10);
@@ -423,9 +483,14 @@ async function searchNews(query: string, baseUrl: string): Promise<NewsSearchRes
   const results: NewsSearchResult[] = [];
   
   try {
-    // Use absolute URL for internal API call
+    // Use absolute URL for internal API call with proper error handling
     const newsUrl = `${baseUrl}/api/news`;
-    const response = await fetch(newsUrl);
+    const response = await fetch(newsUrl, {
+      headers: {
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(10000), // 10 second timeout
+    });
     if (response.ok) {
       const articles = await response.json();
       
@@ -452,8 +517,13 @@ async function searchNews(query: string, baseUrl: string): Promise<NewsSearchRes
         thumbnailUrl: article.thumbnailUrl
       })));
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error searching news:", error);
+    if (error.name === 'AbortError') {
+      console.error("News search request timed out");
+    } else if (error.message) {
+      console.error("News search error message:", error.message);
+    }
   }
 
   return results;
@@ -569,13 +639,35 @@ async function searchBlock(numberOrHash: string): Promise<BlockSearchResult | nu
 }
 
 export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const { searchParams } = url;
+  const query = searchParams.get('q') || '';
+  
   try {
-    const url = new URL(request.url);
-    const { searchParams } = url;
-    const query = searchParams.get('q') || '';
     
-    // Get base URL from request origin for internal API calls
-    const baseUrl = `${url.protocol}//${url.host}`;
+    // Get base URL for internal API calls
+    // Priority: NEXT_PUBLIC_BASE_URL > VERCEL_URL > construct from request
+    let baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL;
+    
+    if (!baseUrl && process.env.VERCEL_URL) {
+      // On Vercel, use the VERCEL_URL with https
+      baseUrl = `https://${process.env.VERCEL_URL}`;
+    }
+    
+    if (!baseUrl) {
+      // Fallback: construct from request URL
+      const protocol = url.protocol || 'https:';
+      const host = url.host || 'localhost:3000';
+      baseUrl = `${protocol}//${host}`;
+    }
+    
+    // Ensure baseUrl doesn't end with a slash and uses https in production
+    baseUrl = baseUrl.replace(/\/$/, '');
+    if (process.env.NODE_ENV === 'production' && baseUrl.startsWith('http://')) {
+      baseUrl = baseUrl.replace('http://', 'https://');
+    }
+    
+    console.log('[Search API] Using baseUrl:', baseUrl, 'Query:', query);
     
     if (!query || query.trim().length === 0) {
       return NextResponse.json({
@@ -644,10 +736,22 @@ export async function GET(request: Request) {
     });
     
   } catch (error) {
-    console.error("Search error:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    console.error("[Search API] Error:", {
+      message: errorMessage,
+      stack: errorStack,
+      query: query || 'unknown',
+      environment: process.env.NODE_ENV,
+      baseUrl: process.env.NEXT_PUBLIC_BASE_URL || 'not set',
+      appUrl: process.env.NEXT_PUBLIC_APP_URL || 'not set'
+    });
+    
     return NextResponse.json({
       success: false,
-      error: "Failed to perform search"
+      error: "Failed to perform search",
+      details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
     }, { status: 500 });
   }
 }

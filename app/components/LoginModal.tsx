@@ -186,17 +186,30 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, redirectTo = "
         code: errorCode,
         stack: errorStack,
       });
-      setErrorMsg(
-        errorCode === "auth/popup-blocked"
-          ? "Google sign-in popup was blocked. Please allow popups and try again."
-          : errorCode === "auth/invalid-credential"
-          ? "Invalid Google credentials. Please try again."
-          : errorCode === "auth/popup-closed-by-user"
-          ? "Google sign-in was canceled. Please try again."
-          : errorCode === "firestore/permission-denied"
-          ? "Permission denied to create user document. Check input or contact support."
-          : errorMessage || "Failed to sign in with Google."
-      );
+      // Handle specific error codes
+      let userFriendlyMessage = "Failed to sign in with Google.";
+      
+      if (errorCode === "auth/popup-blocked") {
+        userFriendlyMessage = "Google sign-in popup was blocked. Please allow popups and try again.";
+      } else if (errorCode === "auth/invalid-credential") {
+        userFriendlyMessage = "Invalid Google credentials. Please try again.";
+      } else if (errorCode === "auth/popup-closed-by-user") {
+        userFriendlyMessage = "Google sign-in was canceled. Please try again.";
+      } else if (errorCode === "auth/internal-error") {
+        userFriendlyMessage = "An internal error occurred. This may be due to Content Security Policy or network issues. Please check your browser console and try again.";
+      } else if (errorCode === "auth/network-request-failed") {
+        userFriendlyMessage = "Network error. Please check your internet connection and try again.";
+      } else if (errorCode === "auth/unauthorized-domain") {
+        userFriendlyMessage = "This domain is not authorized for Google Sign-In. Please contact support.";
+      } else if (errorCode === "firestore/permission-denied") {
+        userFriendlyMessage = "Permission denied to create user document. Check input or contact support.";
+      } else if (errorMessage.includes("Content Security Policy") || errorMessage.includes("CSP")) {
+        userFriendlyMessage = "Content Security Policy blocked Google Sign-In. Please contact support.";
+      } else if (errorMessage) {
+        userFriendlyMessage = errorMessage;
+      }
+      
+      setErrorMsg(userFriendlyMessage);
     } finally {
       setLoadingAction(false);
     }

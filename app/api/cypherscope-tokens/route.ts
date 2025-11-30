@@ -429,16 +429,25 @@ export async function GET(request: Request) {
     );
     console.log(`📊 Total unique tokens after deduplication: ${uniqueTokens.length}`);
 
+    // Filter by market cap and volume - only allow pairs > $50k market cap and > $10k volume
+    const filteredTokens = uniqueTokens.filter((token: TokenData) => {
+      const marketCap = typeof token.marketCap === 'string' ? parseFloat(token.marketCap) : (token.marketCap || 0);
+      const volume24h = typeof token.volume24h === 'string' ? parseFloat(token.volume24h) : (token.volume24h || 0);
+      
+      return marketCap >= 50000 && volume24h >= 10000;
+    });
+    console.log(`📊 Total tokens after market cap ($50k+) and volume ($10k+) filter: ${filteredTokens.length}`);
+
     // Search filter
     if (search) {
       const searchLower = search.toLowerCase();
-      tokens = uniqueTokens.filter((token: TokenData) => 
+      tokens = filteredTokens.filter((token: TokenData) => 
         token.name?.toLowerCase().includes(searchLower) ||
         token.symbol?.toLowerCase().includes(searchLower) ||
         token.address?.toLowerCase().includes(searchLower)
       );
     } else {
-      tokens = uniqueTokens;
+      tokens = filteredTokens;
     }
 
     // Sort tokens - prioritize scored tokens first, then by score, then by the requested sort

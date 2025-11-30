@@ -25,24 +25,25 @@ const CookieBanner: React.FC = () => {
   };
 
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       {isVisible && (
         <motion.div
           className="fixed inset-x-0 bottom-0 z-[9999998]"
-          initial={{ opacity: 0, y: 24 }}
+          initial={{ opacity: 0, y: "100%" }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 24 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
+          exit={{ opacity: 0, y: "100%" }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+          style={{ willChange: "transform" }}
         >
-          <div className="w-full bg-[#050a1a] border-t border-blue-900/40 px-4 py-4 sm:px-6 sm:py-5">
-            <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1 text-slate-200">
-                <p className="text-sm font-semibold tracking-wide text-white">Cookies & Privacy</p>
-                <p className="text-xs sm:text-sm text-slate-300">
+          <div className="w-full bg-[#050a1a] border-t border-blue-900/40 px-3 py-3 sm:px-6 sm:py-5">
+            <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1 text-slate-200 flex-1 min-w-0">
+                <p className="text-xs sm:text-sm font-semibold tracking-wide text-white">Cookies & Privacy</p>
+                <p className="text-[11px] sm:text-xs text-slate-300 leading-relaxed">
                   We use cookies to personalize content, enhance your experience, and analyze traffic. You can accept or reject optional cookies.
                 </p>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 flex-shrink-0">
                 <button
                   type="button"
                   onClick={() => handleChoice("rejected")}

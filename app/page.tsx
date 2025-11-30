@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion, useScroll } from "framer-motion";
+import { motion } from "framer-motion";
 import Link from "next/link";
+import { FiZap, FiBarChart2, FiTrendingUp, FiEye, FiSearch } from "react-icons/fi";
+import { FaWallet } from "react-icons/fa";
 
 import Header from "./components/Header";
 import GlobalSearch from "./components/GlobalSearch";
@@ -49,37 +51,11 @@ function fadeInUp(delay = 0) {
   };
 }
 
-// Lightweight background orbs using CSS animations
-const LightweightOrbs = () => (
-  <>
-    {/* Desktop: 3 orbs */}
-    <div className="hidden sm:block">
-      <div className="orb orb-1"></div>
-      <div className="orb orb-2"></div>
-      <div className="orb orb-3"></div>
-    </div>
-    {/* Mobile: 2 orbs */}
-    <div className="block sm:hidden">
-      <div className="orb orb-mobile-1"></div>
-      <div className="orb orb-mobile-2"></div>
-    </div>
-  </>
-);
 
 export default function Page() {
-  const { scrollYProgress } = useScroll();
-  const [showScrollToTop, setShowScrollToTop] = useState(false);
   const [activeUsers, setActiveUsers] = useState<number>(0);
   const [totalTokens, setTotalTokens] = useState<number>(0);
   const [statsLoading, setStatsLoading] = useState(true);
-  
-  // Track scroll progress for scroll to top button
-  useEffect(() => {
-    const unsubscribe = scrollYProgress.on("change", (latest) => {
-      setShowScrollToTop(latest > 0.1);
-    });
-    return unsubscribe;
-  }, [scrollYProgress]);
 
   // Fetch stats from APIs
   useEffect(() => {
@@ -127,88 +103,97 @@ export default function Page() {
   }, []);
 
   return (
-      <div className="min-h-screen flex flex-col bg-gray-950 overflow-x-hidden">
+      <div className="min-h-screen flex flex-col bg-[#070c14] overflow-x-hidden">
         <Header />
 
         {/* Separator line between header and content */}
-        <div className="border-b border-gray-800/50"></div>
+        <div className="border-b border-gray-800/30"></div>
 
         <main className="flex-1 text-gray-200 relative overflow-x-hidden" style={{ overflowY: 'visible' }}>
-          <div className="fixed inset-0 bg-gray-950 -z-10"></div>
+          <div className="fixed inset-0 bg-[#070c14] -z-10"></div>
+
+          {/* Background lines that flow through the entire page */}
+          <div className="fixed inset-0 pointer-events-none overflow-visible z-0">
+            {/* 2 Vertical lines spread out more, running down the entire page */}
+            <div className="fixed top-0 left-[25%] w-[1px] h-[500vh] bg-gradient-to-b from-gray-400/5 via-gray-400/15 to-gray-400/20"></div>
+            <div className="fixed top-0 left-[75%] w-[1px] h-[500vh] bg-gradient-to-b from-gray-400/5 via-gray-400/15 to-gray-400/20"></div>
+            {/* 4 Horizontal lines - first one below hero section, others distributed */}
+            <div className="absolute top-[70vh] left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-gray-400/12 to-transparent"></div>
+            <div className="absolute top-[85vh] left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-gray-400/10 to-transparent"></div>
+            <div className="absolute top-[100vh] left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-gray-400/10 to-transparent"></div>
+            <div className="absolute top-[115vh] left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-gray-400/8 to-transparent"></div>
+          </div>
 
           {/* Hero Section */}
           <motion.div 
-            className="relative w-full min-h-[60vh] sm:min-h-[60vh] flex items-center justify-center overflow-visible pt-8 sm:pt-0"
+            className="relative w-full min-h-[60vh] sm:min-h-[65vh] flex items-center justify-center overflow-visible pt-8 sm:pt-12"
             variants={heroVariants}
             initial="hidden"
             animate="visible"
           >
-            <div className="absolute inset-0 pointer-events-none overflow-hidden">
-              <LightweightOrbs />
-            </div>
 
-            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-gray-950 via-gray-950/70 to-transparent pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#070c14] via-[#070c14]/70 to-transparent pointer-events-none"></div>
 
             <div className="relative z-10 text-center px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
               {/* Enhanced Main Heading */}
               <motion.div
                 variants={itemVariants}
-                className="mb-8 sm:mb-6 pt-8 sm:pt-6 lg:pt-2"
+                className="mb-12 sm:mb-10 relative"
               >
-                {/* Small Badge */}
+                {/* Subtle background layer for badge section */}
+                <div className="hidden lg:block absolute -top-4 left-1/2 -translate-x-1/2 w-full max-w-md h-20 bg-gradient-to-b from-blue-500/5 via-blue-400/3 to-transparent rounded-full blur-2xl pointer-events-none"></div>
+                {/* 1 CLICK SWAPS Badge */}
                 <motion.div
                   variants={itemVariants}
-                  className="flex justify-center mb-4"
+                  className="flex justify-center mb-6"
                 >
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                    <span className="w-2 h-2 bg-blue-400 rounded-full mr-2 animate-pulse"></span>
-                    INSTANT SWAP-EXECUTIONS
+                  <span className="chrome-reflection inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/40 relative overflow-hidden">
+                    <FiZap className="w-3.5 h-3.5 text-blue-400 relative z-10" />
+                    <span className="relative z-10">1 CLICK SWAPS</span>
                   </span>
                 </motion.div>
                 
-                {/* Enhanced Subtitle */}
-                <motion.p 
-                  className="text-lg sm:text-xl lg:text-2xl xl:text-[2.3rem] text-gray-300 max-w-4xl mx-auto font-light mb-8 sm:mb-6 leading-[1.95] tracking-[0.014em]"
+                {/* Main Headline - 2 lines */}
+                <motion.h1 
+                  className="text-4xl sm:text-5xl md:text-6xl lg:text-6xl xl:text-7xl font-bold text-white max-w-5xl mx-auto mb-5 sm:mb-7 leading-tight px-2"
                   variants={itemVariants}
                 >
-                  Advanced analytics, real-time insights, and{" "}
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-700 via-blue-500 to-blue-300 font-semibold">
-                    AI-powered intelligence
-                  </span>{" "}
-                  for the next generation of decentralized trading
+                  <div>See Everything.</div>
+                  <div><span className="text-blue-400">Miss Nothing.</span></div>
+                </motion.h1>
+                
+                {/* Subtext */}
+                <motion.p 
+                  className="text-sm sm:text-base md:text-lg text-gray-400 max-w-3xl mx-auto mb-5 sm:mb-7 leading-relaxed font-normal px-2"
+                  variants={itemVariants}
+                >
+                  The all-in-one trading terminal for Base. Real-time analytics, instant swaps, and deep market intelligence—built for traders who move fast.
+                </motion.p>
+
+                {/* Status Indicators */}
+                <motion.p
+                  variants={itemVariants}
+                  className="text-sm sm:text-base text-gray-400 mb-6 sm:mb-8 px-2"
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-green-400 rounded-full"></span>
+                    {statsLoading ? '...' : totalTokens.toLocaleString()} tokens indexed
+                  </span>
+                  <span className="mx-1.5 sm:mx-2">•</span>
+                  <span>Real-time data</span>
                 </motion.p>
               </motion.div>
 
-              {/* Enhanced Global Search Bar */}
+              {/* Stats Section - Grid Layout */}
               <motion.div
                 variants={itemVariants}
-                className="mb-8 sm:mb-6 max-w-2xl mx-auto relative"
-                style={{ overflow: 'visible' }}
-              >
-                <GlobalSearch 
-                  placeholder="Search for tokens, addresses, txs, insights, events, or blocks..."
-                  variant="homepage"
-                />
-                {/* Small status text */}
-                <div className="flex justify-center mt-2">
-                  <span className="text-xs text-gray-500 flex items-center">
-                    <span className="w-1.5 h-1.5 bg-green-400 rounded-full mr-1.5 animate-pulse"></span>
-                    Real-time data • {statsLoading ? '...' : totalTokens.toLocaleString()} tokens indexed
-                  </span>
-                </div>
-              </motion.div>
-
-
-              {/* Enhanced Stats Section */}
-              <motion.div
-                variants={itemVariants}
-                className="flex flex-wrap justify-center gap-6 sm:gap-8 mb-8 sm:mb-0"
+                className="flex items-center justify-center gap-0 max-w-4xl mx-auto mb-8 sm:mb-0 relative"
                 initial="hidden"
                 whileInView="visible"
                 viewport={{ once: true, margin: "-50px" }}
               >
                 <motion.div 
-                  className="text-center group"
+                  className="text-center group px-2 sm:px-4 lg:px-6"
                   variants={itemVariants}
                   whileHover={{ scale: 1.05, y: -5 }}
                   transition={{ duration: 0.3 }}
@@ -218,12 +203,13 @@ export default function Page() {
                     end={activeUsers || 0}
                     duration={2500}
                     delay={500}
-                    className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-400 mb-1 sm:mb-2 group-hover:text-blue-300 transition-colors"
+                    className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-semibold text-white mb-1.5 group-hover:text-blue-300 transition-colors"
                   />
-                  <div className="text-xs text-gray-400 group-hover:text-gray-300 transition-colors">Active Users</div>
+                  <div className="text-xs sm:text-sm text-gray-400 uppercase tracking-wider font-light">ACTIVE USERS</div>
                 </motion.div>
+                <div className="w-px h-10 sm:h-14 bg-gray-800/30"></div>
                 <motion.div 
-                  className="text-center group"
+                  className="text-center group px-2 sm:px-4 lg:px-6"
                   variants={itemVariants}
                   whileHover={{ scale: 1.05, y: -5 }}
                   transition={{ duration: 0.3 }}
@@ -234,12 +220,13 @@ export default function Page() {
                     delay={800}
                     prefix="$"
                     suffix="B+"
-                    className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-400 mb-1 sm:mb-2 group-hover:text-blue-300 transition-colors"
+                    className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-semibold text-white mb-1.5 group-hover:text-blue-300 transition-colors"
                   />
-                  <div className="text-xs text-gray-400 group-hover:text-gray-300 transition-colors">Volume Tracked</div>
+                  <div className="text-xs sm:text-sm text-gray-400 uppercase tracking-wider font-light">VOLUME TRACKED</div>
                 </motion.div>
+                <div className="w-px h-10 sm:h-14 bg-gray-800/30"></div>
                 <motion.div 
-                  className="text-center group"
+                  className="text-center group px-2 sm:px-4 lg:px-6"
                   variants={itemVariants}
                   whileHover={{ scale: 1.05, y: -5 }}
                   transition={{ duration: 0.3 }}
@@ -250,217 +237,171 @@ export default function Page() {
                     delay={1100}
                     suffix="%"
                     decimals={1}
-                  className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-400 mb-1 sm:mb-2 group-hover:text-blue-300 transition-colors"
+                    className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-semibold text-white mb-1.5 group-hover:text-blue-300 transition-colors"
                   />
-                  <div className="text-xs text-gray-400 group-hover:text-gray-300 transition-colors">Uptime</div>
+                  <div className="text-xs sm:text-sm text-gray-400 uppercase tracking-wider font-light">UPTIME</div>
                 </motion.div>
               </motion.div>
             </div>
           </motion.div>
 
           {/* Content Section with Enhanced Padding */}
-          <div className="relative z-10 p-4 sm:p-6 lg:p-10 pt-8 sm:pt-6 lg:pt-8">
+          <div className="relative z-10 pt-12 sm:pt-16 lg:pt-20 bg-[#070c14]">
             
             {/* Discover Section */}
-            <motion.div className="mb-16" {...fadeInUp(0.1)}>
-              <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-10 px-4">
+            <motion.div className="mb-12 sm:mb-16" {...fadeInUp(0.1)}>
+              <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 px-4 sm:px-6 lg:px-8">
                 
                 {/* Left Panel - Token Discovery */}
-                <div className="lg:col-span-1 flex flex-col items-center lg:items-start justify-start lg:justify-center lg:pr-8 px-4 text-center lg:text-left">
+                <div className="lg:col-span-1 flex flex-col items-center lg:items-start justify-start lg:justify-center lg:pr-8 text-center lg:text-left mb-6 lg:mb-0">
                   <div className="relative">
-
-                    
-                    {/* Section number */}
-                    <div className="text-blue-400 text-sm mb-4 font-medium">[ 01. ]</div>
-                    
                     {/* Heading */}
-                    <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">Token Discovery</h2>
+                    <div className="mb-3 sm:mb-4">
+                      <span className="text-blue-400 uppercase tracking-[0.3em] sm:tracking-[0.4em] text-[10px] sm:text-xs block mb-2 font-normal">TOKEN DISCOVERY</span>
+                      <h2 className="text-xl sm:text-2xl md:text-3xl font-semibold text-white mb-2 sm:mb-3">
+                        Find opportunities in real-time
+                      </h2>
+                    </div>
                     
                     {/* Subtitle */}
-                    <p className="text-gray-400 mb-6 text-sm sm:text-base">Discover new tokens and filter by your preferences.</p>
+                    <p className="text-gray-300 mb-4 sm:mb-6 text-xs sm:text-sm md:text-base leading-relaxed max-w-lg mx-auto lg:mx-0">
+                      Scan thousands of tokens instantly. Filter by liquidity, volume, age, and security metrics. Never miss a trade again.
+                    </p>
                     
                     {/* CTA Button */}
-                    {/* Removed Start Trading button */}
-          </div>
-        </div>
+                    <Link
+                      href="/discover"
+                      className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-semibold transition-colors rounded-none"
+                    >
+                      Open Discover
+                      <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Link>
+                  </div>
+                </div>
                 
                                 {/* Right Panel - Token Table */}
-                <div className="lg:col-span-2 lg:pr-12 px-2 sm:px-4 lg:px-6">
-                  {/* Token Table */}
-                  <div className="bg-gray-950 border border-gray-800 overflow-hidden">
-                    {/* Table Header */}
-                    <div className="bg-gray-900 px-2 sm:px-4 py-3 border-b border-gray-800">
-                      <div className="grid text-xs text-gray-400 font-medium min-w-[760px] items-center" style={{ gridTemplateColumns: 'minmax(140px, 1.5fr) minmax(80px, 1fr) minmax(70px, 1fr) minmax(90px, 1.2fr) minmax(70px, 1fr) minmax(80px, 1.2fr) minmax(80px, 1fr)', gap: '0.5rem 1rem' }}>
-                        <div className="truncate">PAIR</div>
-                        <div className="truncate">CREATED</div>
-                        <div className="truncate">LIQUIDITY</div>
-                        <div className="truncate">PRICE</div>
-                        <div className="truncate">FDV</div>
-                        <div className="truncate">TXNS</div>
-                        <div className="truncate">VOLUME</div>
-                      </div>
-                    </div>
-                    
-                    {/* Table Body */}
-                    <div className="max-h-96 overflow-y-auto">
-                      {/* Scrollable container for mobile */}
-                      <div className="overflow-x-auto scrollbar-hide">
-                        <div className="min-w-[760px]">
-                          {/* Token Row 1 */}
-                          <div className="px-2 sm:px-4 py-3 border-b border-gray-800">
-                            <div className="grid text-xs sm:text-sm items-center" style={{ gridTemplateColumns: 'minmax(140px, 1.5fr) minmax(80px, 1fr) minmax(70px, 1fr) minmax(90px, 1.2fr) minmax(70px, 1fr) minmax(80px, 1.2fr) minmax(80px, 1fr)', gap: '0.5rem 1rem' }}>
-                              <div className="min-w-0">
-                                <div className="text-white font-medium truncate">
-                                  <span className="sm:hidden">$CYPHX</span>
-                                  <span className="hidden sm:inline">$CYPHX/WETH</span>
-                                </div>
-                                <div className="text-gray-500 text-xs truncate">0x8f2a...4b3c</div>
-                              </div>
-                              <div className="text-gray-300 truncate">12h 45m</div>
-                              <div className="text-gray-300 truncate">$42K</div>
-                              <div className="min-w-0">
-                                <div className="text-gray-300 truncate">$0.0024</div>
-                                <div className="text-green-400 text-xs truncate">+ 468.64%</div>
-                              </div>
-                              <div className="text-gray-300 truncate">$89K</div>
-                              <div className="min-w-0">
-                                <div className="text-gray-300 truncate">5.2K</div>
-                                <div className="text-gray-500 text-xs truncate">3120 / 2080</div>
-                              </div>
-                              <div className="text-gray-300 truncate">$2.1M</div>
-                            </div>
-                          </div>
-        
-                          {/* Token Row 2 */}
-                          <div className="px-2 sm:px-4 py-3 border-b border-gray-800">
-                            <div className="grid text-xs sm:text-sm items-center" style={{ gridTemplateColumns: 'minmax(140px, 1.5fr) minmax(80px, 1fr) minmax(70px, 1fr) minmax(90px, 1.2fr) minmax(70px, 1fr) minmax(80px, 1.2fr) minmax(80px, 1fr)', gap: '0.5rem 1rem' }}>
-                              <div className="min-w-0">
-                                <div className="text-white font-medium truncate">
-                                  <span className="sm:hidden">$ALPHA</span>
-                                  <span className="hidden sm:inline">$ALPHA/WETH</span>
-                                </div>
-                                <div className="text-gray-500 text-xs truncate">0x7d9e...5f2a</div>
-                              </div>
-                              <div className="text-gray-300 truncate">8h 22m</div>
-                              <div className="text-gray-300 truncate">$24K</div>
-                              <div className="min-w-0">
-                                <div className="text-gray-300 truncate">$0.0018</div>
-                                <div className="text-green-400 text-xs truncate">+ 433.30%</div>
-                              </div>
-                              <div className="text-gray-300 truncate">$67K</div>
-                              <div className="min-w-0">
-                                <div className="text-gray-300 truncate">4.1K</div>
-                                <div className="text-gray-500 text-xs truncate">2456 / 1644</div>
-                              </div>
-                              <div className="text-gray-300 truncate">$1.8M</div>
-                            </div>
-                          </div>
-                      
-                      {/* Token Row 3 */}
-                      <div className="px-2 sm:px-4 py-3 border-b border-gray-800">
-                        <div className="grid text-xs sm:text-sm items-center" style={{ gridTemplateColumns: 'minmax(140px, 1.5fr) minmax(80px, 1fr) minmax(70px, 1fr) minmax(90px, 1.2fr) minmax(70px, 1fr) minmax(80px, 1.2fr) minmax(80px, 1fr)', gap: '0.5rem 1rem' }}>
-                          <div className="min-w-0">
-                            <div className="text-white font-medium truncate">
-                              <span className="sm:hidden">$QUANT</span>
-                              <span className="hidden sm:inline">$QUANT/WETH</span>
-                            </div>
-                            <div className="text-gray-500 text-xs truncate">0x3b4c...9e1f</div>
-                          </div>
-                          <div className="text-gray-300 truncate">15h 8m</div>
-                          <div className="text-gray-300 truncate">$11K</div>
-                          <div className="min-w-0">
-                            <div className="text-gray-300 truncate">$0.0009</div>
-                            <div className="text-green-400 text-xs truncate">+ 378.97%</div>
-                          </div>
-                          <div className="text-gray-300 truncate">$28K</div>
-                          <div className="min-w-0">
-                            <div className="text-gray-300 truncate">3.7K</div>
-                            <div className="text-gray-500 text-xs truncate">1987 / 1713</div>
-                          </div>
-                          <div className="text-gray-300 truncate">$890K</div>
+                <div className="lg:col-span-2 lg:pr-12">
+                  {/* Token Table - Simplified to match image */}
+                  <div className="bg-[#0d1117] border border-gray-800/30 overflow-hidden backdrop-blur-sm">
+                    {/* Mobile: Horizontal scroll container */}
+                    <div className="overflow-x-auto">
+                      {/* Table Header */}
+                      <div className="bg-[#0d1117] px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-800/30 min-w-[600px]">
+                        <div className="grid grid-cols-4 gap-2 sm:gap-4 text-[10px] sm:text-xs text-gray-400 font-medium">
+                          <div>TOKEN</div>
+                          <div className="text-right">PRICE</div>
+                          <div className="text-right">24H</div>
+                          <div className="text-right">VOLUME</div>
                         </div>
                       </div>
+                    
+                      {/* Table Body */}
+                      <div className="divide-y divide-gray-800/50 min-w-[600px]">
+                        {/* Token Row 1 - $CYPHX */}
+                        <div className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-900/30 transition-colors">
+                          <div className="grid grid-cols-4 gap-2 sm:gap-4 items-center">
+                            <div className="flex items-center gap-1.5 sm:gap-2">
+                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0">C</div>
+                              <div className="min-w-0">
+                                <div className="text-white font-medium text-xs sm:text-sm truncate">$CYPHX</div>
+                                <div className="text-gray-400 text-[10px] sm:text-xs truncate">CypherX</div>
+                              </div>
+                            </div>
+                            <div className="text-white text-right text-xs sm:text-sm">$0.0024</div>
+                            <div className="text-green-400 text-right text-xs sm:text-sm">+468.64%</div>
+                            <div className="text-white text-right text-xs sm:text-sm">$2.1M</div>
+                          </div>
+                        </div>
 
-                      {/* Token Row 4 */}
-                      <div className="px-2 sm:px-4 py-3 border-b border-gray-800">
-                        <div className="grid text-xs sm:text-sm items-center" style={{ gridTemplateColumns: 'minmax(140px, 1.5fr) minmax(80px, 1fr) minmax(70px, 1fr) minmax(90px, 1.2fr) minmax(70px, 1fr) minmax(80px, 1.2fr) minmax(80px, 1fr)', gap: '0.5rem 1rem' }}>
-                          <div className="min-w-0">
-                            <div className="text-white font-medium truncate">
-                              <span className="sm:hidden">$SWIFT</span>
-                              <span className="hidden sm:inline">$SWIFT/WETH</span>
+                        {/* Token Row 2 - $ALPHA */}
+                        <div className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-900/30 transition-colors">
+                          <div className="grid grid-cols-4 gap-2 sm:gap-4 items-center">
+                            <div className="flex items-center gap-1.5 sm:gap-2">
+                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0">A</div>
+                              <div className="min-w-0">
+                                <div className="text-white font-medium text-xs sm:text-sm truncate">$ALPHA</div>
+                                <div className="text-gray-400 text-[10px] sm:text-xs truncate">AlphaFi</div>
+                              </div>
                             </div>
-                            <div className="text-gray-500 text-xs truncate">0x9a2b...7c4d</div>
+                            <div className="text-white text-right text-xs sm:text-sm">$0.0018</div>
+                            <div className="text-green-400 text-right text-xs sm:text-sm">+433.30%</div>
+                            <div className="text-white text-right text-xs sm:text-sm">$1.8M</div>
                           </div>
-                          <div className="text-gray-300 truncate">6h 15m</div>
-                          <div className="text-gray-300 truncate">$18K</div>
-                          <div className="min-w-0">
-                            <div className="text-gray-300 truncate">$0.0032</div>
-                            <div className="text-green-400 text-xs truncate">+ 245.67%</div>
+                        </div>
+
+                        {/* Token Row 3 - $NEXUS */}
+                        <div className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-900/30 transition-colors">
+                          <div className="grid grid-cols-4 gap-2 sm:gap-4 items-center">
+                            <div className="flex items-center gap-1.5 sm:gap-2">
+                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0">N</div>
+                              <div className="min-w-0">
+                                <div className="text-white font-medium text-xs sm:text-sm truncate">$NEXUS</div>
+                                <div className="text-gray-400 text-[10px] sm:text-xs truncate">NexusAI</div>
+                              </div>
+                            </div>
+                            <div className="text-white text-right text-xs sm:text-sm">$0.0009</div>
+                            <div className="text-green-400 text-right text-xs sm:text-sm">+156.23%</div>
+                            <div className="text-white text-right text-xs sm:text-sm">$890K</div>
                           </div>
-                          <div className="text-gray-300 truncate">$45K</div>
-                          <div className="min-w-0">
-                            <div className="text-gray-300 truncate">2.8K</div>
-                            <div className="text-gray-500 text-xs truncate">1689 / 1111</div>
+                        </div>
+
+                        {/* Token Row 4 - $SWIFT */}
+                        <div className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-900/30 transition-colors">
+                          <div className="grid grid-cols-4 gap-2 sm:gap-4 items-center">
+                            <div className="flex items-center gap-1.5 sm:gap-2">
+                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0">S</div>
+                              <div className="min-w-0">
+                                <div className="text-white font-medium text-xs sm:text-sm truncate">$SWIFT</div>
+                                <div className="text-gray-400 text-[10px] sm:text-xs truncate">SwiftPay</div>
+                              </div>
+                            </div>
+                            <div className="text-white text-right text-xs sm:text-sm">$0.0032</div>
+                            <div className="text-red-400 text-right text-xs sm:text-sm">-12.45%</div>
+                            <div className="text-white text-right text-xs sm:text-sm">$720K</div>
                           </div>
-                          <div className="text-gray-300 truncate">$720K</div>
+                        </div>
+
+                        {/* Token Row 5 - $QUANT */}
+                        <div className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-900/30 transition-colors">
+                          <div className="grid grid-cols-4 gap-2 sm:gap-4 items-center">
+                            <div className="flex items-center gap-1.5 sm:gap-2">
+                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0">Q</div>
+                              <div className="min-w-0">
+                                <div className="text-white font-medium text-xs sm:text-sm truncate">$QUANT</div>
+                                <div className="text-gray-400 text-[10px] sm:text-xs truncate">QuantumX</div>
+                              </div>
+                            </div>
+                            <div className="text-white text-right text-xs sm:text-sm">$0.0006</div>
+                            <div className="text-green-400 text-right text-xs sm:text-sm">+89.12%</div>
+                            <div className="text-white text-right text-xs sm:text-sm">$340K</div>
+                          </div>
                         </div>
                       </div>
                       
-                      {/* Token Row 5 */}
-                      <div className="px-2 sm:px-4 py-3 border-b border-gray-800">
-                        <div className="grid text-xs sm:text-sm items-center" style={{ gridTemplateColumns: 'minmax(140px, 1.5fr) minmax(80px, 1fr) minmax(70px, 1fr) minmax(90px, 1.2fr) minmax(70px, 1fr) minmax(80px, 1.2fr) minmax(80px, 1fr)', gap: '0.5rem 1rem' }}>
-                          <div className="min-w-0">
-                            <div className="text-white font-medium truncate">
-                              <span className="sm:hidden">$NEXUS</span>
-                              <span className="hidden sm:inline">$NEXUS/WETH</span>
-                            </div>
-                            <div className="text-gray-500 text-xs truncate">0x5e8f...9a1b</div>
+                      {/* Table Footer */}
+                      <div className="bg-[#0d1117] px-3 sm:px-4 py-2 sm:py-3 border-t border-gray-800/30 min-w-[600px]">
+                        <div className="flex flex-wrap gap-2 sm:gap-2 md:gap-3">
+                          <div className="inline-flex items-center gap-1 sm:gap-1.5 px-2 py-1 rounded-full bg-green-500/10 border border-green-500/20">
+                            <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                            <span className="text-[10px] sm:text-xs text-green-300 whitespace-nowrap">Contract Verified</span>
                           </div>
-                          <div className="text-gray-300 truncate">19h 42m</div>
-                          <div className="text-gray-300 truncate">$8.5K</div>
-                          <div className="min-w-0">
-                            <div className="text-gray-300 truncate">$0.0006</div>
-                            <div className="text-green-400 text-xs truncate">+ 156.23%</div>
+                          <div className="inline-flex items-center gap-1 sm:gap-1.5 px-2 py-1 rounded-full bg-green-500/10 border border-green-500/20">
+                            <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                            </svg>
+                            <span className="text-[10px] sm:text-xs text-green-300 whitespace-nowrap">Liquidity Locked</span>
                           </div>
-                          <div className="text-gray-300 truncate">$22K</div>
-                          <div className="min-w-0">
-                            <div className="text-gray-300 truncate">1.9K</div>
-                            <div className="text-gray-500 text-xs truncate">1123 / 777</div>
+                          <div className="inline-flex items-center gap-1 sm:gap-1.5 px-2 py-1 rounded-full bg-green-500/10 border border-green-500/20">
+                            <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                            <span className="text-[10px] sm:text-xs text-green-300 whitespace-nowrap">Not Honeypot</span>
                           </div>
-                          <div className="text-gray-300 truncate">$340K</div>
                         </div>
-                      </div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Table Footer */}
-                    <div className="bg-gray-900 px-2 sm:px-4 py-3 border-t border-gray-800">
-                      <div className="flex flex-wrap gap-2 sm:gap-4 text-xs text-gray-400">
-                        <div className="flex items-center space-x-1">
-                          <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                          <span>Audited Contract</span>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                          <span>Contract Renounced</span>
-                  </div>
-                        <div className="flex items-center space-x-1">
-                          <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                          <span>Liquidity Locked</span>
-              </div>
-                        <div className="flex items-center space-x-1">
-                          <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                          <span>Not Honey Pot</span>
-            </div>
                       </div>
                     </div>
                   </div>
@@ -468,426 +409,273 @@ export default function Page() {
       </div>
     </motion.div>
             
-            {/* Separator line between Discover and Features */}
-            <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent mb-16"></div>
+            {/* Separator line between Discover and Platform */}
+            <div className="border-b border-gray-800/30 mb-12 sm:mb-16"></div>
 
-            {/* Chart Section */}
-            <motion.div className="mb-16" {...fadeInUp(0.1)}>
-              <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-10 px-4">
-                {/* Left Panel - Chart Info */}
-                <div className="lg:col-span-1 flex flex-col items-center lg:items-start justify-start lg:justify-center lg:pr-8 px-4 text-center lg:text-left">
-                  <div className="relative">
-                    <div className="text-blue-400 text-sm mb-4 font-medium">[ 02. ]</div>
-                    <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white mb-3">Advanced Charts</h2>
-                    <p className="text-gray-400 mb-6 text-sm sm:text-base">Professional TradingView charts with advanced indicators and real-time data.</p>
-                    {/* Removed View Charts button */}
-                  </div>
-                </div>
-
-                {/* Right Panel - Mini Chart */}
-                <div className="lg:col-span-2 lg:pr-12 px-2 sm:px-4 lg:px-6">
-                  <div className="bg-gray-950/80 border border-gray-800 p-6 sm:p-8 flex items-center justify-center min-h-[320px]">
-                    <div className="w-full max-w-3xl aspect-[16/9] border-2 border-dashed border-blue-500/30 bg-gradient-to-br from-gray-900/60 via-gray-900/30 to-gray-900/10 flex flex-col items-center justify-center text-gray-500">
-                      <svg className="w-10 h-10 text-blue-400/40 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M4 19V7l6-3 6 3 4 2v10H4z" />
-                      </svg>
-                      <p className="text-sm sm:text-base text-gray-400/80">Chart showcase placeholder</p>
-                      <p className="text-xs text-gray-500 mt-1">Drop in a hero chart image here later</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Powered By Section */}
-            <motion.div className="mb-16" {...fadeInUp(0.2)}>
-              <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-10 px-4 items-stretch">
-                <div className="lg:col-span-1 flex flex-col items-center lg:items-start justify-start lg:justify-center lg:pr-8 px-4 text-center lg:text-left">
-                  <div className="relative">
-                    <div className="text-blue-400 text-sm mb-4 font-medium">[ 03. ]</div>
-                    <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">Powered By</h2>
-                    <p className="text-gray-400 mb-6 text-sm sm:text-base">
-                      We partner with category leaders to deliver deep liquidity, resilient infrastructure, and always-on market intelligence.
-                    </p>
-                  </div>
-                </div>
-                <div className="lg:col-span-2 lg:pr-12 px-2 sm:px-4 lg:px-6">
-                  <div className="p-4 sm:p-6">
-                    <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-1 md:grid md:grid-cols-2 xl:grid-cols-3 md:gap-6 md:overflow-visible">
-                      <div className="group relative flex min-w-[220px] items-center gap-4 bg-gray-900/40 p-4 transition-all duration-300 hover:bg-blue-500/5 md:min-w-0">
-                        <div className="w-16 h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center">
-                          <img src="https://i.imgur.com/9Y7BIHa.png" alt="0x Protocol" className="h-10 object-contain" />
-                        </div>
-                        <div>
-                          <p className="text-white text-sm sm:text-base font-semibold">0x Protocol</p>
-                          <p className="text-xs text-gray-400">Aggregation & smart order routing</p>
-                        </div>
-                      </div>
-                      <div className="group relative flex min-w-[220px] items-center gap-4 bg-gray-900/40 p-4 transition-all duration-300 hover:bg-blue-500/5 md:min-w-0">
-                        <div className="w-16 h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center">
-                          <img src="https://i.imgur.com/RWgPgY1.png" alt="Coinbase" className="h-10 object-contain" />
-                        </div>
-                        <div>
-                          <p className="text-white text-sm sm:text-base font-semibold">Coinbase</p>
-                          <p className="text-xs text-gray-400">Base chain infrastructure & custody</p>
-                        </div>
-                      </div>
-                      <div className="group relative flex min-w-[220px] items-center gap-4 bg-gray-900/40 p-4 transition-all duration-300 hover:bg-blue-500/5 md:min-w-0">
-                        <div className="w-16 h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center">
-                          <img src="https://i.imgur.com/LweKEMF.png" alt="Dexscreener" className="h-10 object-contain" />
-                        </div>
-                        <div>
-                          <p className="text-white text-sm sm:text-base font-semibold">Dexscreener</p>
-                          <p className="text-xs text-gray-400">Live market discovery</p>
-                        </div>
-                      </div>
-                      <div className="group relative flex min-w-[220px] items-center gap-4 bg-gray-900/40 p-4 transition-all duration-300 hover:bg-blue-500/5 md:min-w-0">
-                        <div className="w-16 h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center">
-                          <img src="https://i.imgur.com/coHc8sq.png" alt="Alchemy" className="h-10 object-contain" />
-                        </div>
-                        <div>
-                          <p className="text-white text-sm sm:text-base font-semibold">Alchemy</p>
-                          <p className="text-xs text-gray-400">Scalable data + node services</p>
-                        </div>
-                      </div>
-                      <div className="group relative flex min-w-[220px] items-center gap-4 bg-gray-900/40 p-4 transition-all duration-300 hover:bg-blue-500/5 md:min-w-0">
-                        <div className="w-16 h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center">
-                          <img src="https://i.imgur.com/UgezDbe.png" alt="CoinGecko" className="h-10 object-contain" />
-                        </div>
-                        <div>
-                          <p className="text-white text-sm sm:text-base font-semibold">CoinGecko</p>
-                          <p className="text-xs text-gray-400">Global pricing & token intelligence</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Separator line between Chart and Features */}
-            <div className="border-b border-gray-800/30 mb-16"></div>
-
-            {/* Features Section */}
+            {/* Platform Features Section */}
             <motion.div className="mb-12 sm:mb-16" {...fadeInUp(0)}>
-              <div className="max-w-6xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-4 lg:px-0">
-            <div className="grid gap-3 sm:gap-4 lg:gap-5 lg:grid-cols-5">
-                  <div className="lg:col-span-3 relative overflow-hidden border border-blue-500/10 bg-gradient-to-br from-blue-900/15 via-gray-950 to-gray-950 p-3 sm:p-4 lg:p-6 xl:p-8">
-                    <div className="absolute inset-0 bg-gradient-to-br from-blue-600/15 via-transparent to-blue-400/10 pointer-events-none"></div>
-                    <div className="hidden sm:block absolute -top-20 -right-24 w-56 h-56 bg-blue-500/20 blur-3xl"></div>
-                    <div className="hidden sm:block absolute -bottom-24 -left-10 w-48 h-48 bg-blue-500/10 blur-3xl"></div>
-                    <div className="relative space-y-4 sm:space-y-5 lg:space-y-6">
-                      <div className="space-y-1.5 sm:space-y-2">
-                        <span className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-blue-200/80">Execution Engine</span>
-                        <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mt-1 sm:mt-2">Built for decisive traders</h3>
-                        <p className="text-gray-400 text-xs sm:text-sm lg:text-base">
-                          From the first price check to the executed trade, CypherX keeps you locked into the market with deep liquidity routing, precision controls, and contextual insights.
-                        </p>
-                      </div>
-                      <div className="grid gap-2.5 sm:gap-3 sm:grid-cols-2">
-                        <div className="flex items-start gap-2 sm:gap-3">
-                          <div className="mt-0.5 sm:mt-1 flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center bg-blue-600/20 text-blue-300 shrink-0">
-                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                          </div>
-                          <div>
-                            <p className="text-white font-semibold text-xs sm:text-sm lg:text-base">Instant Swap Executions</p>
-                            <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1 leading-tight">Optimized routing with sub-second confirmations across Base liquidity venues.</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-2 sm:gap-3">
-                          <div className="mt-0.5 sm:mt-1 flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center bg-blue-600/20 text-blue-300 shrink-0">
-                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 7h18M3 12h18M3 17h10" />
-                            </svg>
-                          </div>
-                          <div>
-                            <p className="text-white font-semibold text-xs sm:text-sm lg:text-base">Quick Buys & Automation</p>
-                            <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1 leading-tight">Preset slippage, gas, and sizing ready for one-click execution when the setup appears.</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-2 sm:gap-3">
-                          <div className="mt-0.5 sm:mt-1 flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center bg-blue-600/20 text-blue-300 shrink-0">
-                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 5h16M4 9.5h10M4 14h7M4 18.5h4" />
-                              <circle cx="17" cy="9.5" r="1.8" strokeWidth={1.8} />
-                              <circle cx="14" cy="14" r="1.8" strokeWidth={1.8} />
-                              <circle cx="11" cy="18.5" r="1.8" strokeWidth={1.8} />
-                            </svg>
-                          </div>
-                          <div>
-                            <p className="text-white font-semibold text-xs sm:text-sm lg:text-base">In-context Analytics</p>
-                            <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1 leading-tight">TradingView-grade visuals, live orderflow, and on-chain activity where you trade.</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-2 sm:gap-3">
-                          <div className="mt-0.5 sm:mt-1 flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center bg-blue-600/20 text-blue-300 shrink-0">
-                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 5h14v14H5z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 9h6v6H9z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 5v4M11 19v-4" />
-                            </svg>
-                          </div>
-                          <div>
-                            <p className="text-white font-semibold text-xs sm:text-sm lg:text-base">Portfolio Intelligence</p>
-                            <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1 leading-tight">Monitor PnL, holdings, and reward multipliers without leaving the terminal.</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="lg:col-span-2 flex flex-col gap-2.5 sm:gap-3.5 lg:gap-4">
-                    <div className="border border-gray-800/80 bg-gray-950/80 p-3 sm:p-4 lg:p-5 shadow-lg shadow-blue-900/10">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2 sm:mb-3">
-                        <div>
-                          <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-blue-300/80">Swap Timeline</p>
-                          <h3 className="text-white text-base sm:text-lg lg:text-xl font-semibold mt-0.5 sm:mt-1">Execution flow in seconds</h3>
-                        </div>
-                        <div className="hidden sm:flex h-10 w-10 items-center justify-center bg-blue-600/20 text-blue-300">
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 1" />
-                          </svg>
-                        </div>
-                      </div>
-                      <div className="space-y-2 sm:space-y-2.5 lg:space-y-3">
-                        {[
-                          { title: "Scan", description: "Detect price dislocations with market scanners and custom alerts." },
-                          { title: "Size", description: "Auto-calc position sizing, slippage ceilings, and gas strategy." },
-                          { title: "Execute", description: "Route through 0x with instant confirmations and slippage protection." }
-                        ].map((step, idx) => (
-                          <div key={step.title} className="flex gap-2 sm:gap-3">
-                            <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center border border-blue-500/40 bg-blue-600/10 text-blue-200 text-[10px] sm:text-xs font-semibold shrink-0">
-                              0{idx + 1}
-                            </div>
-                            <div>
-                              <p className="text-white text-xs sm:text-sm font-semibold">{step.title}</p>
-                              <p className="text-[11px] sm:text-xs text-gray-400 leading-tight">{step.description}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="border border-gray-800/80 bg-gradient-to-r from-blue-600/20 via-blue-500/10 to-transparent p-3 sm:p-4 lg:p-5">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
-                        <div>
-                          <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-blue-200/80">Quick Buys</p>
-                          <h3 className="text-white text-base sm:text-lg lg:text-xl font-semibold mt-0.5 sm:mt-1">Preset macros for every setup</h3>
-                          <p className="text-[11px] sm:text-xs text-gray-300 mt-1.5 sm:mt-2 leading-tight">
-                            Save your favorite routes, gas profiles, and trade sizes. Fire instantly when liquidity spikes.
-                          </p>
-                        </div>
-                        <button className="self-start sm:self-auto inline-flex items-center gap-2 border border-blue-400/40 bg-blue-500/10 px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-blue-200 hover:bg-blue-500/20 transition">
-                          <svg className="w-3 sm:w-3.5 h-3 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                          </svg>
-                          Launch Macro
-                        </button>
-                      </div>
-                      <div className="mt-3 sm:mt-4 grid gap-2 sm:gap-2.5 sm:grid-cols-3">
-                        <div className="border border-blue-500/20 bg-gray-950/80 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs text-gray-300">
-                          <p className="text-blue-200 text-[10px] sm:text-[11px] uppercase tracking-[0.2em] mb-0.5 sm:mb-1">Slippage</p>
-                          <p className="text-white font-semibold">0.5%</p>
-                        </div>
-                        <div className="border border-blue-500/20 bg-gray-950/80 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs text-gray-300">
-                          <p className="text-blue-200 text-[10px] sm:text-[11px] uppercase tracking-[0.2em] mb-0.5 sm:mb-1">Size</p>
-                          <p className="text-white font-semibold">0.01 ETH</p>
-                        </div>
-                        <div className="border border-blue-500/20 bg-gray-950/80 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs text-gray-300">
-                          <p className="text-blue-200 text-[10px] sm:text-[11px] uppercase tracking-[0.2em] mb-0.5 sm:mb-1">Preset</p>
-                          <p className="text-white font-semibold">Breakout</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="mb-6 sm:mb-8 text-center">
+                  <span className="text-blue-400 uppercase tracking-wider text-[10px] sm:text-xs block mb-2">PLATFORM</span>
+                  <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-white">
+                    Built for serious traders
+                  </h2>
                 </div>
-
-                <div className="mt-8 sm:mt-12 lg:mt-16 flex flex-col gap-8 sm:gap-10 md:grid md:grid-cols-2 md:gap-x-6 md:gap-y-10 lg:gap-x-8 lg:gap-y-12 xl:grid-cols-4">
-                  {[
-                    {
-                      title: "TradingView Charts",
-                      description: "Advanced overlays, multi-timeframe layouts, and drawing suites—embedded directly in the terminal."
-                    },
-                    {
-                      title: "Self-Custodial Wallet",
-                      description: "Multi-layer security with 2FA, session approvals, and hardware support—your keys, always."
-                    },
-                    {
-                      title: "Portfolio Tracking",
-                      description: "Real-time PnL, realized vs unrealized returns, and multi-wallet aggregation with one dashboard."
-                    },
-                    {
-                      title: "Rewards Program",
-                      description: "Earn CYPHX on trading fees, multiplier boosts for loyalty, and referral yields for growing the network."
-                    }
-                  ].map((card) => (
-                    <div key={card.title} className="border border-gray-800/80 bg-gray-950/80 p-4 transition-all duration-300 hover:border-blue-500/40 hover:bg-blue-500/5">
-                      <div className="mb-3 h-0.5 w-12 rounded-full bg-blue-500/40"></div>
-                      <h3 className="text-white text-base font-semibold mb-1.5">{card.title}</h3>
-                      <p className="text-sm text-gray-400">{card.description}</p>
+                
+                <div className="grid gap-3 sm:gap-4 md:gap-5 md:grid-cols-2 lg:grid-cols-3">
+                  {/* Card 1: Instant Swap Execution */}
+                  <div className="border border-gray-800/30 bg-[#0d1117] p-3 sm:p-4 md:p-5 hover:border-blue-500/40 hover:bg-blue-500/5 transition-all duration-300">
+                    <div>
+                      <span className="text-blue-400 uppercase tracking-wider text-[10px] sm:text-xs block mb-1.5 sm:mb-2">EXECUTION ENGINE</span>
+                      <h3 className="text-white font-semibold text-base sm:text-lg mb-1.5 sm:mb-2">Instant Swap Execution</h3>
+                      <p className="text-gray-400 text-xs sm:text-sm leading-relaxed">Route through 0x aggregation for optimal pricing. Sub-second confirmations with MEV protection and slippage controls.</p>
                     </div>
-                  ))}
+                  </div>
+
+                  {/* Card 2: TradingView Charts */}
+                  <div className="border border-gray-800/30 bg-[#0d1117] p-3 sm:p-4 md:p-5 hover:border-blue-500/40 hover:bg-blue-500/5 transition-all duration-300">
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center bg-blue-600/20 text-blue-300 shrink-0 rounded-lg">
+                        <FiBarChart2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-white font-semibold text-sm sm:text-base mb-1.5 sm:mb-2">TradingView Charts</h3>
+                        <p className="text-gray-400 text-xs sm:text-sm leading-relaxed mb-1.5 sm:mb-2">Professional charting with 100+ indicators, drawing tools, and multi-timeframe analysis.</p>
+                        <Link href="/discover" className="text-blue-400 hover:text-blue-300 text-xs sm:text-sm inline-flex items-center gap-1">
+                          Learn more <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 3: Portfolio Tracking */}
+                  <div className="border border-gray-800/30 bg-[#0d1117] p-3 sm:p-4 md:p-5 hover:border-blue-500/40 hover:bg-blue-500/5 transition-all duration-300">
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center bg-blue-600/20 text-blue-300 shrink-0 rounded-lg">
+                        <FiTrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-white font-semibold text-sm sm:text-base mb-1.5 sm:mb-2">Portfolio Tracking</h3>
+                        <p className="text-gray-400 text-xs sm:text-sm leading-relaxed mb-1.5 sm:mb-2">Real-time P&L, multi-wallet aggregation, and detailed position analytics.</p>
+                        <Link href="/discover" className="text-blue-400 hover:text-blue-300 text-xs sm:text-sm inline-flex items-center gap-1">
+                          Learn more <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 4: Self-Custody Wallet */}
+                  <div className="border border-gray-800/30 bg-[#0d1117] p-3 sm:p-4 md:p-5 hover:border-blue-500/40 hover:bg-blue-500/5 transition-all duration-300">
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center bg-blue-600/20 text-blue-300 shrink-0 rounded-lg">
+                        <FaWallet className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-white font-semibold text-sm sm:text-base mb-1.5 sm:mb-2">Self-Custody Wallet</h3>
+                        <p className="text-gray-400 text-xs sm:text-sm leading-relaxed mb-0">Non-custodial security with session approvals, 2FA, and hardware wallet support.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 5: Smart Radar */}
+                  <div className="border border-gray-800/30 bg-[#0d1117] p-3 sm:p-4 md:p-5 hover:border-blue-500/40 hover:bg-blue-500/5 transition-all duration-300">
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center bg-blue-600/20 text-blue-300 shrink-0 rounded-lg">
+                        <FiEye className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-white font-semibold text-sm sm:text-base mb-1.5 sm:mb-2">Smart Radar</h3>
+                        <p className="text-gray-400 text-xs sm:text-sm leading-relaxed mb-1.5 sm:mb-2">AI-powered token scanner with customizable alerts and security scoring.</p>
+                        <Link href="/discover" className="text-blue-400 hover:text-blue-300 text-xs sm:text-sm inline-flex items-center gap-1">
+                          Learn more <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 6: Chain Explorer */}
+                  <div className="border border-gray-800/30 bg-[#0d1117] p-3 sm:p-4 md:p-5 hover:border-blue-500/40 hover:bg-blue-500/5 transition-all duration-300">
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center bg-blue-600/20 text-blue-300 shrink-0 rounded-lg">
+                        <FiSearch className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-white font-semibold text-sm sm:text-base mb-1.5 sm:mb-2">Chain Explorer</h3>
+                        <p className="text-gray-400 text-xs sm:text-sm leading-relaxed mb-1.5 sm:mb-2">Deep dive into transactions, blocks, and wallet activity with forensic tools.</p>
+                        <Link href="/discover" className="text-blue-400 hover:text-blue-300 text-xs sm:text-sm inline-flex items-center gap-1">
+                          Learn more <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </motion.div>
 
-            {/* Separator line between Features and 3D Coins */}
-            <div className="border-b border-gray-800/30 mb-16"></div>
+            {/* Separator line between Platform and Rewards */}
+            <div className="border-b border-gray-800/30 mb-12 sm:mb-16"></div>
 
-          {/* Hold Trade Earn Section */}
+          {/* Rewards Program Section */}
           <motion.div
-            className="mb-16"
+            className="mb-12 sm:mb-16"
             {...fadeInUp(0.3)}
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true, margin: "-100px" }}
           >
-            <div className="relative max-w-6xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-4 lg:px-0">
-              <div className="relative overflow-hidden border border-gray-800/70 bg-gradient-to-br from-gray-900 via-gray-950 to-blue-950 px-4 py-6 sm:px-8 lg:px-10 lg:py-10">
-                <div className="hidden sm:block absolute -top-32 right-0 h-72 w-72 rounded-full bg-blue-600/20 blur-3xl"></div>
-                <div className="hidden sm:block absolute -bottom-24 -left-16 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl"></div>
-                <div className="relative grid gap-6 sm:gap-8 lg:grid-cols-2 items-start">
-                  <div className="space-y-5 sm:space-y-6">
+            <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="relative grid gap-4 sm:gap-6 md:gap-8 lg:grid-cols-2 items-start">
+                  <div className="space-y-4 sm:space-y-5 md:space-y-6">
                     <div>
-                      <span className="inline-flex items-center gap-2 border border-blue-500/40 bg-blue-500/10 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.3em] text-blue-200">
-                        Rewards Ecosystem
-                      </span>
-                      <h2 className="mt-3 text-2xl sm:text-3xl font-bold text-white tracking-tight">
-                        Hold. Trade. Earn.
+                      <h2 className="text-xl sm:text-2xl md:text-3xl font-semibold text-white mb-2">
+                        <span className="text-blue-400 uppercase tracking-wider text-[10px] sm:text-xs md:text-sm block mb-1.5 sm:mb-2">REWARDS PROGRAM</span>
+                        Trade. Earn. Compound.
                       </h2>
-                      <p className="mt-3 text-gray-300 text-sm sm:text-base max-w-xl">
-                        CYPHX rewards align incentives between active traders and long term holders. Grow your stack with dynamic revenue sharing, loyalty multipliers, and community-driven referrals.
+                      <p className="mt-2 sm:mt-3 text-gray-300 text-xs sm:text-sm md:text-base max-w-xl">
+                        Earn CYPHX rewards on every trade. Stack multipliers with daily streaks and unlock higher tiers for increased earnings.
                       </p>
                     </div>
-                    <div className="grid gap-2 sm:gap-2.5 sm:grid-cols-2">
+                    <div className="space-y-2.5 sm:space-y-3">
                       {[
                         {
-                          title: "Revenue Share",
-                          description: "Distribute trading fees back to top liquidity providers and power users.",
-                          icon: (
-                            <svg className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8c1.657 0 3-1.343 3-3S13.657 2 12 2 9 3.343 9 5s1.343 3 3 3zM19 21v-2a4 4 0 00-4-4H9a4 4 0 00-4 4v2" />
-                            </svg>
-                          )
+                          number: "1",
+                          title: "Trading Rewards",
+                          description: "Earn CYPHX on every swap and trade you execute."
                         },
                         {
+                          number: "2",
                           title: "Streak Multipliers",
-                          description: "Boost your share with weekly trading streaks and liquidity commitments.",
-                          icon: (
-                            <svg className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 13l4 4L19 7" />
-                            </svg>
-                          )
+                          description: "Boost your earnings with daily trading streaks."
                         },
                         {
-                          title: "Referral Yield",
-                          description: "Earn a percentage of friend activity by sharing your CypherX access link.",
-                          icon: (
-                            <svg className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <circle cx="12" cy="6" r="2.5" strokeWidth={1.8} />
-                              <circle cx="6.5" cy="18" r="2.5" strokeWidth={1.8} />
-                              <circle cx="17.5" cy="18" r="2.5" strokeWidth={1.8} />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 8.8l-2.6 4.6" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 8.8l2.6 4.6" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7.8 16.7l2.4-2.4" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16.2 16.7l-2.4-2.4" />
-                            </svg>
-                          )
-                        },
-                        {
-                          title: "Vault Security",
-                          description: "Pooled rewards are protected with multi-sig safeguards and 24/7 monitoring.",
-                          icon: (
-                            <svg className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 11c1.657 0 3-1.343 3-3S13.657 5 12 5 9 6.343 9 8s1.343 3 3 3z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 21v-2a4 4 0 00-4-4h-6a4 4 0 00-4 4v2" />
-                            </svg>
-                          )
+                          number: "3",
+                          title: "Referral Yields",
+                          description: "Earn a percentage of your referrals' trading activity."
                         }
-                      ].map((card) => (
-                        <div key={card.title} className="border border-blue-500/20 bg-gray-950/80 p-4 hover:border-blue-500/40 hover:bg-blue-500/5 transition-colors">
-                          <div className="mb-2.5 inline-flex h-9 w-9 items-center justify-center bg-blue-600/15 border border-blue-500/30">
-                            {card.icon}
+                      ].map((item) => (
+                        <div key={item.number} className="flex gap-2 sm:gap-3 items-start">
+                          <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center border border-blue-500/40 bg-blue-600/15 text-blue-200 text-xs sm:text-sm font-semibold shrink-0">
+                            {item.number}
                           </div>
-                          <p className="text-white font-semibold text-sm">{card.title}</p>
-                          <p className="text-xs text-gray-400 mt-1">{card.description}</p>
+                          <div className="min-w-0">
+                            <p className="text-white text-xs sm:text-sm font-semibold">{item.title}</p>
+                            <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1">{item.description}</p>
+                          </div>
                         </div>
                       ))}
                     </div>
                     <Link
                       href="/rewards"
-                      className="inline-flex items-center gap-2 border border-blue-400/60 bg-blue-500/10 px-4 py-1.5 text-sm font-semibold text-blue-200 hover:bg-blue-500/20 transition"
+                      className="inline-flex items-center gap-1.5 sm:gap-2 border border-blue-400/60 px-3 sm:px-4 py-1 sm:py-1.5 text-xs sm:text-sm font-semibold text-blue-200 hover:border-blue-400 transition"
                     >
-                      Explore Rewards
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      View Rewards
+                      <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 5l7 7-7 7" />
                       </svg>
                     </Link>
                   </div>
 
-                  <div className="hidden sm:block space-y-3.5 sm:space-y-4">
-                    <div className="border border-blue-500/20 bg-gray-950/80 p-4 sm:p-6 shadow-xl shadow-blue-900/10">
-                      <p className="text-xs uppercase tracking-[0.3em] text-blue-200/80">Growth Loop</p>
-                      <h3 className="mt-2 text-white text-xl font-semibold">Compounding your edge</h3>
-                      <div className="mt-4 space-y-3.5">
-                        {[
-                          {
-                            title: "Trade & Provide",
-                            description: "Execute swaps or supply liquidity to qualify for weekly snapshots.",
-                            accent: "01"
-                          },
-                          {
-                            title: "Earn & Amplify",
-                            description: "Claim CYPHX, activate loyalty multipliers, and stake for boosted APR.",
-                            accent: "02"
-                          },
-                          {
-                            title: "Refer & Compound",
-                            description: "Invite your circle to unlock referral tiers and double down on rewards.",
-                            accent: "03"
-                          }
-                        ].map((item) => (
-                          <div key={item.title} className="flex gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center border border-blue-500/40 bg-blue-600/15 text-blue-200 text-sm font-semibold">
-                              {item.accent}
-                            </div>
-                            <div>
-                              <p className="text-white text-sm font-semibold">{item.title}</p>
-                              <p className="text-xs text-gray-400 mt-1">{item.description}</p>
-                            </div>
+                  <div className="hidden sm:block">
+                    <div className="border border-gray-800/30 bg-[#0d1117] p-4 sm:p-6">
+                      <p className="text-xs uppercase tracking-[0.3em] text-blue-200/80 mb-4">YOUR REWARDS</p>
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-2xl font-bold text-white">12,450</p>
+                          <p className="text-xs text-gray-400 mt-1">CYPHX Points</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-lg font-semibold text-white">2.5x</p>
+                            <p className="text-xs text-gray-400">Multiplier</p>
                           </div>
-                        ))}
+                          <div>
+                            <p className="text-lg font-semibold text-white">14</p>
+                            <p className="text-xs text-gray-400">Day Streak</p>
+                          </div>
+                        </div>
+                        <div className="pt-3 border-t border-gray-800">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs text-gray-400">+520 Today</span>
+                            <span className="text-xs text-blue-400">Level 4</span>
+                          </div>
+                          <div className="w-full bg-gray-800 rounded-full h-2">
+                            <div className="bg-blue-500 h-2 rounded-full" style={{ width: '62%' }}></div>
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1">7,550 to Level 5</p>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
           </motion.div>
+
+            {/* Separator line between Rewards and Powered By */}
+            <div className="border-b border-gray-800/30 mb-12 sm:mb-16"></div>
+
+            {/* Powered By Industry Leaders Section */}
+            <motion.div className="mb-12 sm:mb-16" {...fadeInUp(0.2)}>
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="mb-6 sm:mb-8 text-center">
+                  <span className="text-gray-400 uppercase tracking-wider text-[10px] sm:text-xs block mb-3 sm:mb-4">POWERED BY INDUSTRY LEADERS</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center shrink-0">
+                      <img src="https://i.imgur.com/9Y7BIHa.png" alt="0x Protocol" className="h-8 sm:h-10 object-contain" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-white text-xs sm:text-sm font-semibold">0x Protocol</p>
+                      <p className="text-[10px] sm:text-xs text-gray-400">DEX Aggregation</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center shrink-0">
+                      <img src="https://i.imgur.com/RWgPgY1.png" alt="Coinbase" className="h-8 sm:h-10 object-contain" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-white text-xs sm:text-sm font-semibold">Coinbase</p>
+                      <p className="text-[10px] sm:text-xs text-gray-400">Base Infrastructure</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center shrink-0">
+                      <img src="https://i.imgur.com/coHc8sq.png" alt="Alchemy" className="h-8 sm:h-10 object-contain" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-white text-xs sm:text-sm font-semibold">Alchemy</p>
+                      <p className="text-[10px] sm:text-xs text-gray-400">Node Services</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center shrink-0">
+                      <img src="https://i.imgur.com/UgezDbe.png" alt="CoinGecko" className="h-8 sm:h-10 object-contain" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-white text-xs sm:text-sm font-semibold">CoinGecko</p>
+                      <p className="text-[10px] sm:text-xs text-gray-400">Price Intelligence</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center shrink-0">
+                      <img src="https://i.imgur.com/LweKEMF.png" alt="Dexscreener" className="h-8 sm:h-10 object-contain" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-white text-xs sm:text-sm font-semibold">Dexscreener</p>
+                      <p className="text-[10px] sm:text-xs text-gray-400">Market Data</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
+                    <Link href="/discover" className="text-blue-400 hover:text-blue-300 text-xs sm:text-sm font-medium">
+                      More integrations →
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
         </div>
       </main>
 
-      {/* Scroll to Top Button */}
-      <motion.button
-        className="fixed right-6 w-12 h-12 bg-blue-600 hover:bg-blue-700 text-white shadow-lg z-50 flex items-center justify-center transition-colors"
-        style={{ 
-          bottom: 'calc(var(--app-footer-height, 0px) + 56px)',
-          pointerEvents: showScrollToTop ? 'auto' : 'none' 
-        }}
-        initial={{ opacity: 0, scale: 0 }}
-        animate={{ 
-          opacity: showScrollToTop ? 1 : 0,
-          scale: showScrollToTop ? 1 : 0
-        }}
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
-        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-        </svg>
-      </motion.button>
     </div>
   );
 }

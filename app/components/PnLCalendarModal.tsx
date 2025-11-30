@@ -149,6 +149,10 @@ const PnLCalendarModal: React.FC<PnLCalendarModalProps> = ({
   // Format P&L value
   const formatPnL = (value: number | undefined): string => {
     if (value === undefined || value === null) return "--";
+    // Show small values (even 0.01) with proper formatting
+    if (Math.abs(value) < 0.01 && value !== 0) {
+      return value > 0 ? "+0.01" : "-0.01";
+    }
     if (value === 0) return "0.00";
     return `${value >= 0 ? "+" : ""}${value.toFixed(2)}`;
   };

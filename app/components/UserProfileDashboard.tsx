@@ -19,15 +19,15 @@ import TierDisplay from "./TierDisplay";
 import TierProgressionModal from "./TierProgressionModal";
 
 interface UserStats {
-  tier: string;
-  points: number;
-  badges: string[];
-  progress: number;
-  nextTier: string | null;
-  pointsToNextTier: number;
-  tierSystem: Record<string, unknown>;
-  badgeSystem: Record<string, unknown>;
-  currentTierBenefits: string[];
+  tier?: string;
+  points?: number;
+  badges?: string[];
+  progress?: number;
+  nextTier?: string | null;
+  pointsToNextTier?: number;
+  tierSystem?: Record<string, unknown>;
+  badgeSystem?: Record<string, unknown>;
+  currentTierBenefits?: string[];
 }
 
 interface Activity {
@@ -131,13 +131,13 @@ export default function UserProfileDashboard() {
           <div className="flex items-center gap-4">
             <div 
               className="w-16 h-16 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: getTierColor(userStats.tier) }}
+              style={{ backgroundColor: getTierColor(userStats.tier || 'normie') }}
             >
               <FiUser className="w-8 h-8 text-white" />
             </div>
             <div>
               <h2 className="text-2xl font-bold text-white">
-                {userStats.tier.charAt(0).toUpperCase() + userStats.tier.slice(1)} Member
+                {userStats.tier ? `${userStats.tier.charAt(0).toUpperCase() + userStats.tier.slice(1)} Member` : 'Member'}
               </h2>
               <p className="text-gray-400">
                 {walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}
@@ -145,7 +145,7 @@ export default function UserProfileDashboard() {
             </div>
           </div>
           <div className="text-right">
-            <div className="text-3xl font-bold text-white">{userStats.points.toLocaleString()}</div>
+            <div className="text-3xl font-bold text-white">{(userStats.points ?? 0).toLocaleString()}</div>
             <div className="text-gray-400">Total Points</div>
           </div>
         </div>
@@ -155,16 +155,16 @@ export default function UserProfileDashboard() {
           <div className="mt-4">
             <div className="flex justify-between text-sm text-gray-400 mb-2">
               <span>Progress to {userStats.nextTier}</span>
-              <span>{userStats.progress}%</span>
+              <span>{userStats.progress ?? 0}%</span>
             </div>
             <div className="w-full bg-gray-700 rounded-full h-2">
               <div
                 className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${userStats.progress}%` }}
+                style={{ width: `${userStats.progress ?? 0}%` }}
               ></div>
             </div>
             <div className="text-xs text-gray-500 mt-1">
-              {userStats.pointsToNextTier} points to next tier
+              {userStats.pointsToNextTier ?? 0} points to next tier
             </div>
           </div>
         )}
@@ -211,7 +211,7 @@ export default function UserProfileDashboard() {
                   Current Benefits
                 </h3>
                 <ul className="space-y-2">
-                  {userStats.currentTierBenefits.map((benefit, index) => (
+                  {(userStats.currentTierBenefits || []).map((benefit, index) => (
                     <li key={index} className="flex items-center gap-2 text-gray-300">
                       <FiCheckCircle className="w-4 h-4 text-green-400" />
                       {benefit}
@@ -229,11 +229,11 @@ export default function UserProfileDashboard() {
                 <div className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-gray-400">Badges Earned</span>
-                    <span className="text-white font-medium">{userStats.badges.length}</span>
+                    <span className="text-white font-medium">{(userStats.badges || []).length}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">Current Tier</span>
-                    <span className="text-white font-medium capitalize">{userStats.tier}</span>
+                    <span className="text-white font-medium capitalize">{userStats.tier || 'normie'}</span>
                   </div>
                   {userStats.nextTier && (
                     <div className="flex justify-between">
@@ -285,9 +285,9 @@ export default function UserProfileDashboard() {
                 Badges
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {Object.entries(userStats.badgeSystem).map(([badgeId, badgeData]) => {
+                {Object.entries(userStats.badgeSystem || {}).map(([badgeId, badgeData]) => {
                   const badge = badgeData as { name: string; description: string; points: number };
-                  const isEarned = userStats.badges.includes(badgeId);
+                  const isEarned = (userStats.badges || []).includes(badgeId);
                   return (
                     <div
                       key={badgeId}
@@ -340,8 +340,8 @@ export default function UserProfileDashboard() {
                  </button>
                </div>
                <TierDisplay 
-                 currentTier={userStats.tier}
-                 currentPoints={userStats.points}
+                 currentTier={userStats.tier || 'normie'}
+                 currentPoints={userStats.points ?? 0}
                />
              </div>
            )}
@@ -353,8 +353,8 @@ export default function UserProfileDashboard() {
          <TierProgressionModal
            isOpen={showTierModal}
            onClose={() => setShowTierModal(false)}
-           currentTier={userStats.tier}
-           currentPoints={userStats.points}
+           currentTier={userStats.tier || 'normie'}
+           currentPoints={userStats.points ?? 0}
          />
        )}
      </div>

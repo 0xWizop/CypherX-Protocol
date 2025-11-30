@@ -142,6 +142,18 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
   const [swapQuote, setSwapQuote] = useState<any>(null);
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
+  const [swapError, setSwapError] = useState<string | null>(null);
+  const [insufficientFunds, setInsufficientFunds] = useState(false);
+  const [showSwapConfirmation, setShowSwapConfirmation] = useState(false);
+  const [pendingSwapData, setPendingSwapData] = useState<any>(null);
+  const [tokenBalance, setTokenBalance] = useState<string>('0');
+  const [swapSuccess, setSwapSuccess] = useState<{
+    type: 'buy' | 'sell';
+    amount: string;
+    tokenSymbol: string;
+    txHash: string;
+    received: string;
+  } | null>(null);
   const [activeBottomTab, setActiveBottomTab] = useState<'home' | 'swap' | 'history' | 'send'>('home');
   const [tokenSearchQuery, setTokenSearchQuery] = useState<string>('');
   const [tokenSearchResults, setTokenSearchResults] = useState<any[]>([]);
@@ -1303,22 +1315,117 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
   }, [walletData]);
 
 
-  // Fetch swap quote
+  // Helper function to get token decimals (with caching)
+  const tokenDecimalsCache = useRef<Map<string, number>>(new Map());
+  
+  const getTokenDecimals = useCallback(async (tokenAddress: string): Promise<number> => {
+    const addr = tokenAddress.toLowerCase();
+    
+    // Check cache first
+    if (tokenDecimalsCache.current.has(addr)) {
+      return tokenDecimalsCache.current.get(addr)!;
+    }
+
+    // Known tokens with non-18 decimals
+    const knownDecimals: Record<string, number> = {
+      // USDC on Base: 6 decimals
+      "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": 6,
+      // USDT on Base: 6 decimals  
+      "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2": 6,
+      // cBBTC on Base: 8 decimals
+      "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf": 8,
+      // WETH on Base: 18 decimals
+      "0x4200000000000000000000000000000000000006": 18,
+    };
+
+    if (knownDecimals[addr]) {
+      tokenDecimalsCache.current.set(addr, knownDecimals[addr]);
+      return knownDecimals[addr];
+    }
+
+    // Fetch from on-chain if not in cache or known list
+    try {
+      const provider = new ethers.JsonRpcProvider(BASE_RPC_URL);
+      const tokenContract = new ethers.Contract(
+        addr,
+        ["function decimals() view returns (uint8)"],
+        provider
+      );
+      const decimals = await tokenContract.decimals();
+      const decimalsNum = Number(decimals);
+      tokenDecimalsCache.current.set(addr, decimalsNum);
+      return decimalsNum;
+    } catch (error) {
+      console.warn(`⚠️ Failed to fetch decimals for ${addr}, defaulting to 18:`, error);
+      // Default to 18 if fetch fails
+      tokenDecimalsCache.current.set(addr, 18);
+      return 18;
+    }
+  }, []);
+
+  // Check token balance
+  const checkTokenBalance = useCallback(async (tokenAddress: string, amount: string) => {
+    if (!walletData?.address || !amount || parseFloat(amount) <= 0) {
+      setTokenBalance('0');
+      setInsufficientFunds(false);
+      return;
+    }
+
+    try {
+      const provider = new ethers.JsonRpcProvider(BASE_RPC_URL);
+      const decimals = await getTokenDecimals(tokenAddress);
+      
+      // Check if it's ETH/WETH
+      const WETH_ADDRESS = '0x4200000000000000000000000000000000000006';
+      if (tokenAddress.toLowerCase() === WETH_ADDRESS.toLowerCase()) {
+        const balance = await provider.getBalance(walletData.address);
+        const balanceFormatted = parseFloat(ethers.formatEther(balance));
+        setTokenBalance(balanceFormatted.toFixed(6));
+        setInsufficientFunds(balanceFormatted < parseFloat(amount));
+      } else {
+        // Check ERC20 token balance
+        const tokenContract = new ethers.Contract(
+          tokenAddress,
+          ["function balanceOf(address) view returns (uint256)"],
+          provider
+        );
+        const balance = await tokenContract.balanceOf(walletData.address);
+        const balanceFormatted = parseFloat(ethers.formatUnits(balance, decimals));
+        setTokenBalance(balanceFormatted.toFixed(6));
+        setInsufficientFunds(balanceFormatted < parseFloat(amount));
+      }
+    } catch (error) {
+      console.error('Error checking token balance:', error);
+      setTokenBalance('0');
+      setInsufficientFunds(false);
+    }
+  }, [walletData?.address, getTokenDecimals]);
+
+  // Fetch swap quote (always fetch even if insufficient funds)
   const fetchSwapQuote = useCallback(async (amount: string, tokenIn: {symbol: string; address: string}, tokenOut: {symbol: string; address: string}) => {
     if (!amount || parseFloat(amount) <= 0 || !tokenIn || !tokenOut) {
       setSwapReceiveAmount('0');
+      setSwapQuote(null);
       return;
     }
 
     setIsLoadingQuote(true);
+    
+    // Check balance in parallel but don't block quote fetching (still get quote even if insufficient funds)
+    checkTokenBalance(tokenIn.address, amount).catch(err => console.error('Balance check error:', err));
+    
     try {
       const sellToken = tokenIn.address;
       const buyToken = tokenOut.address;
 
-      // Get decimals (simplified - in production you'd fetch these)
-      const decimals = 18; // Most tokens use 18
+      // Get actual decimals for both tokens
+      const [sellTokenDecimals, buyTokenDecimals] = await Promise.all([
+        getTokenDecimals(sellToken),
+        getTokenDecimals(buyToken)
+      ]);
       
-      const amountWei = (parseFloat(amount) * Math.pow(10, decimals)).toFixed(0);
+      // Convert amount to wei using sell token's decimals
+      const amountWei = (parseFloat(amount) * Math.pow(10, sellTokenDecimals)).toFixed(0);
       
       const params = new URLSearchParams({
         chainId: "8453",
@@ -1331,18 +1438,22 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
       const data = await res.json();
 
       if (res.ok && data?.buyAmount) {
-        const buyAmount = parseFloat(data.buyAmount) / Math.pow(10, decimals);
+        // Convert buyAmount from wei using buy token's decimals
+        const buyAmount = parseFloat(data.buyAmount) / Math.pow(10, buyTokenDecimals);
         let formattedAmt: string;
         if (buyAmount >= 1) {
           formattedAmt = buyAmount.toFixed(4);
         } else if (buyAmount >= 0.01) {
           formattedAmt = buyAmount.toFixed(6);
-        } else {
+        } else if (buyAmount >= 0.0001) {
           formattedAmt = buyAmount.toFixed(8);
+        } else {
+          formattedAmt = buyAmount.toExponential(4);
         }
         setSwapReceiveAmount(formattedAmt);
-        setSwapQuote(data);
+        setSwapQuote({ ...data, sellTokenDecimals, buyTokenDecimals });
       } else {
+        console.error('Quote API error:', data);
         setSwapReceiveAmount('0');
         setSwapQuote(null);
       }
@@ -1353,7 +1464,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
     } finally {
       setIsLoadingQuote(false);
     }
-  }, []);
+  }, [getTokenDecimals, checkTokenBalance]);
 
   // Handle token selection
   const handleTokenSelect = useCallback(async (token: {symbol: string; address: string; logo?: string; name?: string}) => {
@@ -1368,6 +1479,9 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
     
     if (selectingTokenFor === 'pay') {
       setSwapPayToken(tokenWithLogo);
+      // Clear balance check when pay token changes
+      setTokenBalance('0');
+      setInsufficientFunds(false);
     } else if (selectingTokenFor === 'receive') {
       setSwapReceiveToken(tokenWithLogo);
     } else if (selectingTokenFor === 'send') {
@@ -1393,54 +1507,144 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
     }
   }, [selectingTokenFor, swapPayAmount, swapPayToken, swapReceiveToken, fetchSwapQuote, addToRecentTokens, getTokenLogo]);
 
-  // Execute swap
+  // Show swap confirmation dialog
+  const handleSwapButtonClick = useCallback(async () => {
+    if (!swapPayAmount || parseFloat(swapPayAmount) <= 0 || !swapReceiveAmount || !swapQuote) {
+      setSwapError('Please enter a valid amount and wait for the quote.');
+      return;
+    }
+
+    // Re-check balance before showing confirmation (final check)
+    await checkTokenBalance(swapPayToken.address, swapPayAmount);
+    
+    if (insufficientFunds) {
+      setSwapError('Insufficient funds. Please reduce the swap amount.');
+      return;
+    }
+
+    // Store swap data for confirmation
+    setPendingSwapData({
+      payAmount: swapPayAmount,
+      receiveAmount: swapReceiveAmount,
+      payToken: swapPayToken,
+      receiveToken: swapReceiveToken,
+      quote: swapQuote
+    });
+    setShowSwapConfirmation(true);
+    setSwapError(null); // Clear any previous errors
+  }, [insufficientFunds, swapPayAmount, swapReceiveAmount, swapQuote, swapPayToken, swapReceiveToken, checkTokenBalance]);
+
+  // Execute swap (after confirmation)
   const executeSwap = useCallback(async () => {
-    if (!walletData || !swapPayAmount || !swapReceiveToken || !swapQuote) {
+    if (!walletData || !swapPayAmount || !swapReceiveAmount || !swapPayToken || !swapReceiveToken || !swapQuote) {
+      console.error('Missing required swap data');
+      setSwapError('Missing swap data. Please try again.');
+      return;
+    }
+
+    if (!walletData.privateKey) {
+      console.error('Wallet private key not found');
+      setSwapError('Wallet private key not found. Please reconnect your wallet.');
+      return;
+    }
+
+    // Final check for insufficient funds before executing
+    if (insufficientFunds) {
+      setSwapError('Insufficient funds. Please reduce the swap amount.');
+      setShowSwapConfirmation(false);
       return;
     }
 
     setIsSwapping(true);
+    setSwapError(null);
+    setShowSwapConfirmation(false);
+    
     try {
-      const sellToken = swapPayToken.address;
-      const buyToken = swapReceiveToken.address;
+      // Get token decimals
+      const [sellTokenDecimals, buyTokenDecimals] = await Promise.all([
+        getTokenDecimals(swapPayToken.address),
+        getTokenDecimals(swapReceiveToken.address)
+      ]);
 
-      // Get quote from 0x API for execution
-      const quoteParams = new URLSearchParams({
-        chainId: "8453",
-        sellToken,
-        buyToken,
-        sellAmount: (parseFloat(swapPayAmount) * Math.pow(10, 18)).toFixed(0),
-        taker: walletData.address,
-        slippageBps: "50" // 0.5% slippage
+      // Determine token symbols (handle ETH/WETH)
+      const inputTokenSymbol = swapPayToken.symbol === 'WETH' || swapPayToken.symbol === 'ETH' ? 'ETH' : swapPayToken.symbol;
+      const outputTokenSymbol = swapReceiveToken.symbol === 'WETH' || swapReceiveToken.symbol === 'ETH' ? 'ETH' : swapReceiveToken.symbol;
+
+      // Call the swap execute API
+      const executeResponse = await fetch('/api/swap/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          inputToken: inputTokenSymbol,
+          outputToken: outputTokenSymbol,
+          inputAmount: swapPayAmount,
+          outputAmount: swapReceiveAmount,
+          slippage: 0.5, // 0.5% slippage
+          walletAddress: walletData.address,
+          privateKey: walletData.privateKey,
+          tokenAddress: swapPayToken.address !== '0x4200000000000000000000000000000000000006' ? swapPayToken.address : undefined
+        }),
       });
 
-      const quoteRes = await fetch(`/api/0x/quote?${quoteParams.toString()}`);
-      const quoteData = await quoteRes.json();
+      const executeData = await executeResponse.json();
 
-      if (!quoteRes.ok) {
-        throw new Error(quoteData.error || "Failed to get swap quote");
+      if (!executeResponse.ok || !executeData.success) {
+        throw new Error(executeData.error || 'Swap execution failed');
       }
 
-      // Here you would execute the swap using the wallet's private key
-      // For now, we'll just show a success message
-      console.log('Swap quote:', quoteData);
+      // Success!
+      console.log('✅ Swap successful!', executeData);
       
-      // In a real implementation, you'd sign and send the transaction
-      // using ethers.js with the wallet's private key
+      // Close confirmation dialog
+      setShowSwapConfirmation(false);
+      setPendingSwapData(null);
       
-      setShowCopyNotification(true);
-      setTimeout(() => setShowCopyNotification(false), 2000);
+      // Determine swap type (buy = receiving token, sell = paying token)
+      const isBuy = swapReceiveToken.symbol !== 'ETH' && swapReceiveToken.symbol !== 'WETH';
       
-      // Reset form
-      setSwapPayAmount('0');
-      setSwapReceiveAmount('0');
+      // Show success notification
+      setSwapSuccess({
+        type: isBuy ? 'buy' : 'sell',
+        amount: swapPayAmount,
+        tokenSymbol: swapReceiveToken.symbol,
+        txHash: executeData.transactionHash || '',
+        received: swapReceiveAmount
+      });
+      
+      // Auto-hide success banner after 8 seconds
+      setTimeout(() => {
+        setSwapSuccess(null);
+      }, 8000);
+      
+      // Refresh wallet data to show updated balances
+      // Trigger reload by reloading wallet from storage
+      if (walletData.address) {
+        loadWallet();
+      }
+      
+      // Reset form after a short delay
+      setTimeout(() => {
+        setSwapPayAmount('0');
+        setSwapReceiveAmount('0');
+        setSwapQuote(null);
+        setInsufficientFunds(false);
+        setTokenBalance('0');
+        setSwapError(null);
+      }, 2000);
       
     } catch (error) {
-      console.error('Error executing swap:', error);
+      console.error('❌ Error executing swap:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Swap failed. Please try again.';
+      setSwapError(errorMessage);
+      
+      // Clear error after 5 seconds
+      setTimeout(() => setSwapError(null), 5000);
     } finally {
       setIsSwapping(false);
     }
-  }, [walletData, swapPayAmount, swapPayToken, swapReceiveToken, swapQuote]);
+  }, [walletData, swapPayAmount, swapReceiveAmount, swapPayToken, swapReceiveToken, swapQuote, insufficientFunds, getTokenDecimals, loadWallet]);
 
   // Handle Swap button
   const handleSwap = useCallback(() => {
@@ -1667,6 +1871,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
           <>
             {isMobile && (
               <motion.div
+                key="loading-backdrop"
                 className="fixed inset-0 bg-[#02050d]/80 backdrop-blur-sm z-[9999998]"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -1675,13 +1880,17 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
               />
             )}
             <motion.div
+            key="loading-wallet-dropdown"
             className={isMobile
               ? "fixed inset-0 bottom-0 w-full bg-[#0d1628] border-t border-[#1f2a44] shadow-2xl z-[9999999] h-[70vh] max-h-[640px] flex flex-col overflow-hidden rounded-none"
-              : "fixed top-20 right-8 w-[400px] bg-[#0d1628] border border-[#1f2a44] shadow-2xl z-[9999999] max-h-[70vh] overflow-hidden rounded-[24px]"
+              : "fixed top-[85px] right-8 w-[400px] bg-[#0d1628] border border-[#1f2a44] shadow-2xl z-[9999999] max-h-[70vh] overflow-hidden rounded-[24px] flex flex-col"
               }
-              initial={isMobile ? { opacity: 0, y: 200 } : { opacity: 0, y: -10, scale: 0.95 }}
-              animate={isMobile ? { opacity: 1, y: 0 } : { opacity: 1, y: 0, scale: 1 }}
-              exit={isMobile ? { opacity: 0, y: 200 } : { opacity: 0, y: -10, scale: 0.95 }}
+              style={!isMobile ? {
+                top: '85px'
+              } : undefined}
+              initial={isMobile ? { opacity: 0, y: 200 } : { opacity: 0, scale: 0.95, y: 0 }}
+              animate={isMobile ? { opacity: 1, y: 0 } : { opacity: 1, scale: 1, y: 0 }}
+              exit={isMobile ? { opacity: 0, y: 200 } : { opacity: 0, scale: 0.95, y: 0 }}
               transition={{ duration: 0.3 }}
             >
             {isMobile && (
@@ -1706,6 +1915,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
           {/* Password Modal */}
           {showPasswordModal && (
             <motion.div
+              key="password-modal"
               className="fixed inset-0 bg-[#02050d]/80 backdrop-blur-sm z-[9999999] flex items-center justify-center"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1790,6 +2000,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
 
           {isMobile && !showPasswordModal && (
             <motion.div
+              key="mobile-backdrop"
               className="fixed inset-0 bg-[#02050d]/80 backdrop-blur-sm z-[9999998]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1799,22 +2010,27 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
           )}
 
           <motion.div
+            key="wallet-dropdown"
             data-wallet-dropdown
             className={isMobile
               ? "fixed left-0 right-0 bottom-0 w-screen bg-[#0d1628] border-t border-[#1f2a44] shadow-2xl z-[9999999] h-[70vh] max-h-[680px] flex flex-col overflow-hidden rounded-t-[28px]"
-              : "fixed top-20 right-8 w-[400px] bg-[#0d1628] border border-[#1f2a44] shadow-2xl z-[9999999] max-h-[70vh] overflow-hidden rounded-[24px] flex flex-col"
+              : "fixed top-[85px] right-8 w-[400px] bg-[#0d1628] border border-[#1f2a44] shadow-2xl z-[9999999] max-h-[70vh] overflow-hidden rounded-[24px] flex flex-col"
         }
+            style={!isMobile ? {
+              top: '85px',
+              transform: 'translateY(0)'
+            } : {}}
             initial={isMobile 
               ? { opacity: 0, y: 200 }
-              : { opacity: 0, y: -10, scale: 0.95 }
+              : { opacity: 0, scale: 0.95 }
             }
             animate={isMobile 
               ? { opacity: 1, y: 0 }
-              : { opacity: 1, y: 0, scale: 1 }
+              : { opacity: 1, scale: 1 }
             }
             exit={isMobile 
               ? { opacity: 0, y: 200 }
-              : { opacity: 0, y: -10, scale: 0.95 }
+              : { opacity: 0, scale: 0.95, y: 0 }
             }
             transition={{ duration: 0.3 }}
           >
@@ -2190,7 +2406,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                 {/* Swap UI */}
                 <div className={`flex-1 overflow-y-auto scrollbar-hide px-4 ${isMobile ? "py-2.5" : "py-6"}`}>
                   {/* You Pay Card */}
-                  <div className={`bg-slate-800/50 rounded-2xl border border-slate-700/50 ${isMobile ? "p-3 mb-3" : "p-4 mb-4"}`}>
+                  <div className={`bg-slate-800/50 rounded-2xl border ${insufficientFunds ? 'border-red-500/50' : 'border-slate-700/50'} ${isMobile ? "p-3 mb-3" : "p-4 mb-4"}`}>
                     <div className="text-xs text-gray-400 mb-1.5">You Pay</div>
                     <div className="flex items-center justify-between mb-1.5">
                       <input
@@ -2199,14 +2415,18 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         onChange={(e) => {
                           const value = e.target.value.replace(/[^0-9.]/g, '');
                           setSwapPayAmount(value);
+                          setSwapError(null); // Clear errors when amount changes
+                          setInsufficientFunds(false); // Reset insufficient funds state
                           if (value && parseFloat(value) > 0 && swapPayToken && swapReceiveToken) {
                             fetchSwapQuote(value, swapPayToken, swapReceiveToken);
                           } else {
                             setSwapReceiveAmount('0');
+                            setSwapQuote(null);
+                            setInsufficientFunds(false);
                           }
                         }}
                         placeholder="0"
-                        className={`font-bold text-white bg-transparent border-none outline-none w-full ${isMobile ? "text-2xl" : "text-3xl"}`}
+                        className={`font-bold bg-transparent border-none outline-none w-full ${insufficientFunds ? 'text-red-400' : 'text-white'} ${isMobile ? "text-2xl" : "text-3xl"}`}
                       />
                       <button 
                         onClick={() => {
@@ -2232,16 +2452,26 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         </svg>
                       </button>
                     </div>
-                    <div className="flex items-center space-x-3 text-xs text-gray-400">
-                      <span>&lt;0.01</span>
-                      <button className="px-2 py-1 hover:text-white transition-colors">50%</button>
-                      <button className="px-2 py-1 hover:text-white transition-colors">Max</button>
-                      <button className="ml-auto">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                      </button>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3 text-xs text-gray-400">
+                        <span>&lt;0.01</span>
+                        <button className="px-2 py-1 hover:text-white transition-colors">50%</button>
+                        <button className="px-2 py-1 hover:text-white transition-colors">Max</button>
+                      </div>
+                      {tokenBalance !== '0' && (
+                        <div className="text-xs text-gray-500">
+                          Balance: {tokenBalance} {swapPayToken.symbol}
+                        </div>
+                      )}
                     </div>
+                    {insufficientFunds && (
+                      <div className="mt-2 text-xs text-red-400 flex items-center gap-1">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Insufficient funds. You have {tokenBalance} {swapPayToken.symbol}
+                      </div>
+                    )}
                   </div>
 
                   {/* Swap Button */}
@@ -2297,15 +2527,98 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                     <div className="text-xs text-gray-400">0.21</div>
                   </div>
 
+                  {/* Error Message */}
+                  {swapError && (
+                    <div className="mb-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+                      {swapError}
+                    </div>
+                  )}
+
                   {/* Swap Button */}
                   <button
-                    onClick={executeSwap}
-                    disabled={!swapPayAmount || parseFloat(swapPayAmount) <= 0 || !swapReceiveToken || isSwapping}
+                    onClick={handleSwapButtonClick}
+                    disabled={!swapPayAmount || parseFloat(swapPayAmount) <= 0 || !swapReceiveToken || isSwapping || isLoadingQuote || !swapQuote || !swapReceiveAmount || parseFloat(swapReceiveAmount) <= 0}
                     className={`w-full bg-[#1d4ed8] hover:bg-[#2563eb] disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors ${isMobile ? "py-3.5 mb-3" : "py-4 mb-4"}`}
                   >
-                    {isSwapping ? 'Swapping...' : 'Swap'}
+                    {isSwapping ? 'Swapping...' : isLoadingQuote ? 'Getting quote...' : insufficientFunds ? 'Insufficient funds' : !swapQuote ? 'Enter amount' : 'Swap'}
                   </button>
                 </div>
+
+                {/* Swap Confirmation Dialog */}
+                <AnimatePresence>
+                  {showSwapConfirmation && pendingSwapData && (
+                    <>
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50"
+                        onClick={() => setShowSwapConfirmation(false)}
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="absolute inset-x-4 top-1/2 -translate-y-1/2 bg-slate-900 border border-slate-700 rounded-2xl p-6 z-50 max-w-md mx-auto"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-semibold text-white">Confirm Swap</h3>
+                          <button
+                            onClick={() => setShowSwapConfirmation(false)}
+                            className="text-gray-400 hover:text-white"
+                          >
+                            <FiX className="w-5 h-5" />
+                          </button>
+                        </div>
+                        <div className="space-y-4 mb-6">
+                          <div className="bg-slate-800/50 rounded-xl p-4">
+                            <div className="text-xs text-gray-400 mb-1">You Pay</div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xl font-bold text-white">{pendingSwapData.payAmount}</span>
+                              <span className="text-sm text-gray-300">{pendingSwapData.payToken.symbol}</span>
+                            </div>
+                          </div>
+                          <div className="flex justify-center">
+                            <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                            </svg>
+                          </div>
+                          <div className="bg-slate-800/50 rounded-xl p-4">
+                            <div className="text-xs text-gray-400 mb-1">You Receive</div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xl font-bold text-white">{pendingSwapData.receiveAmount}</span>
+                              <span className="text-sm text-gray-300">{pendingSwapData.receiveToken.symbol}</span>
+                            </div>
+                          </div>
+                          {insufficientFunds && (
+                            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm flex items-center gap-2">
+                              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span>Insufficient funds. You have {tokenBalance} {pendingSwapData.payToken.symbol}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => setShowSwapConfirmation(false)}
+                            className="flex-1 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-medium"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => !insufficientFunds && executeSwap()}
+                            disabled={insufficientFunds}
+                            className="flex-1 px-4 py-3 bg-[#1d4ed8] hover:bg-[#2563eb] disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-xl font-semibold"
+                          >
+                            Confirm Swap
+                          </button>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
 
                 {/* Token Selector Dropdown - Within Wallet Component */}
                 <AnimatePresence>
@@ -3418,7 +3731,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                          </div>
 
                     <button
-                      onClick={() => window.location.href = '/explore'}
+                      onClick={() => window.location.href = '/discover'}
                       className="w-full py-3 px-4 bg-[#1d4ed8] hover:bg-[#2563eb] text-white rounded-lg font-medium transition-colors"
                     >
                       Go to Trade Page
@@ -3432,22 +3745,71 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
       )}
 
       {/* Copy Notification */}
-      <AnimatePresence>
-        {showCopyNotification && (
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.2 }}
-            className="fixed bottom-6 left-6 z-[99999999] bg-slate-800/90 backdrop-blur-sm border border-slate-700/50 rounded-lg px-4 py-3 shadow-lg"
-          >
-            <div className="flex items-center gap-2">
-              <FiCheck className="w-4 h-4 text-green-400" />
-              <span className="text-white text-sm">Address copied to clipboard</span>
+      {showCopyNotification && (
+        <motion.div
+          key="copy-notification"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.2 }}
+          className="fixed bottom-6 left-6 z-[99999999] bg-slate-800/90 backdrop-blur-sm border border-slate-700/50 rounded-lg px-4 py-3 shadow-lg"
+        >
+          <div className="flex items-center gap-2">
+            <FiCheck className="w-4 h-4 text-green-400" />
+            <span className="text-white text-sm">Address copied to clipboard</span>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Swap Success Banner */}
+      {swapSuccess && (
+        <motion.div
+          key="swap-success-banner"
+          initial={{ opacity: 0, x: -100, scale: 0.9 }}
+          animate={{ opacity: 1, x: 0, scale: 1 }}
+          exit={{ opacity: 0, x: -100, scale: 0.9 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+          className={`fixed bottom-6 left-6 z-[99999999] min-w-[320px] max-w-md w-auto ${
+            swapSuccess.type === 'buy'
+              ? 'bg-green-500/20 border-green-500/40 text-green-400'
+              : 'bg-red-500/20 border-red-500/40 text-red-400'
+          } border backdrop-blur-xl rounded-lg px-4 py-2.5 shadow-2xl`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`flex-shrink-0 ${
+              swapSuccess.type === 'buy' ? 'text-green-400' : 'text-red-400'
+            }`}>
+              {swapSuccess.type === 'buy' ? (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              )}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <div className="flex-1 min-w-0 flex items-center gap-3">
+              <div className="flex-1">
+                <p className="text-sm font-medium leading-tight">
+                  {swapSuccess.type === 'buy' ? 'Buy' : 'Sell'} Successful!
+                </p>
+                <p className="text-xs text-gray-300 leading-tight mt-0.5">
+                  Received <span className="font-semibold">{swapSuccess.received} {swapSuccess.tokenSymbol}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setSwapSuccess(null)}
+                className={`text-xs px-2 py-1 rounded hover:bg-white/10 transition-colors ${
+                  swapSuccess.type === 'buy' ? 'text-green-400' : 'text-red-400'
+                }`}
+              >
+                <FiX className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
     </AnimatePresence>
   );

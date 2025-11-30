@@ -94,6 +94,9 @@ const AdvancedSwapInterface: React.FC<AdvancedSwapInterfaceProps> = ({
   // Swap status
   const [swapStatus, setSwapStatus] = useState<'idle' | 'approving' | 'preparing' | 'executing' | 'completed' | 'failed'>('idle');
   const [swapError, setSwapError] = useState<string>("");
+  const [insufficientFunds, setInsufficientFunds] = useState(false);
+  const [showSwapConfirmation, setShowSwapConfirmation] = useState(false);
+  const [pendingSwapData, setPendingSwapData] = useState<any>(null);
 
   // ────────────────────────────────────────────────────────────────────────────────
   // EFFECTS
@@ -119,9 +122,8 @@ const AdvancedSwapInterface: React.FC<AdvancedSwapInterfaceProps> = ({
     [tokenIn, tokenOut, slippageTolerance]
   );
 
-  useEffect(() => {
-    debouncedFetchQuote(amountIn);
-  }, [amountIn, slippageTolerance, debouncedFetchQuote]);
+  // Effect to fetch quote when amount changes (moved after checkBalanceBeforeSwap)
+  // See useEffect after checkBalanceBeforeSwap definition
 
   // ────────────────────────────────────────────────────────────────────────────────
   // API FUNCTIONS
@@ -220,16 +222,83 @@ const AdvancedSwapInterface: React.FC<AdvancedSwapInterfaceProps> = ({
     }
   };
 
-  // 🔧 FIXED: Enhanced swap execution with token approval handling
+  // Check balance before swap
+  const checkBalanceBeforeSwap = useCallback(async () => {
+    if (!amountIn || parseFloat(amountIn) <= 0 || !tokenIn || !walletAddress) {
+      setInsufficientFunds(false);
+      return;
+    }
+
+    try {
+      const balance = parseFloat(tokenInBalance || "0");
+      const amount = parseFloat(amountIn);
+      setInsufficientFunds(balance < amount);
+      if (balance < amount) {
+        setSwapError(`Insufficient ${tokenIn.symbol} balance. You have ${tokenInBalance}`);
+      }
+    } catch (error) {
+      console.error('Error checking balance:', error);
+      setInsufficientFunds(false);
+    }
+  }, [amountIn, tokenIn, tokenInBalance, walletAddress]);
+
+  // Effect to fetch quote and check balance when amount changes
+  useEffect(() => {
+    debouncedFetchQuote(amountIn);
+    // Check balance when amount changes
+    if (amountIn && parseFloat(amountIn) > 0 && tokenIn) {
+      checkBalanceBeforeSwap();
+    } else {
+      setInsufficientFunds(false);
+      setSwapError("");
+    }
+  }, [amountIn, slippageTolerance, debouncedFetchQuote, tokenIn, checkBalanceBeforeSwap]);
+
+  // Show swap confirmation dialog
+  const handleSwapButtonClick = async () => {
+    if (!currentQuote || !walletAddress || !privateKey || !tokenIn || !tokenOut) {
+      toast.error("Missing required parameters for swap");
+      return;
+    }
+
+    // Check balance before showing confirmation
+    await checkBalanceBeforeSwap();
+    
+    if (insufficientFunds) {
+      toast.error(`Insufficient ${tokenIn.symbol} balance. You have ${tokenInBalance}`);
+      return;
+    }
+
+    // Store swap data for confirmation
+    setPendingSwapData({
+      amountIn,
+      amountOut,
+      tokenIn: tokenIn.symbol,
+      tokenOut: tokenOut.symbol
+    });
+    setShowSwapConfirmation(true);
+    setSwapError("");
+  };
+
+  // 🔧 FIXED: Enhanced swap execution with token approval handling (after confirmation)
   const executeSwap = async () => {
     if (!currentQuote || !walletAddress || !privateKey || !tokenIn || !tokenOut) {
       toast.error("Missing required parameters for swap");
       return;
     }
 
+    // Final balance check
+    await checkBalanceBeforeSwap();
+    if (insufficientFunds) {
+      toast.error(`Insufficient ${tokenIn.symbol} balance. You have ${tokenInBalance}`);
+      setShowSwapConfirmation(false);
+      return;
+    }
+
     setIsLoading(true);
     setSwapStatus('preparing');
     setSwapError("");
+    setShowSwapConfirmation(false);
 
     try {
       // 🔧 FIXED: Check and handle token approval first
@@ -440,9 +509,14 @@ const AdvancedSwapInterface: React.FC<AdvancedSwapInterfaceProps> = ({
             <input
               type="number"
               value={amountIn}
-              onChange={(e) => setAmountIn(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^0-9.]/g, '');
+                setAmountIn(value);
+                setSwapError("");
+                setInsufficientFunds(false);
+              }}
               placeholder="0.0"
-              className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+              className={`flex-1 bg-gray-700 border ${insufficientFunds ? 'border-red-500' : 'border-gray-600'} rounded-lg px-3 py-2 ${insufficientFunds ? 'text-red-400' : 'text-gray-200'} placeholder-gray-500 focus:outline-none focus:border-blue-500`}
               disabled={isLoading}
             />
             <div className="flex items-center space-x-2 bg-gray-700 rounded-lg px-3 py-2">
@@ -637,8 +711,8 @@ const AdvancedSwapInterface: React.FC<AdvancedSwapInterfaceProps> = ({
       {/* Swap Button */}
       <div className="mt-6">
         <button
-          onClick={executeSwap}
-          disabled={!canExecuteSwap}
+          onClick={handleSwapButtonClick}
+          disabled={!canExecuteSwap || insufficientFunds}
           className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
             canExecuteSwap
               ? 'bg-blue-500 hover:bg-blue-600 text-white'
@@ -659,6 +733,8 @@ const AdvancedSwapInterface: React.FC<AdvancedSwapInterfaceProps> = ({
             'Quote Expired - Refresh'
           ) : !currentQuote ? (
             'Enter Amount'
+          ) : insufficientFunds ? (
+            'Insufficient funds'
           ) : (
             `${swapDirection === 'buy' ? 'Buy' : 'Sell'} ${tokenOut?.symbol}`
           )}
@@ -671,6 +747,96 @@ const AdvancedSwapInterface: React.FC<AdvancedSwapInterfaceProps> = ({
           <p className="text-red-400 text-sm">{swapError}</p>
         </div>
       )}
+
+      {/* Insufficient Funds Warning */}
+      {insufficientFunds && (
+        <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+          <p className="text-red-400 text-sm flex items-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Insufficient {tokenIn?.symbol} balance. You have {tokenInBalance} {tokenIn?.symbol}
+          </p>
+        </div>
+      )}
+
+      {/* Swap Confirmation Dialog */}
+      <AnimatePresence>
+        {showSwapConfirmation && pendingSwapData && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+              onClick={() => setShowSwapConfirmation(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="fixed inset-x-4 top-1/2 -translate-y-1/2 bg-slate-900 border border-slate-700 rounded-2xl p-6 z-50 max-w-md mx-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">Confirm Swap</h3>
+                <button
+                  onClick={() => setShowSwapConfirmation(false)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="space-y-4 mb-6">
+                <div className="bg-slate-800/50 rounded-xl p-4">
+                  <div className="text-xs text-gray-400 mb-1">You Pay</div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xl font-bold text-white">{pendingSwapData.amountIn}</span>
+                    <span className="text-sm text-gray-300">{pendingSwapData.tokenIn}</span>
+                  </div>
+                </div>
+                <div className="flex justify-center">
+                  <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                  </svg>
+                </div>
+                <div className="bg-slate-800/50 rounded-xl p-4">
+                  <div className="text-xs text-gray-400 mb-1">You Receive</div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xl font-bold text-white">{pendingSwapData.amountOut}</span>
+                    <span className="text-sm text-gray-300">{pendingSwapData.tokenOut}</span>
+                  </div>
+                </div>
+                {insufficientFunds && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm flex items-center gap-2">
+                    <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Insufficient funds. You have {tokenInBalance} {pendingSwapData.tokenIn}</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowSwapConfirmation(false)}
+                  className="flex-1 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => !insufficientFunds && executeSwap()}
+                  disabled={insufficientFunds}
+                  className="flex-1 px-4 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-xl font-semibold"
+                >
+                  Confirm Swap
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Loading States */}
       {isQuoteLoading && (

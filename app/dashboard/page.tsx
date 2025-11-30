@@ -1,12 +1,86 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
-import Header from "../components/Header";
-import { motion } from "framer-motion";
-import { useWalletSystem } from "@/app/providers";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import Header from "@/app/components/Header";
+import LoadingSpinner from "@/app/components/LoadingSpinner";
+import { FaWallet, FaLayerGroup } from "react-icons/fa";
+import { FiChevronDown, FiCheck, FiRefreshCw } from "react-icons/fi";
 
-interface TradingStats {
+// Format number to abbreviated form with max 4 decimal places
+const formatNumber = (value: number | string | undefined | null, decimals: number = 2): string => {
+  if (value === null || value === undefined) return '0';
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return '0';
+  
+  // Handle very small numbers (scientific notation)
+  if (Math.abs(num) < 0.0001 && num !== 0) {
+    return num.toExponential(2);
+  }
+  
+  // Handle large numbers
+  if (Math.abs(num) >= 1000000) {
+    return (num / 1000000).toFixed(2) + 'M';
+  }
+  if (Math.abs(num) >= 1000) {
+    return (num / 1000).toFixed(2) + 'K';
+  }
+  
+  return num.toFixed(decimals);
+};
+
+// Format token amount - smart formatting based on value
+const formatTokenAmount = (value: string | number | undefined | null): string => {
+  if (value === null || value === undefined) return '-';
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return '-';
+  
+  if (num === 0) return '0';
+  if (Math.abs(num) < 0.000001) return '<0.000001';
+  if (Math.abs(num) < 0.0001) return num.toFixed(6);
+  if (Math.abs(num) < 1) return num.toFixed(4);
+  if (Math.abs(num) < 1000) return num.toFixed(2);
+  return formatNumber(num);
+};
+
+// Shorten token address/name
+const shortenToken = (token: string | undefined | null): string => {
+  if (!token) return '-';
+  if (token.length <= 10) return token;
+  if (token.startsWith('0x')) return `${token.slice(0, 6)}...${token.slice(-4)}`;
+  return token;
+};
+
+// Format percentage with sane limits and handle edge cases
+const formatPercentage = (pct: number | null | undefined): string => {
+  if (pct === null || pct === undefined || !isFinite(pct)) return '0';
+  
+  // Handle extremely small values (essentially zero)
+  if (Math.abs(pct) < 0.01) return '0';
+  
+  // Cap at reasonable display values
+  if (pct > 9999) return '>9,999';
+  if (pct < -9999) return '<-9,999';
+  
+  // Format based on magnitude
+  if (Math.abs(pct) >= 1000) return `${(pct / 1000).toFixed(1)}K`;
+  if (Math.abs(pct) >= 100) return pct.toFixed(0);
+  if (Math.abs(pct) >= 10) return pct.toFixed(1);
+  return pct.toFixed(2);
+};
+
+// Format P&L value, handling tiny/zero values
+const formatPnLValue = (pnl: number | null | undefined): string => {
+  if (pnl === null || pnl === undefined || !isFinite(pnl)) return '0.00';
+  
+  // Handle extremely small values (dust)
+  if (Math.abs(pnl) < 0.01) return '0.00';
+  
+  return formatNumber(pnl);
+};
+
+const POSITIONS_PER_PAGE = 5;
+
+type TradingData = {
   totalPnL: number;
   totalPnLPercentage: number;
   totalVolume: number;
@@ -27,6 +101,7 @@ interface TradingStats {
     timestamp: number;
     type: 'buy' | 'sell';
     status: 'completed' | 'pending' | 'failed';
+    walletAddress?: string;
   }>;
   positionsHistory: Array<{
     tokenAddress: string;
@@ -39,92 +114,97 @@ interface TradingStats {
     entryDate: string;
     exitDate: string;
     status: 'open' | 'closed';
+    walletAddress?: string;
   }>;
+};
+
+interface WalletData {
+  address: string;
+  privateKey: string;
+  createdAt: number;
+  alias?: string;
 }
 
-interface Position {
-  id: string;
-  tokenAddress: string;
-  tokenSymbol: string;
-  amount: string;
-  avgPrice: string;
-  currentPrice: string;
-  pnl?: string;
-  pnlValue?: string;
-  pnlPercentage?: number;
-  status: "open" | "closed";
+interface WalletsStorage {
+  wallets: WalletData[];
+  activeIndex: number;
 }
 
-export default function TradingDashboard() {
-  const router = useRouter();
-  const { selfCustodialWallet } = useWalletSystem();
+export default function DashboardPage() {
   const [walletAddress, setWalletAddress] = useState<string>("");
-  const [stats, setStats] = useState<TradingStats | null>(null);
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [loading, setLoadingState] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "positions" | "trades" | "analytics">("overview");
-  const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d" | "all">("30d");
-  const [totalWalletValue, setTotalWalletValue] = useState<number>(0);
-  const [positionsPage, setPositionsPage] = useState<number>(1);
-  const [tradesPage, setTradesPage] = useState<number>(1);
-  const itemsPerPage = 10;
-  const [tokenNames, setTokenNames] = useState<Record<string, string>>({});
-  const [allTokenHoldings, setAllTokenHoldings] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<"overview" | "positions" | "trades" | "analytics" | "tax">("overview");
+  const [tradingData, setTradingData] = useState<TradingData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [timeframe, setTimeframe] = useState<"7d" | "30d" | "90d" | "all">("30d");
+  
+  // Multi-wallet state
+  const [allWallets, setAllWallets] = useState<WalletData[]>([]);
+  const [selectedWalletIndex, setSelectedWalletIndex] = useState<number | 'all'>(0);
+  const [showWalletSelector, setShowWalletSelector] = useState(false);
+  const walletSelectorRef = useRef<HTMLDivElement>(null);
+  
+  // Pagination state for positions
+  const [openPositionsPage, setOpenPositionsPage] = useState(1);
+  const [closedPositionsPage, setClosedPositionsPage] = useState(1);
 
-  // Reset pagination when switching tabs
+  // Close wallet selector on click outside
   useEffect(() => {
-    setPositionsPage(1);
-    setTradesPage(1);
-  }, [activeTab]);
-
-  // Force no scroll on body/html
-  useEffect(() => {
-    document.documentElement.style.overflow = 'hidden';
-    document.documentElement.style.height = '100vh';
-    document.body.style.overflow = 'hidden';
-    document.body.style.height = '100vh';
-    document.body.style.margin = '0';
-    document.body.style.padding = '0';
-    return () => {
-      document.documentElement.style.overflow = '';
-      document.documentElement.style.height = '';
-      document.body.style.overflow = '';
-      document.body.style.height = '';
-      document.body.style.margin = '';
-      document.body.style.padding = '';
+    const handleClickOutside = (event: MouseEvent) => {
+      if (walletSelectorRef.current && !walletSelectorRef.current.contains(event.target as Node)) {
+        setShowWalletSelector(false);
+      }
     };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Get wallet address from wallet system context and localStorage (fallback)
+  // Load all wallets from storage
   useEffect(() => {
-    // First check the wallet system context
-    if (selfCustodialWallet?.address) {
-      setWalletAddress(selfCustodialWallet.address);
-      return;
-    }
-    
-    // Fallback to localStorage if context doesn't have address yet
     try {
-      const raw = typeof window !== "undefined" ? localStorage.getItem("cypherx_wallet") : null;
-      if (raw) {
-        const data = JSON.parse(raw);
-        if (data?.address) {
-          setWalletAddress(data.address);
+      // Try loading from multi-wallet storage first
+      const storedWallets = typeof window !== "undefined" ? localStorage.getItem("cypherx_wallets") : null;
+      if (storedWallets) {
+        const storage: WalletsStorage = JSON.parse(storedWallets);
+        if (storage.wallets && storage.wallets.length > 0) {
+          setAllWallets(storage.wallets);
+          setSelectedWalletIndex(storage.activeIndex);
+          setWalletAddress(storage.wallets[storage.activeIndex].address);
+        }
+      } else {
+        // Fall back to single wallet storage
+        const raw = typeof window !== "undefined" ? localStorage.getItem("cypherx_wallet") : null;
+        if (raw) {
+          const data = JSON.parse(raw);
+          if (data?.address) {
+            const walletWithAlias: WalletData = {
+              ...data,
+              alias: data.alias || 'Account 1'
+            };
+            setAllWallets([walletWithAlias]);
+            setSelectedWalletIndex(0);
+            setWalletAddress(data.address);
+          }
         }
       }
     } catch {}
-  }, [selfCustodialWallet?.address]);
-
-  // Also listen to localStorage changes as backup
-  useEffect(() => {
+    
     const onStorage = (e: StorageEvent) => {
-      if (e.key === "cypherx_wallet") {
+      if (e.key === "cypherx_wallets" || e.key === "cypherx_wallet") {
         try {
-          const data = e.newValue ? JSON.parse(e.newValue) : null;
-          if (data?.address) {
-            setWalletAddress(data.address);
-          } else {
-            setWalletAddress("");
+          if (e.key === "cypherx_wallets" && e.newValue) {
+            const storage: WalletsStorage = JSON.parse(e.newValue);
+            if (storage.wallets && storage.wallets.length > 0) {
+              setAllWallets(storage.wallets);
+              if (selectedWalletIndex !== 'all') {
+                const idx = Math.min(selectedWalletIndex, storage.wallets.length - 1);
+                setSelectedWalletIndex(idx);
+                setWalletAddress(storage.wallets[idx].address);
+              }
+            }
+          } else if (e.key === "cypherx_wallet") {
+            const data = e.newValue ? JSON.parse(e.newValue) : null;
+            setWalletAddress(data?.address || "");
           }
         } catch {
           setWalletAddress("");
@@ -132,1158 +212,1105 @@ export default function TradingDashboard() {
       }
     };
     
-    // Also listen for custom storage event (for same-tab updates)
-    const onCustomStorage = () => {
+    // Listen for wallet updates from the wallet dropdown
+    const onWalletUpdate = () => {
       try {
-        const raw = typeof window !== "undefined" ? localStorage.getItem("cypherx_wallet") : null;
-        if (raw) {
-          const data = JSON.parse(raw);
-          if (data?.address) {
-            setWalletAddress(data.address);
+        const storedWallets = localStorage.getItem("cypherx_wallets");
+        if (storedWallets) {
+          const storage: WalletsStorage = JSON.parse(storedWallets);
+          if (storage.wallets && storage.wallets.length > 0) {
+            setAllWallets(storage.wallets);
+            if (selectedWalletIndex !== 'all') {
+              // Adjust index if it's out of bounds (wallet was removed)
+              const idx = Math.min(typeof selectedWalletIndex === 'number' ? selectedWalletIndex : 0, storage.wallets.length - 1);
+              setSelectedWalletIndex(idx);
+              setWalletAddress(storage.wallets[idx].address);
+            }
+            console.log("📊 Dashboard: Wallet updated, now have", storage.wallets.length, "wallets");
           } else {
+            // All wallets were removed
+            console.log("📊 Dashboard: All wallets removed");
+            setAllWallets([]);
+            setSelectedWalletIndex(0);
             setWalletAddress("");
+            setTradingData(null);
           }
         } else {
+          // No wallets in storage
+          setAllWallets([]);
+          setSelectedWalletIndex(0);
           setWalletAddress("");
+          setTradingData(null);
         }
-      } catch {
-        setWalletAddress("");
+      } catch (error) {
+        console.error("Error handling wallet update:", error);
       }
     };
     
     window.addEventListener("storage", onStorage);
-    window.addEventListener("wallet-updated", onCustomStorage);
-    
+    window.addEventListener("wallet-updated", onWalletUpdate);
     return () => {
       window.removeEventListener("storage", onStorage);
-      window.removeEventListener("wallet-updated", onCustomStorage);
+      window.removeEventListener("wallet-updated", onWalletUpdate);
+    };
+  }, [selectedWalletIndex]);
+
+  // Fetch trading data for a single wallet
+  const fetchWalletData = useCallback(async (address: string, timeframeParam: string): Promise<TradingData | null> => {
+    try {
+      const response = await fetch(`/api/wallet/pnl?address=${address}&timeframe=${timeframeParam}`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`📊 Dashboard: Fetched data for ${address.slice(0, 8)}...`, {
+          totalTrades: data.totalTrades,
+          positions: data.positionsHistory?.length || 0,
+          recentTrades: data.recentTrades?.length || 0
+        });
+        return data;
+      }
+    } catch (error) {
+      console.error("Error fetching trading data for", address, error);
+    }
+    return null;
+  }, []);
+
+  // Merge trading data from multiple wallets
+  const mergeTradeData = useCallback((dataArray: (TradingData | null)[]): TradingData => {
+    const validData = dataArray.filter((d): d is TradingData => d !== null);
+    
+    console.log(`📊 Merging data from ${validData.length} wallets:`);
+    validData.forEach((d, i) => {
+      console.log(`  Wallet ${i + 1}: P&L = $${d.totalPnL?.toFixed(2) || 0}, Volume = $${d.totalVolume?.toFixed(2) || 0}, Trades = ${d.totalTrades || 0}`);
+    });
+    
+    if (validData.length === 0) {
+      return {
+        totalPnL: 0,
+        totalPnLPercentage: 0,
+        totalVolume: 0,
+        totalTrades: 0,
+        winRate: 0,
+        bought: 0,
+        sold: 0,
+        holding: 0,
+        positionsClosed: 0,
+        completedTrades: 0,
+        dailyPnL: [],
+        recentTrades: [],
+        positionsHistory: []
+      };
+    }
+
+    // Merge numeric stats - sum P&L from all wallets
+    const totalPnL = validData.reduce((sum, d) => sum + (d.totalPnL || 0), 0);
+    console.log(`📊 Total combined P&L: $${totalPnL.toFixed(2)}`);
+    const totalVolume = validData.reduce((sum, d) => sum + (d.totalVolume || 0), 0);
+    const totalTrades = validData.reduce((sum, d) => sum + (d.totalTrades || 0), 0);
+    const bought = validData.reduce((sum, d) => sum + (d.bought || 0), 0);
+    const sold = validData.reduce((sum, d) => sum + (d.sold || 0), 0);
+    const holding = validData.reduce((sum, d) => sum + (d.holding || 0), 0);
+    const positionsClosed = validData.reduce((sum, d) => sum + (d.positionsClosed || 0), 0);
+    const completedTrades = validData.reduce((sum, d) => sum + (d.completedTrades || 0), 0);
+    
+    // Calculate weighted win rate
+    const totalWins = validData.reduce((sum, d) => sum + ((d.winRate || 0) / 100 * (d.completedTrades || 0)), 0);
+    const winRate = completedTrades > 0 ? (totalWins / completedTrades) * 100 : 0;
+    
+    // Calculate P&L percentage based on total volume
+    const totalPnLPercentage = totalVolume > 0 ? (totalPnL / totalVolume) * 100 : 0;
+
+    // Merge daily PnL (aggregate by date)
+    const dailyPnLMap = new Map<string, number>();
+    validData.forEach(d => {
+      (d.dailyPnL || []).forEach(({ date, pnl }) => {
+        dailyPnLMap.set(date, (dailyPnLMap.get(date) || 0) + pnl);
+      });
+    });
+    const dailyPnL = Array.from(dailyPnLMap.entries())
+      .map(([date, pnl]) => ({ date, pnl }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // Merge and sort trades by timestamp
+    const recentTrades = validData
+      .flatMap(d => d.recentTrades || [])
+      .sort((a, b) => b.timestamp - a.timestamp);
+
+    // Merge positions
+    const positionsHistory = validData.flatMap(d => d.positionsHistory || []);
+
+    return {
+      totalPnL,
+      totalPnLPercentage,
+      totalVolume,
+      totalTrades,
+      winRate,
+      bought,
+      sold,
+      holding,
+      positionsClosed,
+      completedTrades,
+      dailyPnL,
+      recentTrades,
+      positionsHistory
     };
   }, []);
 
-  // Fetch trading data
   useEffect(() => {
-    if (!walletAddress) {
-      setLoadingState(false);
-      return;
-    }
-
-    const fetchData = async () => {
-      setLoadingState(true);
-      try {
-        // Fetch PnL stats (with cache-busting to ensure fresh data)
-        const pnlRes = await fetch(`/api/wallet/pnl?address=${walletAddress}&t=${Date.now()}`, {
-          cache: 'no-store'
-        });
-        const pnlData = await pnlRes.json();
-        if (pnlRes.ok) {
-          setStats(pnlData);
+    const fetchTradingData = async () => {
+      if (selectedWalletIndex === 'all') {
+        // Fetch consolidated data from all wallets
+        if (allWallets.length === 0) {
+          setLoading(false);
+          return;
         }
-
-        // Fetch positions
-        const positionsRes = await fetch(`/api/wallet/positions?address=${walletAddress}`);
-        const positionsData = await positionsRes.json();
-        if (positionsRes.ok) {
-          setPositions(positionsData.positions || []);
-          
-          // Token names are already fetched from Alchemy API via allTokenHoldings
-          // No need to fetch from DexScreener (which causes CORS errors)
-          // If we need names for positions that aren't in holdings, we can extract them from allTokenHoldings
-          const namesMap: Record<string, string> = {};
-          
-          // Extract token names from allTokenHoldings if available
-          if (allTokenHoldings.length > 0) {
-            allTokenHoldings.forEach((token: any) => {
-              if (token.contractAddress && token.name) {
-                namesMap[token.contractAddress.toLowerCase()] = token.name;
-              }
-            });
-          }
-          
-          setTokenNames(namesMap);
+        
+        setLoading(true);
+        try {
+          const timeframeParam = timeframe === "7d" ? "7D" : timeframe === "30d" ? "30D" : timeframe === "90d" ? "90D" : "ALL";
+          const dataPromises = allWallets.map(w => fetchWalletData(w.address, timeframeParam));
+          const allData = await Promise.all(dataPromises);
+          const merged = mergeTradeData(allData);
+          setTradingData(merged);
+        } catch (error) {
+          console.error("Error fetching consolidated data:", error);
+        } finally {
+          setLoading(false);
         }
-
-        // Fetch wallet balance and calculate total value
-        const balanceRes = await fetch(`/api/wallet/balance?address=${walletAddress}`);
-        if (balanceRes.ok) {
-          const balanceData = await balanceRes.json();
-          const ethBalance = parseFloat(balanceData.ethBalance || "0");
-          
-          // Get ETH price via API route (to avoid CORS)
-          let ethPrice = 0;
-          try {
-            const ethPriceRes = await fetch("/api/price/eth");
-            if (ethPriceRes.ok) {
-              const ethPriceData = await ethPriceRes.json();
-              // API returns { ethereum: { usd: price } }
-              ethPrice = ethPriceData.ethereum?.usd || ethPriceData.price || 0;
-            } else {
-              // Fallback price if API fails
-              ethPrice = 2737;
-            }
-          } catch (error) {
-            console.error("Error fetching ETH price:", error);
-            // Fallback price if API fails
-            ethPrice = 2737;
-          }
-          
-          // Calculate ETH value
-          const ethValue = ethBalance * ethPrice;
-          
-          // Fetch all token holdings using Alchemy API (like wallet dropdown)
-          try {
-            const holdingsRes = await fetch('/api/alchemy/wallet', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                address: walletAddress,
-                action: 'tokens'
-              })
-            });
-            
-            if (holdingsRes.ok) {
-              const holdingsData = await holdingsRes.json();
-              if (holdingsData.success && holdingsData.data?.tokenBalances) {
-                setAllTokenHoldings(holdingsData.data.tokenBalances);
-                
-                // Calculate total token holdings value from all tokens (excluding ETH to avoid double counting)
-                let tokenHoldingsValue = holdingsData.data.tokenBalances.reduce((sum: number, token: any) => {
-                  // Check if this is ETH token (contract address or symbol)
-                  const isEth = token.contractAddress?.toLowerCase() === '0x4200000000000000000000000000000000000006' ||
-                                token.symbol === 'ETH' || token.symbol === 'WETH';
-                  
-                  // If it's ETH, use ethValue instead to avoid double counting
-                  // Otherwise, include all other token values
-                  if (isEth) {
-                    // ETH is already included in ethValue calculation above
-                    return sum;
-                  }
-                  
-                  return sum + (token.usdValue || 0);
-                }, 0);
-                
-                // Total wallet value = ETH (already calculated) + all other token balances
-                setTotalWalletValue(ethValue + tokenHoldingsValue);
-              } else {
-                setAllTokenHoldings([]);
-                setTotalWalletValue(ethValue);
-              }
-            } else {
-              // Fallback to positions if Alchemy fails
-              let tokenHoldingsValue = 0;
-              if (positionsData.positions && positionsData.positions.length > 0) {
-                const openPositions = positionsData.positions.filter((p: Position) => p.status === 'open');
-                tokenHoldingsValue = openPositions.reduce((sum: number, position: Position) => {
-                  const amount = parseFloat(position.amount || "0");
-                  const currentPrice = parseFloat(position.currentPrice || "0");
-                  return sum + (amount * currentPrice);
-                }, 0);
-              }
-              setTotalWalletValue(ethValue + tokenHoldingsValue);
-            }
-          } catch (error) {
-            console.error("Error fetching token holdings:", error);
-            setAllTokenHoldings([]);
-            // Fallback to positions
-            let tokenHoldingsValue = 0;
-            if (positionsData.positions && positionsData.positions.length > 0) {
-              const openPositions = positionsData.positions.filter((p: Position) => p.status === 'open');
-              tokenHoldingsValue = openPositions.reduce((sum: number, position: Position) => {
-                const amount = parseFloat(position.amount || "0");
-                const currentPrice = parseFloat(position.currentPrice || "0");
-                return sum + (amount * currentPrice);
-              }, 0);
-            }
-            setTotalWalletValue(ethValue + tokenHoldingsValue);
-          }
+      } else {
+        // Fetch data for single wallet
+        if (!walletAddress) {
+          setLoading(false);
+          return;
         }
-      } catch (error) {
-        console.error("Error fetching dashboard data:", error);
-      } finally {
-        setLoadingState(false);
+        
+        setLoading(true);
+        try {
+          const timeframeParam = timeframe === "7d" ? "7D" : timeframe === "30d" ? "30D" : timeframe === "90d" ? "90D" : "ALL";
+          const data = await fetchWalletData(walletAddress, timeframeParam);
+          setTradingData(data);
+        } catch (error) {
+          console.error("Error fetching trading data:", error);
+        } finally {
+          setLoading(false);
+        }
       }
     };
 
-    fetchData();
-    // Auto-refresh every 30 seconds without page reload
-    const interval = setInterval(() => {
-      fetchData();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [walletAddress]);
+    fetchTradingData();
+  }, [walletAddress, timeframe, selectedWalletIndex, allWallets, fetchWalletData, mergeTradeData]);
 
-  const formatCurrency = (value: number) => {
-    if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
-    if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
-    if (value >= 1e3) return `$${(value / 1e3).toFixed(2)}K`;
-    return `$${value.toFixed(2)}`;
-  };
-
-  const formatTimeAgo = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return `${seconds}s ago`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    return `${Math.floor(seconds / 86400)}d ago`;
-  };
-
-  // Calculate portfolio allocation from all token holdings (including ETH)
-  const portfolioAllocation = useMemo(() => {
-    // Use a Map to deduplicate by address (case-insensitive) and combine values
-    const allocationMap = new Map<string, {
-      symbol: string;
-      name: string | null;
-      address: string;
-      value: number;
-      percentage: number;
-      logo?: string;
-    }>();
+  const formatTimeAgo = (timestamp: number | undefined | null): string => {
+    if (!timestamp) return '-';
     
-    // Calculate ETH value from token holdings
-    let ethValue = 0;
-    let ethTokenFromHoldings: any = null;
-    
-    // Check if ETH is in token holdings
-    const ethToken = allTokenHoldings.find((t: any) => 
-      t.contractAddress?.toLowerCase() === '0x4200000000000000000000000000000000000006' ||
-      t.symbol === 'ETH'
-    );
-    
-    if (ethToken && ethToken.usdValue > 0) {
-      ethValue = ethToken.usdValue;
-      ethTokenFromHoldings = ethToken;
-      const ethAddress = '0x4200000000000000000000000000000000000006';
-      allocationMap.set(ethAddress.toLowerCase(), {
-        symbol: 'ETH',
-        name: 'Ethereum',
-        address: ethAddress,
-        value: ethValue,
-        percentage: 0,
-        logo: ethToken.logo || 'https://assets.coingecko.com/coins/images/279/small/ethereum.png'
-      });
-    }
-    
-    // Add all other token holdings from Alchemy API (excluding ETH if already added)
-    if (allTokenHoldings.length > 0) {
-      allTokenHoldings.forEach((token) => {
-        // Skip ETH if we already added it
-        const isEth = token.contractAddress?.toLowerCase() === '0x4200000000000000000000000000000000000006' ||
-                      token.symbol === 'ETH';
-        
-        if (!isEth && token.usdValue && token.usdValue > 0 && token.contractAddress) {
-          const address = token.contractAddress.toLowerCase();
-          
-          // If token already exists in map, combine values
-          if (allocationMap.has(address)) {
-            const existing = allocationMap.get(address)!;
-            existing.value += token.usdValue || 0;
-          } else {
-            allocationMap.set(address, {
-              symbol: token.symbol || 'UNK',
-              name: token.name || null,
-              address: token.contractAddress,
-              value: token.usdValue || 0,
-              percentage: 0,
-              logo: token.logo
-            });
-          }
-        }
-      });
-    }
-    
-    // Fallback to positions if no holdings from Alchemy
-    if (allocationMap.size === 0 && positions && positions.length > 0) {
-      const openPositions = positions.filter(p => p.status === 'open');
-      openPositions.forEach(p => {
-        if (!p.tokenAddress) return; // Skip if no address
-        
-        const amount = parseFloat(p.amount || "0");
-        const currentPrice = parseFloat(p.currentPrice || "0");
-        const value = amount * currentPrice;
-        if (value > 0) {
-          const address = p.tokenAddress.toLowerCase();
-          const tokenName = tokenNames[address] || null;
-          
-          // If position already exists in map, combine values
-          if (allocationMap.has(address)) {
-            const existing = allocationMap.get(address)!;
-            existing.value += value;
-          } else {
-            allocationMap.set(address, {
-              symbol: p.tokenSymbol,
-              name: tokenName,
-              address: p.tokenAddress,
-              value,
-              percentage: 0
-            });
-          }
-        }
-      });
-    }
-    
-    // Convert map to array
-    let allocation = Array.from(allocationMap.values());
-    
-    // Calculate total value from allocation
-    let totalValue = allocation.reduce((sum, item) => sum + item.value, 0);
-    
-    // If we have totalWalletValue but no ETH in allocation, and totalValue is less than totalWalletValue,
-    // add ETH difference as a separate entry (edge case handling)
-    if (totalWalletValue > 0 && totalValue < totalWalletValue && !ethTokenFromHoldings) {
-      const ethDifference = totalWalletValue - totalValue;
-      if (ethDifference > 0.01) { // Only add if significant (> 1 cent)
-        const ethAddress = '0x4200000000000000000000000000000000000006';
-        allocation.unshift({
-          symbol: 'ETH',
-          name: 'Ethereum',
-          address: ethAddress,
-          value: ethDifference,
-          percentage: 0,
-          logo: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png'
-        });
-        totalValue = totalWalletValue;
-      }
-    }
-    
-    // Calculate percentages based on actual total value
-    const finalTotalValue = Math.max(totalValue, totalWalletValue) || totalValue;
-    
-    // Filter out items without valid addresses and calculate percentages
-    // Use a Set to track addresses we've seen to ensure complete deduplication
-    const seenAddresses = new Set<string>();
-    const deduplicatedAllocation: typeof allocation = [];
-    
-    for (const item of allocation) {
-      if (!item.address || item.address.trim() === '') continue; // Skip items with empty addresses
-      
-      const addressLower = item.address.toLowerCase();
-      if (!seenAddresses.has(addressLower)) {
-        seenAddresses.add(addressLower);
-        deduplicatedAllocation.push({
-          ...item,
-          percentage: finalTotalValue > 0 ? (item.value / finalTotalValue) * 100 : 0
-        });
-      }
-    }
-    
-    return deduplicatedAllocation.sort((a, b) => b.value - a.value);
-  }, [allTokenHoldings, positions, tokenNames, totalWalletValue]);
-
-  // Filter daily PnL by time range with proper logic
-  const filteredDailyPnL = useMemo(() => {
-    if (!stats?.dailyPnL || stats.dailyPnL.length === 0) return [];
-    
-    if (timeRange === "all") {
-      // Return all data for "all" time range
-      return stats.dailyPnL;
-    }
-    
+    // Detect if timestamp is in seconds or milliseconds
+    // If timestamp is less than year 2000 in ms, it's probably in seconds
+    const ts = timestamp > 1000000000000 ? timestamp : timestamp * 1000;
     const now = Date.now();
-    let daysAgo = 7; // Default to 7d
+    const diff = now - ts;
     
-    switch (timeRange) {
-      case "7d":
-        daysAgo = 7;
-        break;
-      case "30d":
-        daysAgo = 30;
-        break;
-      case "90d":
-        daysAgo = 90;
-        break;
-      default:
-        daysAgo = 7;
-    }
+    // Handle invalid or future timestamps
+    if (diff < 0 || isNaN(diff)) return '-';
     
-    const cutoff = now - (daysAgo * 24 * 60 * 60 * 1000);
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    const weeks = Math.floor(days / 7);
+    const months = Math.floor(days / 30);
     
-    return stats.dailyPnL.filter(item => {
-      const itemDate = new Date(item.date).getTime();
-      return itemDate >= cutoff;
-    });
-  }, [stats?.dailyPnL, timeRange]);
+    if (seconds < 60) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    if (weeks < 4) return `${weeks}w ago`;
+    if (months < 12) return `${months}mo ago`;
+    return `${Math.floor(months / 12)}y ago`;
+  };
 
-  // Calculate cumulative PnL for chart
-  const cumulativePnL = useMemo(() => {
-    let cumulative = 0;
-    return filteredDailyPnL.map(item => {
-      cumulative += item.pnl;
-      return {
-        date: item.date,
-        pnl: item.pnl,
-        cumulative
-      };
-    });
-  }, [filteredDailyPnL]);
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
 
-  if (!walletAddress) {
-    return (
-      <div className="min-h-screen bg-gray-950 text-gray-200 flex flex-col">
-        <Header />
-        <main className="flex-1 flex items-center justify-center px-4">
-          <div className="text-center max-w-md w-full">
-            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gray-800/50 border border-gray-700/50 flex items-center justify-center">
-              <div className="w-12 h-12 rounded-full bg-blue-500/20"></div>
-            </div>
-            <h2 className="text-2xl mb-3 text-white">Connect Your Wallet</h2>
-            <p className="text-gray-400 mb-6 text-sm leading-relaxed">Connect your wallet to view your trading dashboard and track your portfolio performance</p>
-            <button
-              onClick={() => {
-                try {
-                  (window as any).dispatchEvent(new CustomEvent('open-wallet'));
-                } catch {}
-              }}
-              className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors text-white"
-            >
-              Connect Wallet
-            </button>
-          </div>
-        </main>
-      </div>
-    );
-  }
+  const openPositions = useMemo(() => {
+    return (tradingData?.positionsHistory || []).filter(p => {
+      if (!p || p.status !== 'open') return false;
+      // Filter out positions with zero cost basis (airdrops/received tokens - not purchased)
+      const costBasis = (p.entryPrice ?? 0) * (p.amount ?? 0);
+      return costBasis > 0;
+    });
+  }, [tradingData]);
+
+  const closedPositions = useMemo(() => {
+    return (tradingData?.positionsHistory || []).filter(p => {
+      if (!p || p.status !== 'closed') return false;
+      // Filter out positions with zero cost basis (airdrops/received tokens - not purchased)
+      const costBasis = (p.entryPrice ?? 0) * (p.amount ?? 0);
+      return costBasis > 0;
+    });
+  }, [tradingData]);
 
   return (
-    <div className="fixed inset-0 bg-gray-950 text-gray-200 flex flex-col overflow-hidden" style={{ height: '100vh', width: '100vw', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
+    <div className="h-full bg-gray-950 text-gray-200 flex flex-col md:overflow-hidden overflow-y-auto">
       <Header />
       
-      <main className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden bg-gray-950 pb-24 sm:pb-28 lg:pb-10">
-        <div className="max-w-[1400px] mx-auto px-2 sm:px-4 lg:px-5 flex flex-col min-h-0 py-2 sm:py-3">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2 sm:mb-3 flex-shrink-0 pt-1 sm:pt-2">
-            <div>
-              <h1 className="text-base sm:text-lg lg:text-xl text-white">Trading Dashboard</h1>
-              <p className="text-[10px] sm:text-xs text-gray-400">
-                {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
-              </p>
+      <main className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 py-2 flex flex-col min-h-0 md:overflow-hidden">
+        <div className="flex items-center justify-between mb-3 sm:mb-4 flex-shrink-0">
+          <div>
+            <h1 className="text-lg sm:text-xl font-semibold text-white">Trading Dashboard</h1>
+            
+            {/* Wallet Selector */}
+            <div className="relative mt-2" ref={walletSelectorRef}>
+              <button
+                onClick={() => setShowWalletSelector(!showWalletSelector)}
+                className="flex items-center space-x-2 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg hover:border-blue-500 transition-colors text-sm"
+              >
+                {selectedWalletIndex === 'all' ? (
+                  <>
+                    <FaLayerGroup className="w-3.5 h-3.5 text-blue-400" />
+                    <span className="text-white">All Wallets ({allWallets.length})</span>
+                  </>
+                ) : (
+                  <>
+                    <FaWallet className="w-3.5 h-3.5 text-blue-400" />
+                    <span className="text-white">
+                      {allWallets[selectedWalletIndex]?.alias || `Account ${selectedWalletIndex + 1}`}
+                    </span>
+                    <span className="text-gray-400 text-xs">
+                      ({walletAddress ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : "No wallet"})
+                    </span>
+                  </>
+                )}
+                <FiChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showWalletSelector ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {/* Wallet Dropdown */}
+              {showWalletSelector && (
+                <div className="absolute top-full left-0 mt-1 w-72 bg-[#0b1220] border border-gray-800 rounded-lg shadow-xl z-50 overflow-hidden">
+                  <div className="p-2">
+                    {/* All Wallets (Consolidated) Option */}
+                    {allWallets.length > 1 && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setSelectedWalletIndex('all');
+                            setWalletAddress(''); // Clear wallet address for consolidated view
+                            setShowWalletSelector(false);
+                          }}
+                          className={`w-full flex items-center justify-between p-2 rounded-lg transition-all duration-150 ${
+                            selectedWalletIndex === 'all'
+                              ? 'bg-blue-600/15 border border-blue-500/30'
+                              : 'hover:bg-[#15233d]'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2">
+                            <div className={`w-7 h-7 rounded-md flex items-center justify-center ${
+                              selectedWalletIndex === 'all' ? 'bg-blue-600' : 'bg-gray-700'
+                            }`}>
+                              <FaLayerGroup className="w-3 h-3 text-white" />
+                            </div>
+                            <div className="text-left">
+                              <div className="text-xs font-medium text-white">All Wallets</div>
+                              <div className="text-[10px] text-gray-500">Consolidated ({allWallets.length} wallets)</div>
+                            </div>
+                          </div>
+                          {selectedWalletIndex === 'all' && (
+                            <FiCheck className="w-3.5 h-3.5 text-blue-400" />
+                          )}
+                        </button>
+                        <div className="border-t border-gray-800 my-1.5"></div>
+                      </>
+                    )}
+                    
+                    {/* Individual Wallets */}
+                    <div className="text-[10px] font-medium text-gray-500 uppercase tracking-wider px-1 py-1">Individual Wallets</div>
+                    <div className="space-y-1 max-h-48 overflow-y-auto scrollbar-hide">
+                      {allWallets.map((wallet, index) => (
+                        <button
+                          key={wallet.address}
+                          onClick={() => {
+                            setSelectedWalletIndex(index);
+                            setWalletAddress(wallet.address);
+                            setShowWalletSelector(false);
+                          }}
+                          className={`w-full flex items-center justify-between p-2 rounded-lg transition-all duration-150 ${
+                            selectedWalletIndex === index
+                              ? 'bg-blue-600/15 border border-blue-500/30'
+                              : 'hover:bg-[#15233d]'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2">
+                            <div className={`w-7 h-7 rounded-md flex items-center justify-center ${
+                              selectedWalletIndex === index ? 'bg-blue-600' : 'bg-gray-700'
+                            }`}>
+                              <FaWallet className="w-3 h-3 text-white" />
+                            </div>
+                            <div className="text-left">
+                              <div className="text-xs font-medium text-white">
+                                {wallet.alias || `Account ${index + 1}`}
+                              </div>
+                              <div className="text-[10px] text-gray-500 font-mono">
+                                {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+                              </div>
+                            </div>
+                          </div>
+                          {selectedWalletIndex === index && (
+                            <div className="flex items-center space-x-1 text-green-400">
+                              <span className="text-[9px] font-medium">Active</span>
+                              <FiCheck className="w-3 h-3" />
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    
+                    {allWallets.length === 0 && (
+                      <div className="text-center py-4 text-gray-500 text-xs">
+                        <FaWallet className="w-6 h-6 mx-auto mb-1.5 opacity-30" />
+                        No wallets found. Open wallet to create one.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={async (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setLoadingState(true);
-                try {
-                  // Fetch PnL stats (with cache-busting to ensure fresh data)
-                  const pnlRes = await fetch(`/api/wallet/pnl?address=${walletAddress}&t=${Date.now()}`, {
-                    cache: 'no-store'
-                  });
-                  const pnlData = await pnlRes.json();
-                  if (pnlRes.ok) setStats(pnlData);
-
-                  const positionsRes = await fetch(`/api/wallet/positions?address=${walletAddress}`);
-                  const positionsData = await positionsRes.json();
-                  if (positionsRes.ok) {
-                    setPositions(positionsData.positions || []);
-                    
-                    // Fetch token names from DexScreener
-                    const uniqueAddresses = [...new Set((positionsData.positions || []).map((p: Position) => p.tokenAddress))] as string[];
-                    const namePromises = uniqueAddresses.map(async (address: string) => {
-                      try {
-                        const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`);
-                        const data = await response.json();
-                        const pair = data.pairs?.[0];
-                        if (pair) {
-                          return { address, name: pair.baseToken?.name || pair.quoteToken?.name || null };
-                        }
-                      } catch (error) {
-                        console.error(`Error fetching token name for ${address}:`, error);
-                      }
-                      return { address, name: null };
-                    });
-                    
-                    const nameResults = await Promise.all(namePromises);
-                    const namesMap: Record<string, string> = {};
-                    nameResults.forEach(({ address, name }) => {
-                      if (name) namesMap[address.toLowerCase()] = name;
-                    });
-                    setTokenNames(namesMap);
-                  }
-
-                  // Fetch wallet balance and calculate total value (same logic as main fetch)
-                  const balanceRes = await fetch(`/api/wallet/balance?address=${walletAddress}`);
-                  if (balanceRes.ok) {
-                    const balanceData = await balanceRes.json();
-                    const ethBalance = parseFloat(balanceData.ethBalance || "0");
-                    
-                    // Get ETH price via API route (to avoid CORS)
-                    let ethPrice = 0;
-                    try {
-                      const ethPriceRes = await fetch("/api/price/eth");
-                      if (ethPriceRes.ok) {
-                        const ethPriceData = await ethPriceRes.json();
-                        ethPrice = ethPriceData.ethereum?.usd || ethPriceData.price || 0;
-                      } else {
-                        ethPrice = 2737;
-                      }
-                    } catch (error) {
-                      console.error("Error fetching ETH price:", error);
-                      ethPrice = 2737;
-                    }
-                    
-                    // Calculate ETH value
-                    const ethValue = ethBalance * ethPrice;
-                    
-                    // Fetch all token holdings using Alchemy API (same as main fetch)
-                    try {
-                      const holdingsRes = await fetch('/api/alchemy/wallet', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          address: walletAddress,
-                          action: 'tokens'
-                        })
-                      });
-                      
-                      if (holdingsRes.ok) {
-                        const holdingsData = await holdingsRes.json();
-                        if (holdingsData.success && holdingsData.data?.tokenBalances) {
-                          setAllTokenHoldings(holdingsData.data.tokenBalances);
-                          
-                          // Calculate total token holdings value (excluding ETH to avoid double counting)
-                          let tokenHoldingsValue = holdingsData.data.tokenBalances.reduce((sum: number, token: any) => {
-                            const isEth = token.contractAddress?.toLowerCase() === '0x4200000000000000000000000000000000000006' ||
-                                          token.symbol === 'ETH' || token.symbol === 'WETH';
-                            
-                            if (isEth) {
-                              return sum;
-                            }
-                            
-                            return sum + (token.usdValue || 0);
-                          }, 0);
-                          
-                          setTotalWalletValue(ethValue + tokenHoldingsValue);
-                        } else {
-                          setAllTokenHoldings([]);
-                          setTotalWalletValue(ethValue);
-                        }
-                      } else {
-                        // Fallback to positions if Alchemy fails
-                        let tokenHoldingsValue = 0;
-                        if (positionsData.positions && positionsData.positions.length > 0) {
-                          const openPositions = positionsData.positions.filter((p: Position) => p.status === 'open');
-                          tokenHoldingsValue = openPositions.reduce((sum: number, position: Position) => {
-                            const amount = parseFloat(position.amount || "0");
-                            const currentPrice = parseFloat(position.currentPrice || "0");
-                            return sum + (amount * currentPrice);
-                          }, 0);
-                        }
-                        setTotalWalletValue(ethValue + tokenHoldingsValue);
-                      }
-                    } catch (error) {
-                      console.error("Error fetching token holdings:", error);
-                      setAllTokenHoldings([]);
-                      // Fallback to positions
-                      let tokenHoldingsValue = 0;
-                      if (positionsData.positions && positionsData.positions.length > 0) {
-                        const openPositions = positionsData.positions.filter((p: Position) => p.status === 'open');
-                        tokenHoldingsValue = openPositions.reduce((sum: number, position: Position) => {
-                          const amount = parseFloat(position.amount || "0");
-                          const currentPrice = parseFloat(position.currentPrice || "0");
-                          return sum + (amount * currentPrice);
-                        }, 0);
-                      }
-                      setTotalWalletValue(ethValue + tokenHoldingsValue);
-                    }
-                  }
-                } catch (error) {
-                  console.error("Error refreshing data:", error);
-                } finally {
-                  setLoadingState(false);
-                }
-              }}
-              className="px-2 sm:px-3 py-1 sm:py-1.5 bg-gray-800/80 hover:bg-gray-700/80 rounded-lg transition-colors text-[10px] sm:text-xs text-gray-200 border border-gray-700/50"
-            >
-              Refresh
-            </button>
           </div>
+          <button
+            onClick={() => {
+              if (selectedWalletIndex === 'all' && allWallets.length > 0) {
+                // Refresh consolidated data
+                const timeframeParam = timeframe === "7d" ? "7D" : timeframe === "30d" ? "30D" : timeframe === "90d" ? "90D" : "ALL";
+                Promise.all(allWallets.map(w => 
+                  fetch(`/api/wallet/pnl?address=${w.address}&timeframe=${timeframeParam}`)
+                    .then(r => r.json())
+                    .catch(() => null)
+                )).then(allData => {
+                  const merged = mergeTradeData(allData);
+                  setTradingData(merged);
+                });
+              } else if (walletAddress) {
+                const timeframeParam = timeframe === "7d" ? "7D" : timeframe === "30d" ? "30D" : timeframe === "90d" ? "90D" : "ALL";
+                fetch(`/api/wallet/pnl?address=${walletAddress}&timeframe=${timeframeParam}`)
+                  .then(r => r.json())
+                  .then(data => setTradingData(data))
+                  .catch(console.error);
+              }
+            }}
+            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+            title="Refresh"
+          >
+            <FiRefreshCw className="w-5 h-5" />
+          </button>
+        </div>
 
-          {/* Loading indicator */}
-          {loading && (
-            <div className="absolute top-20 right-4 z-50">
-              <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-700 border-t-gray-500"></div>
-            </div>
-          )}
-          
-              {/* Key Metrics */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 sm:gap-2 mb-2 sm:mb-3 flex-shrink-0">
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-gray-900/80 border border-gray-600/50 rounded-lg p-2 sm:p-2.5"
-                >
-                  <div className="mb-1">
-                    <span className="text-xs text-gray-400 uppercase tracking-wide">Total P&L</span>
-                  </div>
-                  <div className={`text-sm sm:text-base mb-0.5 ${(stats?.totalPnL || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {stats?.totalPnL ? formatCurrency(stats.totalPnL) : "$0.00"}
-                  </div>
-                  <div className={`text-xs ${(stats?.totalPnLPercentage || 0) >= 0 ? 'text-green-400/80' : 'text-red-400/80'}`}>
-                    {stats?.totalPnLPercentage ? `${stats.totalPnLPercentage >= 0 ? '+' : ''}${stats.totalPnLPercentage.toFixed(2)}%` : '0.00%'}
-                  </div>
-                </motion.div>
-
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="bg-gray-900/80 border border-gray-600/50 rounded-lg p-2 sm:p-2.5"
-                >
-                  <div className="mb-1">
-                    <span className="text-xs text-gray-400 uppercase tracking-wide">Total Volume</span>
-                  </div>
-                  <div className="text-sm sm:text-base text-white mb-0.5">
-                    {stats?.totalVolume ? formatCurrency(stats.totalVolume) : "$0.00"}
-                  </div>
-                  <div className="text-xs text-gray-400">
-                    {stats?.totalTrades || 0} trades
-                  </div>
-                </motion.div>
-
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  className="bg-gray-900/80 border border-gray-600/50 rounded-lg p-2 sm:p-2.5"
-                >
-                  <div className="mb-1">
-                    <span className="text-xs text-gray-400 uppercase tracking-wide">Win Rate</span>
-                  </div>
-                  <div className="text-sm sm:text-base text-white mb-0.5">
-                    {stats?.winRate ? `${stats.winRate.toFixed(1)}%` : "0%"}
-                  </div>
-                  <div className="text-xs text-gray-400">
-                    {stats?.completedTrades || 0} completed
-                  </div>
-                </motion.div>
-
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                  className="bg-gray-900/80 border border-gray-600/50 rounded-lg p-2 sm:p-2.5"
-                >
-                  <div className="mb-1">
-                    <span className="text-xs text-gray-400 uppercase tracking-wide">Open Positions</span>
-                  </div>
-                  <div className="text-sm sm:text-base text-white mb-0.5">
-                    {positions.filter(p => p.status === 'open').length}
-                  </div>
-                  <div className="text-xs text-gray-400">
-                    {positions.filter(p => p.status === 'closed').length} closed
-                  </div>
-                </motion.div>
-              </div>
-
-              {/* Tabs */}
-              <div className="flex items-center gap-0.5 sm:gap-1 mb-2 sm:mb-3 border-b border-gray-600/50 overflow-x-auto scrollbar-hide flex-shrink-0">
-                {[
-                  { id: "overview", label: "Overview" },
-                  { id: "positions", label: "Positions" },
-                  { id: "trades", label: "Trades" },
-                  { id: "analytics", label: "Analytics" }
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as any)}
-                    className={`flex-shrink-0 px-2 sm:px-3 lg:px-4 py-1.5 border-b-2 transition-all text-xs sm:text-sm ${
-                      activeTab === tab.id
-                        ? "border-blue-500 text-white"
-                        : "border-transparent text-gray-400 hover:text-gray-200"
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
+        {/* Consolidated View Banner */}
+        {selectedWalletIndex === 'all' && allWallets.length > 1 && (
+          <div className="bg-blue-600/10 border border-blue-500/30 rounded-lg p-3 mb-4 flex-shrink-0">
+            <div className="flex items-center space-x-2">
+              <FaLayerGroup className="w-4 h-4 text-blue-400" />
+              <span className="text-sm text-blue-300 font-medium">Consolidated View</span>
+              <span className="text-xs text-blue-400/70">•</span>
+              <span className="text-xs text-blue-400/70">
+                Showing combined data from {allWallets.length} wallets:
+              </span>
+              <div className="flex items-center space-x-1 flex-wrap">
+                {allWallets.slice(0, 3).map((w, i) => (
+                  <span key={w.address} className="text-xs bg-blue-600/20 text-blue-300 px-2 py-0.5 rounded">
+                    {w.alias || `Account ${i + 1}`}
+                  </span>
                 ))}
+                {allWallets.length > 3 && (
+                  <span className="text-xs text-blue-400/70">+{allWallets.length - 3} more</span>
+                )}
               </div>
+            </div>
+          </div>
+        )}
 
-              {/* Tab Content */}
+        {/* KPI Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-4 flex-shrink-0">
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2.5 sm:p-3">
+            <div className="text-[9px] sm:text-[10px] text-gray-500 uppercase tracking-wider mb-1">
+              Total P&L {selectedWalletIndex === 'all' && <span className="text-blue-400 normal-case">(All Wallets)</span>}
+            </div>
+            <div className={`text-base sm:text-lg font-semibold ${(tradingData?.totalPnL ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {(tradingData?.totalPnL ?? 0) >= 0 ? '+' : '-'}${formatNumber(Math.abs(tradingData?.totalPnL ?? 0))}
+            </div>
+            <div className={`text-[9px] sm:text-[10px] ${(tradingData?.totalPnLPercentage ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {(tradingData?.totalPnLPercentage ?? 0) >= 0 ? '+' : ''}{formatNumber(tradingData?.totalPnLPercentage ?? 0)}%
+            </div>
+          </div>
+          
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2.5 sm:p-3">
+            <div className="text-[9px] sm:text-[10px] text-gray-500 uppercase tracking-wider mb-1">
+              Total Volume {selectedWalletIndex === 'all' && <span className="text-blue-400 normal-case">(All Wallets)</span>}
+            </div>
+            <div className="text-base sm:text-lg font-semibold text-gray-200">
+              ${formatNumber(tradingData?.totalVolume ?? 0)}
+            </div>
+            <div className="text-[9px] sm:text-[10px] text-gray-500">
+              {tradingData?.totalTrades ?? 0} trades
+            </div>
+          </div>
+          
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2.5 sm:p-3">
+            <div className="text-[9px] sm:text-[10px] text-gray-500 uppercase tracking-wider mb-1">
+              Win Rate {selectedWalletIndex === 'all' && <span className="text-blue-400 normal-case">(All Wallets)</span>}
+            </div>
+            <div className="text-base sm:text-lg font-semibold text-gray-200">
+              {formatNumber(tradingData?.winRate ?? 0, 0)}%
+            </div>
+            <div className="text-[9px] sm:text-[10px] text-gray-500">
+              {tradingData?.completedTrades ?? 0} completed
+            </div>
+          </div>
+          
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-2.5 sm:p-3">
+            <div className="text-[9px] sm:text-[10px] text-gray-500 uppercase tracking-wider mb-1">
+              Positions {selectedWalletIndex === 'all' && <span className="text-blue-400 normal-case">(All Wallets)</span>}
+            </div>
+            <div className="text-base sm:text-lg font-semibold text-gray-200">
+              {openPositions.length} open
+            </div>
+            <div className="text-[9px] sm:text-[10px] text-gray-500">
+              {closedPositions.length} closed
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex items-center gap-0.5 border-b border-gray-800 mb-4 flex-shrink-0 overflow-x-auto scrollbar-hide -mx-3 px-3 sm:mx-0 sm:px-0">
+          {(["overview", "positions", "trades", "analytics", "tax"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                activeTab === tab
+                  ? "text-blue-400 border-b-2 border-blue-400 -mb-[1px]"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content */}
+        <div className="flex-1 min-h-0 md:overflow-hidden overflow-y-auto pb-4 md:pb-0">
+          {loading ? (
+            <div className="flex items-center justify-center h-full">
+              <LoadingSpinner variant="dots" size="md" text="Loading trading data..." />
+            </div>
+          ) : (allWallets.length === 0 || (selectedWalletIndex !== 'all' && !walletAddress)) ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FaWallet className="w-8 h-8 text-gray-500" />
+                </div>
+                <p className="text-gray-400 mb-4">
+                  {allWallets.length === 0 
+                    ? "Create or import a wallet to view trading data" 
+                    : "Select a wallet to view trading data"}
+                </p>
+                <button
+                  onClick={() => {
+                    try {
+                      (window as any).dispatchEvent(new CustomEvent('open-wallet'));
+                    } catch {}
+                  }}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
+                >
+                  {allWallets.length === 0 ? "Open Wallet" : "Select Wallet"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="h-full">
               {activeTab === "overview" && (
-                <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-3 overflow-hidden pb-8 lg:pb-4">
-                  {/* PnL Chart */}
-                  <div className="bg-gray-900/80 border border-gray-600/50 rounded-lg p-2 sm:p-3 flex flex-col h-[240px] lg:h-[280px]">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2 flex-shrink-0">
-                      <h3 className="text-xs sm:text-sm text-white">P&L Over Time</h3>
-                      <div className="flex items-center gap-1">
-                        {["7d", "30d", "90d", "all"].map((range) => (
+                <div className="space-y-3 sm:space-y-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+                  {/* P&L Over Time */}
+                  <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 sm:p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm font-medium text-gray-200">P&L Over Time</h3>
+                      <div className="flex bg-gray-800 rounded-md p-0.5">
+                        {(["7d", "30d", "90d", "all"] as const).map((tf) => (
                           <button
-                            key={range}
-                            onClick={() => setTimeRange(range as any)}
-                            className={`px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs rounded transition-colors ${
-                              timeRange === range
-                                ? "bg-blue-600 text-white"
-                                : "bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-300"
+                            key={tf}
+                            onClick={() => setTimeframe(tf)}
+                            className={`px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium rounded transition-all ${
+                              timeframe === tf
+                                ? "bg-blue-600 text-white shadow-sm"
+                                : "text-gray-400 hover:text-gray-200"
                             }`}
                           >
-                            {range}
+                            {tf === 'all' ? 'ALL' : tf.toUpperCase()}
                           </button>
                         ))}
                       </div>
                     </div>
-                    <div className="flex-1 min-h-0 flex flex-col">
-                      {cumulativePnL.length > 0 ? (
-                        <div className="flex-1 min-h-0 flex flex-col relative" style={{ paddingTop: '8px', paddingBottom: '32px' }}>
-                          {/* Y-axis labels - Better positioned */}
-                          <div className="absolute left-0 top-8 bottom-8 w-10 sm:w-12 flex flex-col justify-between text-[10px] sm:text-xs text-gray-400 pr-1 sm:pr-2 pointer-events-none z-0">
-                            {(() => {
-                              const maxPnL = Math.max(...cumulativePnL.map(i => i.cumulative), 0);
-                              const minPnL = Math.min(...cumulativePnL.map(i => i.cumulative), 0);
-                              const range = maxPnL - minPnL || 1;
+                    <div className="h-36">
+                      {(() => {
+                        // Filter data based on timeframe
+                        const now = new Date();
+                        const allData = tradingData?.dailyPnL || [];
+                        const filteredData = allData.filter(d => {
+                          if (timeframe === 'all') return true;
+                          const date = new Date(d.date);
+                          const daysAgo = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+                          if (timeframe === '7d') return daysAgo <= 7;
+                          if (timeframe === '30d') return daysAgo <= 30;
+                          if (timeframe === '90d') return daysAgo <= 90;
+                          return true;
+                        });
+
+                        if (filteredData.length === 0) {
+                          return <div className="h-full flex items-center justify-center text-gray-500 text-xs">No P&L data for this period</div>;
+                        }
+
+                        // Calculate cumulative P&L and scale to match actual totalPnL
+                        let cumulative = 0;
+                        const rawCumulativeData = filteredData.map(d => {
+                          cumulative += d.pnl;
+                          return { ...d, cumPnl: cumulative };
+                        });
+                        
+                        // Scale the cumulative values to match actual totalPnL
+                        const rawTotal = rawCumulativeData[rawCumulativeData.length - 1]?.cumPnl || 0;
+                        const actualTotal = tradingData?.totalPnL ?? 0;
+                        const scaleFactor = rawTotal !== 0 ? actualTotal / rawTotal : 1;
+                        
+                        const cumulativeData = rawCumulativeData.map(d => ({
+                          ...d,
+                          cumPnl: d.cumPnl * scaleFactor
+                        }));
+
+                        const values = cumulativeData.map(d => d.cumPnl);
+                        const minVal = Math.min(...values, 0);
+                        const maxVal = Math.max(...values, 0);
+                        const range = maxVal - minVal || 1;
+                        const padding = range * 0.1; // 10% padding
+                        const adjustedMin = minVal - padding;
+                        const adjustedMax = maxVal + padding;
+                        const adjustedRange = adjustedMax - adjustedMin || 1;
+
+                        // Chart dimensions
+                        const chartWidth = 340;
+                        const chartHeight = 80;
+                        const leftPadding = 45;
+                        const rightPadding = 10;
+                        const topPadding = 5;
+                        const bottomPadding = 20;
+
+                        const points = cumulativeData.map((d, i) => {
+                          const x = leftPadding + (i / (cumulativeData.length - 1 || 1)) * (chartWidth - leftPadding - rightPadding);
+                          const y = topPadding + (1 - (d.cumPnl - adjustedMin) / adjustedRange) * chartHeight;
+                          return `${x},${y}`;
+                        }).join(' ');
+
+                        const lastValue = tradingData?.totalPnL ?? 0; // Use actual total P&L
+                        const isPositive = lastValue >= 0;
+                        
+                        // Create area fill points
+                        const firstX = leftPadding;
+                        const lastX = leftPadding + (chartWidth - leftPadding - rightPadding);
+                        const baseY = topPadding + chartHeight;
+                        const areaPoints = `${firstX},${baseY} ${points} ${lastX},${baseY}`;
+
+                        // Y-axis labels (3 points: max, mid, min)
+                        const yLabels = [
+                          { value: adjustedMax, y: topPadding },
+                          { value: (adjustedMax + adjustedMin) / 2, y: topPadding + chartHeight / 2 },
+                          { value: adjustedMin, y: topPadding + chartHeight }
+                        ];
+
+                        // X-axis labels (start, middle, end)
+                        const xLabels = [
+                          { date: cumulativeData[0]?.date, x: leftPadding },
+                          { date: cumulativeData[Math.floor(cumulativeData.length / 2)]?.date, x: leftPadding + (chartWidth - leftPadding - rightPadding) / 2 },
+                          { date: cumulativeData[cumulativeData.length - 1]?.date, x: lastX }
+                        ];
+
+                        // Zero line position
+                        const zeroY = topPadding + (1 - (0 - adjustedMin) / adjustedRange) * chartHeight;
+
+                        return (
+                          <div className="w-full h-full">
+                            <svg width="100%" height="100%" viewBox={`0 0 ${chartWidth} ${chartHeight + topPadding + bottomPadding}`} preserveAspectRatio="xMidYMid meet">
+                              {/* Grid lines */}
+                              {[0, 1, 2].map(i => (
+                                <line
+                                  key={`grid-${i}`}
+                                  x1={leftPadding}
+                                  y1={topPadding + (chartHeight / 2) * i}
+                                  x2={chartWidth - rightPadding}
+                                  y2={topPadding + (chartHeight / 2) * i}
+                                  stroke="#1f2937"
+                                  strokeWidth="1"
+                                />
+                              ))}
                               
-                              // Generate 5 evenly distributed labels from top to bottom
-                              const labels = [];
-                              for (let i = 0; i < 5; i++) {
-                                const value = maxPnL - (range / 4 * i);
-                                labels.push(value);
-                              }
-                              
-                              return labels.map((value, i) => (
-                                <div key={`y-label-${i}`} className="text-right">
-                                  {formatCurrency(value)}
-                                </div>
-                              ));
-                            })()}
+                              {/* Zero line (if in range) */}
+                              {adjustedMin < 0 && adjustedMax > 0 && (
+                                <line
+                                  x1={leftPadding}
+                                  y1={zeroY}
+                                  x2={chartWidth - rightPadding}
+                                  y2={zeroY}
+                                  stroke="#4b5563"
+                                  strokeWidth="1"
+                                  strokeDasharray="4,2"
+                                />
+                              )}
+
+                              {/* Area fill */}
+                              <polygon
+                                points={areaPoints}
+                                fill={isPositive ? "rgba(34, 197, 94, 0.15)" : "rgba(239, 68, 68, 0.15)"}
+                              />
+
+                              {/* Line */}
+                              <polyline
+                                points={points}
+                                fill="none"
+                                stroke={isPositive ? "#22c55e" : "#ef4444"}
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+
+                              {/* End point dot */}
+                              {cumulativeData.length > 0 && (
+                                <circle
+                                  cx={lastX}
+                                  cy={topPadding + (1 - (lastValue - adjustedMin) / adjustedRange) * chartHeight}
+                                  r="3"
+                                  fill={isPositive ? "#22c55e" : "#ef4444"}
+                                />
+                              )}
+
+                              {/* Y-axis labels */}
+                              {yLabels.map((label, i) => (
+                                <text
+                                  key={`y-${i}`}
+                                  x={leftPadding - 4}
+                                  y={label.y + 3}
+                                  textAnchor="end"
+                                  className="fill-gray-500"
+                                  style={{ fontSize: '9px' }}
+                                >
+                                  ${formatNumber(label.value, 0)}
+                                </text>
+                              ))}
+
+                              {/* X-axis labels */}
+                              {xLabels.map((label, i) => (
+                                <text
+                                  key={`x-${i}`}
+                                  x={label.x}
+                                  y={chartHeight + topPadding + 14}
+                                  textAnchor={i === 0 ? "start" : i === 2 ? "end" : "middle"}
+                                  className="fill-gray-500"
+                                  style={{ fontSize: '9px' }}
+                                >
+                                  {label.date ? new Date(label.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+                                </text>
+                              ))}
+                            </svg>
                           </div>
-                          
-                          {/* Chart area with bars */}
-                          <div className="flex-1 min-h-0 flex items-end justify-between gap-1 sm:gap-1.5 ml-10 sm:ml-12 relative">
-                              {cumulativePnL.map((item, idx) => {
-                                const maxPnL = Math.max(...cumulativePnL.map(i => i.cumulative), 0);
-                                const minPnL = Math.min(...cumulativePnL.map(i => i.cumulative), 0);
-                                const range = maxPnL - minPnL || 1;
-                                const normalizedValue = (item.cumulative - minPnL) / range;
-                                // Calculate bar height as percentage of available space
-                                const height = Math.max(normalizedValue * 100, 5);
-                                
-                                // Format date for label
-                                const date = new Date(item.date);
-                                const dateLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                                
-                                return (
-                                  <div
-                                    key={idx}
-                                    className="flex-1 flex flex-col items-center justify-end group relative h-full"
-                                  >
-                                    {/* Bar */}
-                                    <div
-                                      className={`w-full rounded-t transition-all hover:opacity-90 cursor-pointer ${
-                                        item.cumulative >= 0 
-                                          ? "bg-green-500" 
-                                          : "bg-red-500"
-                                      }`}
-                                      style={{ height: `${height}%`, minHeight: '4px' }}
-                                      title={`${dateLabel}: ${item.cumulative >= 0 ? '+' : ''}${formatCurrency(item.cumulative)}`}
-                                    />
-                                    {/* Date label below bar */}
-                                    <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-xs text-gray-400 whitespace-nowrap">
-                                      {dateLabel}
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Portfolio Allocation */}
+                  <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 sm:p-4">
+                    <h3 className="text-sm font-medium text-gray-200 mb-3">Portfolio Allocation</h3>
+                    <div className="h-32">
+                      {tradingData?.holding && tradingData.holding > 0 ? (
+                        <div className="flex items-center h-full gap-4">
+                          {/* Simple donut chart */}
+                          <div className="relative w-24 h-24 flex-shrink-0">
+                            <svg viewBox="0 0 36 36" className="w-full h-full">
+                              <circle
+                                cx="18" cy="18" r="14"
+                                fill="none"
+                                stroke="#1f2937"
+                                strokeWidth="4"
+                              />
+                              <circle
+                                cx="18" cy="18" r="14"
+                                fill="none"
+                                stroke="#3b82f6"
+                                strokeWidth="4"
+                                strokeDasharray={`${(tradingData.holding / (tradingData.bought || 1)) * 88} 88`}
+                                strokeLinecap="round"
+                                transform="rotate(-90 18 18)"
+                              />
+                            </svg>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="text-xs font-medium text-white">${formatNumber(tradingData.holding)}</span>
+                            </div>
+                          </div>
+                          {/* Legend */}
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                                <span className="text-xs text-gray-400">Holdings</span>
+                              </div>
+                              <span className="text-xs text-white">${formatNumber(tradingData.holding)}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                <span className="text-xs text-gray-400">Bought</span>
+                              </div>
+                              <span className="text-xs text-white">${formatNumber(tradingData.bought)}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                                <span className="text-xs text-gray-400">Sold</span>
+                              </div>
+                              <span className="text-xs text-white">${formatNumber(tradingData.sold)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="h-full flex items-center justify-center text-gray-500 text-xs">No holdings</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recent Trades */}
+                <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 sm:p-4">
+                  <h3 className="text-sm font-medium text-gray-200 mb-3">Recent Trades</h3>
+                  {tradingData?.recentTrades && tradingData.recentTrades.length > 0 ? (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto scrollbar-hide">
+                      {tradingData.recentTrades.slice(0, 10).map((trade, idx) => (
+                        <div key={trade.id || idx} className="flex items-center justify-between p-2 bg-gray-700/30 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
+                              trade.type === 'buy' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                            }`}>
+                              {(trade.type || 'BUY').toUpperCase()}
+                            </span>
+                            <span className="text-xs text-gray-200">{shortenToken(trade.tokenOut)}</span>
+                            <span className="text-gray-500 text-[10px]">{trade.timestamp ? formatTimeAgo(trade.timestamp) : ''}</span>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs text-gray-200">{formatTokenAmount(trade.amountOut)}</div>
+                            <div className="text-gray-500 text-[10px]">{formatTokenAmount(trade.amountIn)} {trade.tokenIn === 'ETH' ? 'ETH' : ''}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-gray-500 text-xs">No recent trades</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === "positions" && (() => {
+              const openTotalPages = Math.ceil(openPositions.length / POSITIONS_PER_PAGE);
+              const closedTotalPages = Math.ceil(closedPositions.length / POSITIONS_PER_PAGE);
+              const paginatedOpenPositions = openPositions.slice(
+                (openPositionsPage - 1) * POSITIONS_PER_PAGE,
+                openPositionsPage * POSITIONS_PER_PAGE
+              );
+              const paginatedClosedPositions = closedPositions.slice(
+                (closedPositionsPage - 1) * POSITIONS_PER_PAGE,
+                closedPositionsPage * POSITIONS_PER_PAGE
+              );
+              
+              return (
+                <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 sm:p-4 md:max-h-[calc(100vh-380px)] overflow-y-auto scrollbar-hide">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-medium text-gray-200">Positions</h3>
+                    <div className="text-xs text-gray-500">
+                      {openPositions.length} open · {closedPositions.length} closed
+                    </div>
+                  </div>
+                  {openPositions.length > 0 || closedPositions.length > 0 ? (
+                    <div className="space-y-4">
+                      {/* Open Positions Section */}
+                      {openPositions.length > 0 && (
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Open Positions</h4>
+                            {openTotalPages > 1 && (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => setOpenPositionsPage(p => Math.max(1, p - 1))}
+                                  disabled={openPositionsPage === 1}
+                                  className="w-8 h-8 flex items-center justify-center rounded-md bg-gray-700/50 text-sm text-gray-300 hover:bg-gray-600 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  ‹
+                                </button>
+                                <span className="text-xs text-gray-400 min-w-[40px] text-center">{openPositionsPage} / {openTotalPages}</span>
+                                <button
+                                  onClick={() => setOpenPositionsPage(p => Math.min(openTotalPages, p + 1))}
+                                  disabled={openPositionsPage === openTotalPages}
+                                  className="w-8 h-8 flex items-center justify-center rounded-md bg-gray-700/50 text-sm text-gray-300 hover:bg-gray-600 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  ›
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          <div className="space-y-1.5">
+                            {paginatedOpenPositions.map((pos, idx) => {
+                              const pnl = pos.pnl ?? 0;
+                              const pnlPct = pos.pnlPercentage ?? 0;
+                              const isPositive = pnl >= 0 && Math.abs(pnl) >= 0.01;
+                              const isNeutral = Math.abs(pnl) < 0.01;
+                              
+                              return (
+                                <div key={pos.tokenAddress || idx} className="p-2.5 bg-gray-700/30 rounded-lg">
+                                  <div className="flex items-center justify-between">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-xs font-medium text-gray-200 truncate">{shortenToken(pos.tokenSymbol)}</div>
+                                      <div className="text-[10px] text-gray-500">Qty: {formatTokenAmount(pos.amount)}</div>
+                                    </div>
+                                    <div className="text-right flex-shrink-0 ml-2">
+                                      <div className={`text-xs font-medium ${isNeutral ? 'text-gray-400' : isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                                        {isNeutral ? '$0.00' : `${pnl >= 0 ? '+' : '-'}$${formatPnLValue(Math.abs(pnl))}`}
+                                      </div>
+                                      <div className={`text-[10px] ${isNeutral ? 'text-gray-500' : isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                                        {isNeutral ? '0%' : `${pnlPct >= 0 ? '+' : '-'}${formatPercentage(Math.abs(pnlPct))}%`}
+                                      </div>
                                     </div>
                                   </div>
-                                );
-                              })}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
-                          No data available
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                         {/* Portfolio Allocation */}
-                         <div className="bg-gray-900/80 border border-gray-600/50 rounded-lg p-2 sm:p-3 flex flex-col h-[240px] lg:h-[280px]">
-                           <h3 className="text-xs sm:text-sm text-white mb-2 flex-shrink-0">Portfolio Allocation</h3>
-                           <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 scrollbar-thin lg:scrollbar-none">
-                             {portfolioAllocation.length > 0 ? (
-                               portfolioAllocation.slice(0, 8).map((item, idx) => {
-                                 // Create a unique key that's guaranteed to be unique even if addresses duplicate
-                                 const uniqueKey = `portfolio-${item.address?.toLowerCase() || `unknown-${idx}`}-${idx}`;
-                                 return (
-                                 <div key={uniqueKey} className="flex items-center gap-2">
-                                   <div className="flex-1 min-w-0">
-                                     <div className="flex items-center justify-between mb-1">
-                                       <span className="text-sm text-white truncate" title={item.name || item.symbol || item.address}>
-                                         {item.name || item.symbol || `${item.address?.slice(0, 6)}...${item.address?.slice(-4)}`}
-                                       </span>
-                                       <span className="text-sm text-gray-300 ml-2 flex-shrink-0">{item.percentage.toFixed(1)}%</span>
-                                     </div>
-                                     <div className="w-full bg-gray-800/50 rounded-full h-2 overflow-hidden">
-                                       <div
-                                         className="bg-gradient-to-r from-blue-500 via-blue-400 to-blue-300 h-full rounded-full transition-all"
-                                         style={{ width: `${item.percentage}%` }}
-                                       />
-                                     </div>
-                                   </div>
-                                   <div className="text-sm text-white w-20 text-right">
-                                     {formatCurrency(item.value)}
-                                   </div>
-                                 </div>
-                                 );
-                               })
-                      ) : (
-                        <div className="text-center text-gray-400 text-sm py-4">
-                          No positions
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Recent Trades */}
-                  <div className="lg:col-span-2 bg-gray-900/80 border border-gray-600/50 rounded-lg p-2 sm:p-3 flex flex-col h-[250px] lg:h-[280px] mb-8 lg:mb-4">
-                    <h3 className="text-xs sm:text-sm text-white mb-2 flex-shrink-0">Recent Trades</h3>
-                    <div className="flex-1 min-h-0 overflow-y-auto space-y-2 scrollbar-thin lg:scrollbar-none">
-                      {stats?.recentTrades && stats.recentTrades.length > 0 ? (
-                        stats.recentTrades.slice(0, 8).map((trade) => (
-                          <div
-                            key={trade.id}
-                            className="flex items-center justify-between p-2 bg-gray-800/50 hover:bg-gray-800/70 rounded transition-colors border border-gray-700/30"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5 mb-0.5">
-                                <span className={`text-xs px-1 py-0.5 rounded ${
-                                  trade.type === 'buy' 
-                                    ? 'bg-green-500/20 text-green-400' 
-                                    : 'bg-red-500/20 text-red-400'
-                                }`}>
-                                  {trade.type.toUpperCase()}
-                                </span>
-                                <span className="text-xs text-white truncate">{trade.tokenOut}</span>
-                              </div>
-                              <div className="text-xs text-gray-400">
-                                {formatTimeAgo(trade.timestamp)}
-                              </div>
-                            </div>
-                            <div className="text-right ml-2 flex-shrink-0">
-                              <div className="text-xs text-white">
-                                {parseFloat(trade.amountOut).toLocaleString()}
-                              </div>
-                              <div className={`text-xs mt-0.5 ${
-                                trade.status === 'completed' 
-                                  ? 'text-green-400/80' 
-                                  : trade.status === 'pending'
-                                  ? 'text-yellow-400/80'
-                                  : 'text-red-400/80'
-                              }`}>
-                                {trade.status}
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-center text-gray-500 text-xs py-4">
-                          No trades
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === "positions" && (() => {
-                const totalPages = Math.ceil(positions.length / itemsPerPage);
-                const startIndex = (positionsPage - 1) * itemsPerPage;
-                const endIndex = startIndex + itemsPerPage;
-                const paginatedPositions = positions.slice(startIndex, endIndex);
-                
-                return (
-                  <div className="flex-1 min-h-0 bg-gray-800/50 border border-gray-700/50 rounded-lg overflow-hidden flex flex-col">
-                    <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
-                      <table className="w-full">
-                        <thead className="bg-gray-700/20 border-b border-gray-700/50 sticky top-0 z-10">
-                          <tr>
-                            <th className="text-left py-2 px-2 sm:py-2.5 sm:px-3 text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Token</th>
-                            <th className="text-left py-2 px-2 sm:py-2.5 sm:px-3 text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide hidden sm:table-cell">Amount</th>
-                            <th className="text-left py-2 px-2 sm:py-2.5 sm:px-3 text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide hidden md:table-cell">Avg Price</th>
-                            <th className="text-left py-2 px-2 sm:py-2.5 sm:px-3 text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide hidden lg:table-cell">Current</th>
-                            <th className="text-left py-2 px-2 sm:py-2.5 sm:px-3 text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">P&L</th>
-                            <th className="text-left py-2 px-2 sm:py-2.5 sm:px-3 text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {positions.length === 0 ? (
-                            <tr>
-                              <td colSpan={6} className="text-center py-4 text-gray-400 text-xs">
-                                No positions found
-                              </td>
-                            </tr>
-                          ) : (
-                            paginatedPositions.map((position) => {
-                              const pnlPct = position.pnlPercentage ?? 0;
-                              const pnlColor = pnlPct >= 0 ? 'text-green-400' : 'text-red-400';
-                              return (
-                                <tr
-                                  key={position.id}
-                                  className="border-b border-gray-700/20 hover:bg-gray-700/10 cursor-pointer transition-colors"
-                                  onClick={() => router.push(`/explore/${position.tokenAddress}/chart`)}
-                                >
-                                  <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-white text-xs sm:text-sm">{position.tokenSymbol}</td>
-                                  <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-gray-300 text-xs sm:text-sm hidden sm:table-cell">
-                                    {parseFloat(position.amount).toLocaleString()}
-                                  </td>
-                                  <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-gray-300 text-xs sm:text-sm hidden md:table-cell">
-                                    ${parseFloat(position.avgPrice).toFixed(6)}
-                                  </td>
-                                  <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-gray-300 text-xs sm:text-sm hidden lg:table-cell">
-                                    ${parseFloat(position.currentPrice || "0").toFixed(6)}
-                                  </td>
-                                  <td className={`py-2 px-2 sm:py-2.5 sm:px-3 text-xs sm:text-sm ${pnlColor}`}>
-                                    {position.pnl || `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`}
-                                  </td>
-                                  <td className="py-2 px-2 sm:py-2.5 sm:px-3">
-                                    <span
-                                      className={`px-1 sm:px-1.5 py-0.5 rounded text-[10px] sm:text-xs ${
-                                        position.status === 'open'
-                                          ? 'bg-green-500/20 text-green-400'
-                                          : 'bg-gray-500/20 text-gray-400'
-                                      }`}
-                                    >
-                                      {position.status}
-                                    </span>
-                                  </td>
-                                </tr>
+                                </div>
                               );
-                            })
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                    {positions.length > 0 && (
-                      <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-2 sm:px-3 py-2 border-t border-gray-700/50 bg-gray-700/10 flex-shrink-0">
-                        <div className="text-xs text-gray-400">
-                          {positions.length > itemsPerPage ? (
-                            <>Showing {startIndex + 1}-{Math.min(endIndex, positions.length)} of {positions.length}</>
-                          ) : (
-                            <>Showing {positions.length} {positions.length === 1 ? 'position' : 'positions'}</>
-                          )}
-                        </div>
-                        {positions.length > itemsPerPage && (
-                          <div className="flex items-center gap-1.5 sm:gap-2">
-                            <button
-                              onClick={() => setPositionsPage(prev => Math.max(1, prev - 1))}
-                              disabled={positionsPage === 1}
-                              className="px-2 sm:px-3 py-1 text-[10px] sm:text-xs text-white bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                              Prev
-                            </button>
-                            <span className="text-[10px] sm:text-xs text-gray-400">
-                              {positionsPage}/{totalPages}
-                            </span>
-                            <button
-                              onClick={() => setPositionsPage(prev => Math.min(totalPages, prev + 1))}
-                              disabled={positionsPage === totalPages}
-                              className="px-2 sm:px-3 py-1 text-[10px] sm:text-xs text-white bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                              Next
-                            </button>
+                            })}
                           </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+                        </div>
+                      )}
+                      
+                      {/* Closed Positions Section */}
+                      {closedPositions.length > 0 && (
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Closed Positions</h4>
+                            {closedTotalPages > 1 && (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => setClosedPositionsPage(p => Math.max(1, p - 1))}
+                                  disabled={closedPositionsPage === 1}
+                                  className="w-8 h-8 flex items-center justify-center rounded-md bg-gray-700/50 text-sm text-gray-300 hover:bg-gray-600 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  ‹
+                                </button>
+                                <span className="text-xs text-gray-400 min-w-[40px] text-center">{closedPositionsPage} / {closedTotalPages}</span>
+                                <button
+                                  onClick={() => setClosedPositionsPage(p => Math.min(closedTotalPages, p + 1))}
+                                  disabled={closedPositionsPage === closedTotalPages}
+                                  className="w-8 h-8 flex items-center justify-center rounded-md bg-gray-700/50 text-sm text-gray-300 hover:bg-gray-600 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  ›
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          <div className="space-y-1.5">
+                            {paginatedClosedPositions.map((pos, idx) => {
+                              const pnl = pos.pnl ?? 0;
+                              const pnlPct = pos.pnlPercentage ?? 0;
+                              const isPositive = pnl >= 0 && Math.abs(pnl) >= 0.01;
+                              const isNeutral = Math.abs(pnl) < 0.01;
+                              
+                              return (
+                                <div key={`${pos.tokenAddress || idx}-${pos.exitDate || idx}`} className="p-2.5 bg-gray-700/30 rounded-lg">
+                                  <div className="flex items-center justify-between">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-xs font-medium text-gray-200 truncate">{shortenToken(pos.tokenSymbol)}</div>
+                                      <div className="text-[10px] text-gray-500">{pos.exitDate ? formatDate(pos.exitDate) : ''}</div>
+                                    </div>
+                                    <div className="text-right flex-shrink-0 ml-2">
+                                      <div className={`text-xs font-medium ${isNeutral ? 'text-gray-400' : isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                                        {isNeutral ? '$0.00' : `${pnl >= 0 ? '+' : '-'}$${formatPnLValue(Math.abs(pnl))}`}
+                                      </div>
+                                      <div className={`text-[10px] ${isNeutral ? 'text-gray-500' : isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                                        {isNeutral ? '0%' : `${pnlPct >= 0 ? '+' : '-'}${formatPercentage(Math.abs(pnlPct))}%`}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500 text-xs">No positions found</div>
+                  )}
+                </div>
+              );
+            })()}
 
-              {activeTab === "trades" && stats?.recentTrades && (() => {
-                const totalPages = Math.ceil(stats.recentTrades.length / itemsPerPage);
-                const startIndex = (tradesPage - 1) * itemsPerPage;
-                const endIndex = startIndex + itemsPerPage;
-                const paginatedTrades = stats.recentTrades.slice(startIndex, endIndex);
-                
-                return (
-                  <div className="flex-1 min-h-0 bg-gray-800/50 border border-gray-700/50 rounded-lg overflow-hidden flex flex-col">
-                    <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
-                      <table className="w-full">
-                        <thead className="bg-gray-700/20 border-b border-gray-700/50 sticky top-0 z-10">
-                          <tr>
-                            <th className="text-left py-2 px-2 sm:py-2.5 sm:px-3 text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Time</th>
-                            <th className="text-left py-2 px-2 sm:py-2.5 sm:px-3 text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Type</th>
-                            <th className="text-left py-2 px-2 sm:py-2.5 sm:px-3 text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide hidden sm:table-cell">Token In</th>
-                            <th className="text-left py-2 px-2 sm:py-2.5 sm:px-3 text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Token Out</th>
-                            <th className="text-left py-2 px-2 sm:py-2.5 sm:px-3 text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide hidden md:table-cell">Amount</th>
-                            <th className="text-left py-2 px-2 sm:py-2.5 sm:px-3 text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Status</th>
+            {activeTab === "trades" && (
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 sm:p-4">
+                <h3 className="text-sm font-medium text-gray-200 mb-3">Trade History</h3>
+                {tradingData?.recentTrades && tradingData.recentTrades.length > 0 ? (
+                  <div className="overflow-x-auto scrollbar-hide">
+                    <table className="w-full">
+                      <thead className="text-[10px] text-gray-500 border-b border-gray-700 uppercase tracking-wider">
+                        <tr>
+                          <th className="text-left py-2 font-medium">Time</th>
+                          <th className="text-left py-2 font-medium">Type</th>
+                          <th className="text-left py-2 font-medium">Token In</th>
+                          <th className="text-left py-2 font-medium">Token Out</th>
+                          <th className="text-right py-2 font-medium">Amount In</th>
+                          <th className="text-right py-2 font-medium">Amount Out</th>
+                          <th className="text-center py-2 font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tradingData.recentTrades.map((trade, idx) => (
+                          <tr key={trade.id || idx} className="border-b border-gray-700/30 hover:bg-gray-700/20">
+                            <td className="py-2 text-xs text-gray-400">{trade.timestamp ? formatTimeAgo(trade.timestamp) : '-'}</td>
+                            <td className="py-2">
+                              <span className={`text-xs font-medium ${trade.type === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
+                                {(trade.type || 'BUY').toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="py-2 text-xs text-gray-300">{trade.tokenIn === 'ETH' ? 'ETH' : shortenToken(trade.tokenIn)}</td>
+                            <td className="py-2 text-xs text-gray-300">{trade.tokenOut === 'ETH' ? 'ETH' : shortenToken(trade.tokenOut)}</td>
+                            <td className="py-2 text-xs text-gray-300 text-right font-mono">{formatTokenAmount(trade.amountIn)}</td>
+                            <td className="py-2 text-xs text-gray-300 text-right font-mono">{formatTokenAmount(trade.amountOut)}</td>
+                            <td className="py-2 text-center">
+                              <span className={`px-1.5 py-0.5 text-[10px] rounded ${
+                                trade.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                                trade.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                                'bg-red-500/20 text-red-400'
+                              }`}>
+                                {trade.status || 'completed'}
+                              </span>
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {stats.recentTrades.length === 0 ? (
-                            <tr>
-                              <td colSpan={6} className="text-center py-4 text-gray-400 text-xs">
-                                No trades found
-                              </td>
-                            </tr>
-                          ) : (
-                            paginatedTrades.map((trade) => (
-                              <tr
-                                key={trade.id}
-                                className="border-b border-gray-700/20 hover:bg-gray-700/10 transition-colors"
-                              >
-                                <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-gray-300 text-xs sm:text-sm">
-                                  {formatTimeAgo(trade.timestamp)}
-                                </td>
-                                <td className="py-2 px-2 sm:py-2.5 sm:px-3">
-                                  <span
-                                    className={`text-[10px] sm:text-xs px-1 sm:px-1.5 py-0.5 rounded ${
-                                      trade.type === 'buy' 
-                                        ? 'bg-green-500/20 text-green-400' 
-                                        : 'bg-red-500/20 text-red-400'
-                                    }`}
-                                  >
-                                    {trade.type.toUpperCase()}
-                                  </span>
-                                </td>
-                                <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-gray-300 text-xs sm:text-sm hidden sm:table-cell">{trade.tokenIn}</td>
-                                <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-gray-300 text-xs sm:text-sm">{trade.tokenOut}</td>
-                                <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-gray-300 text-xs sm:text-sm hidden md:table-cell">
-                                  {parseFloat(trade.amountOut).toLocaleString()}
-                                </td>
-                                <td className="py-2.5 px-3">
-                                  <span
-                                    className={`px-1.5 py-0.5 rounded text-xs ${
-                                      trade.status === 'completed'
-                                        ? 'bg-green-500/20 text-green-400'
-                                        : trade.status === 'pending'
-                                        ? 'bg-yellow-500/20 text-yellow-400'
-                                        : 'bg-red-500/20 text-red-400'
-                                    }`}
-                                  >
-                                    {trade.status}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                    {stats.recentTrades.length > 0 && (
-                      <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-2 sm:px-3 py-2 border-t border-gray-700/50 bg-gray-700/10 flex-shrink-0">
-                        <div className="text-[10px] sm:text-xs text-gray-400">
-                          {stats.recentTrades.length > itemsPerPage ? (
-                            <>Showing {startIndex + 1}-{Math.min(endIndex, stats.recentTrades.length)} of {stats.recentTrades.length}</>
-                          ) : (
-                            <>Showing {stats.recentTrades.length} {stats.recentTrades.length === 1 ? 'trade' : 'trades'}</>
-                          )}
-                        </div>
-                        {stats.recentTrades.length > itemsPerPage && (
-                          <div className="flex items-center gap-1.5 sm:gap-2">
-                            <button
-                              onClick={() => setTradesPage(prev => Math.max(1, prev - 1))}
-                              disabled={tradesPage === 1}
-                              className="px-2 sm:px-3 py-1 text-[10px] sm:text-xs text-white bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                              Prev
-                            </button>
-                            <span className="text-[10px] sm:text-xs text-gray-400">
-                              {tradesPage}/{totalPages}
-                            </span>
-                            <button
-                              onClick={() => setTradesPage(prev => Math.min(totalPages, prev + 1))}
-                              disabled={tradesPage === totalPages}
-                              className="px-2 sm:px-3 py-1 text-[10px] sm:text-xs text-white bg-gray-700 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                              Next
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                );
-              })()}
+                ) : (
+                  <div className="text-center py-8 text-gray-500 text-xs">No trades found</div>
+                )}
+              </div>
+            )}
 
-              {activeTab === "analytics" && (
-                <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-3 overflow-hidden">
-                  {/* Trading Statistics */}
-                  <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 sm:p-3 flex flex-col overflow-hidden">
-                    <h3 className="text-xs sm:text-sm text-white mb-2 flex-shrink-0">Trading Statistics</h3>
-                    <div className="space-y-0">
-                      <div className="flex items-center justify-between py-2 border-b border-gray-700/30">
-                        <span className="text-sm text-gray-400">Total Trades</span>
-                        <span className="text-white text-sm">{stats?.totalTrades || 0}</span>
-                      </div>
-                      <div className="flex items-center justify-between py-2 border-b border-gray-700/30">
-                        <span className="text-sm text-gray-400">Completed Trades</span>
-                        <span className="text-white text-sm">{stats?.completedTrades || 0}</span>
-                      </div>
-                      <div className="flex items-center justify-between py-2 border-b border-gray-700/30">
-                        <span className="text-sm text-gray-400">Positions Closed</span>
-                        <span className="text-white text-sm">{stats?.positionsClosed || 0}</span>
-                      </div>
-                      <div className="flex items-center justify-between py-2 border-b border-gray-700/30">
-                        <span className="text-sm text-gray-400">Total Bought</span>
-                        <span className="text-green-400 text-sm">
-                          {stats?.bought ? formatCurrency(stats.bought) : "$0.00"}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between py-2 border-b border-gray-700/30">
-                        <span className="text-sm text-gray-400">Total Sold</span>
-                        <span className="text-red-400 text-sm">
-                          {stats?.sold ? formatCurrency(stats.sold) : "$0.00"}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between py-2">
-                        <span className="text-sm text-gray-400">Current Holdings</span>
-                        <span className="text-white text-sm">
-                          {(() => {
-                            // Use stats.holding which is calculated from buy/sell amounts * current prices
-                            // This ensures consistency with Total Bought and Total Sold
-                            if (stats?.holding !== undefined && stats.holding >= 0) {
-                              return formatCurrency(stats.holding);
-                            }
-                            // Fallback to totalWalletValue if stats.holding is not available
-                            return formatCurrency(totalWalletValue);
-                          })()}
-                        </span>
-                      </div>
+            {activeTab === "analytics" && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+                <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 sm:p-4">
+                  <h3 className="text-sm font-medium text-gray-200 mb-3">Trading Statistics</h3>
+                  <div className="space-y-2.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-400">Total Trades</span>
+                      <span className="text-gray-200">{tradingData?.totalTrades ?? 0}</span>
                     </div>
-                  </div>
-
-                  {/* Performance Metrics */}
-                  <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 sm:p-3 flex flex-col overflow-hidden">
-                    <h3 className="text-xs sm:text-sm text-white mb-2 flex-shrink-0">Performance Metrics</h3>
-                    <div className="space-y-0">
-                      <div className="flex items-center justify-between py-2 border-b border-gray-700/30">
-                        <span className="text-sm text-gray-400">Win Rate</span>
-                        <span className="text-white text-sm">
-                          {stats?.winRate ? `${stats.winRate.toFixed(1)}%` : "0%"}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between py-2 border-b border-gray-700/30">
-                        <span className="text-sm text-gray-400">Total P&L</span>
-                        <span
-                          className={`text-sm ${
-                            (stats?.totalPnL || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                          }`}
-                        >
-                          {stats?.totalPnL ? formatCurrency(stats.totalPnL) : "$0.00"}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between py-2 border-b border-gray-700/30">
-                        <span className="text-sm text-gray-400">P&L Percentage</span>
-                        <span
-                          className={`text-sm ${
-                            (stats?.totalPnLPercentage || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                          }`}
-                        >
-                          {stats?.totalPnLPercentage
-                            ? `${stats.totalPnLPercentage >= 0 ? '+' : ''}${stats.totalPnLPercentage.toFixed(2)}%`
-                            : '0.00%'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between py-2">
-                        <span className="text-sm text-gray-400">Average Trade Size</span>
-                        <span className="text-white text-sm">
-                          {stats?.totalTrades && stats.totalTrades > 0
-                            ? formatCurrency((stats.totalVolume || 0) / stats.totalTrades)
-                            : "$0.00"}
-                        </span>
-                      </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-400">Completed</span>
+                      <span className="text-gray-200">{tradingData?.completedTrades ?? 0}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-400">Positions Closed</span>
+                      <span className="text-gray-200">{tradingData?.positionsClosed ?? 0}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-400">Total Bought</span>
+                      <span className="text-green-400 font-mono">${formatNumber(tradingData?.bought ?? 0)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-400">Total Sold</span>
+                      <span className="text-red-400 font-mono">${formatNumber(tradingData?.sold ?? 0)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-400">Holdings</span>
+                      <span className="text-gray-200 font-mono">${formatNumber(tradingData?.holding ?? 0)}</span>
                     </div>
                   </div>
                 </div>
-              )}
+
+                <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-gray-200 mb-3">Performance Metrics</h3>
+                  <div className="space-y-2.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-400">Win Rate</span>
+                      <span className="text-gray-200">{formatNumber(tradingData?.winRate ?? 0)}%</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-400">Total P&L</span>
+                      <span className={`font-mono ${(tradingData?.totalPnL ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        ${formatNumber(tradingData?.totalPnL ?? 0)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-400">P&L %</span>
+                      <span className={`${(tradingData?.totalPnLPercentage ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {formatNumber(tradingData?.totalPnLPercentage ?? 0)}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-400">Avg Trade Size</span>
+                      <span className="text-gray-200 font-mono">
+                        ${tradingData?.totalTrades && tradingData.totalTrades > 0 
+                          ? formatNumber(tradingData.totalVolume / tradingData.totalTrades)
+                          : '0.00'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "tax" && (
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                <h3 className="text-sm font-medium text-gray-200 mb-4">Tax Report</h3>
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-2">Generate Report</label>
+                    <div className="flex gap-2">
+                      <select className="px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-xs text-gray-200">
+                        <option>2025</option>
+                        <option>2024</option>
+                        <option>2023</option>
+                      </select>
+                      <button className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors">
+                        Generate
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-2">Multi-Wallet Tracking</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Enter wallet address"
+                        className="flex-1 px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-xs text-gray-200 placeholder-gray-500"
+                      />
+                      <button className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium transition-colors">
+                        + Add
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-2">Primary Wallet</label>
+                    <div className="px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-gray-300 font-mono text-[10px]">
+                      {walletAddress || 'No wallet connected'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            </div>
+          )}
         </div>
       </main>
     </div>
   );
 }
-

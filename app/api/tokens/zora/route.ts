@@ -9,22 +9,6 @@ export async function GET(request: Request) {
 
     console.log('🔍 Fetching Zora coins...');
 
-    // Try to import Zora SDK - handle cases where it might not be available
-    let zoraSDK: any = null;
-    try {
-      // Use dynamic import for better Next.js compatibility
-      const zoraModule = await import('@zoralabs/coins-sdk').catch(() => null);
-      if (zoraModule) {
-        zoraSDK = zoraModule;
-        // Set API key if available
-        if (process.env.ZORA_API_KEY && typeof zoraSDK.setApiKey === 'function') {
-          zoraSDK.setApiKey(process.env.ZORA_API_KEY);
-        }
-      }
-    } catch (error) {
-      console.warn('⚠️ Zora SDK not available:', error);
-    }
-
     let coins: any[] = [];
 
     // Use REST API directly (Zora SDK is primarily for creating coins, not fetching)

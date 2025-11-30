@@ -774,9 +774,9 @@ export default function WalletPage() {
     <div className="h-screen w-full flex flex-col bg-gray-950 overflow-hidden">
       <Header />
       
-      <main className="flex-1 bg-gray-950 overflow-hidden">
-        <div className="h-full max-w-[1400px] mx-auto px-4 lg:px-6 pt-4 pb-6 flex flex-col">
-          <div className="flex-1 flex flex-col min-h-0">
+      <main className="flex-1 bg-gray-950 overflow-hidden min-h-0">
+        <div className="h-full max-w-[1400px] mx-auto px-4 lg:px-6 pt-4 pb-4 sm:pb-6 flex flex-col min-h-0">
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             {/* Breadcrumb Navigation */}
             <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-400 mb-3 flex-shrink-0">
               <Link href="/explorer" className="hover:text-blue-400 transition-colors">
@@ -889,8 +889,8 @@ export default function WalletPage() {
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex-1 flex flex-col space-y-2 sm:space-y-3 lg:space-y-4 min-h-0">
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              <div className="flex-1 flex flex-col space-y-2 sm:space-y-3 lg:space-y-4 min-h-0 overflow-y-auto overflow-x-hidden">
                 {/* Tab Navigation */}
                 <div className="flex bg-slate-800/30 rounded-lg p-1 mb-3 overflow-x-auto flex-shrink-0">
                   {[

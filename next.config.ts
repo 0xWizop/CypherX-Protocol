@@ -3,6 +3,7 @@ import path from "path";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Externalize problematic packages from server-side bundles
   images: {
     unoptimized: true,
     remotePatterns: [
@@ -30,7 +31,7 @@ const nextConfig = {
       { protocol: "https", hostname: "tba-social.mypinata.cloud" },
     ],
   },
-  experimental: {},
+  serverExternalPackages: ['@zoralabs/coins-sdk', '@zoralabs/protocol-deployments'],
   allowedDevOrigins: ["192.168.86.250"],
   async headers() {
     return [
@@ -66,8 +67,13 @@ const nextConfig = {
 
     // Alias '@zoralabs/coins-sdk' to a local stub to avoid breaking nested imports
     // from '@zoralabs/protocol-deployments' during bundling.
+    // This applies to both server and client bundles
     (config.resolve.alias as Record<string, string>)["@zoralabs/coins-sdk"] =
       path.resolve(__dirname, "lib/zora-sdk-stub.ts");
+    
+    // Also alias the protocol-deployments package to avoid issues
+    (config.resolve.alias as Record<string, string>)["@zoralabs/protocol-deployments"] =
+      path.resolve(__dirname, "lib/zora-protocol-deployments-stub.ts");
 
     // Suppress console warnings for development
     if (!isServer) {

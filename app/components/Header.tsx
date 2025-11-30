@@ -158,18 +158,13 @@ const Header: React.FC = () => {
   const { setShowLoginModal, setRedirectTo } = useLoginModal();
 
 
-  const navLinks: Array<{ href: string; label: string; isActive: (path: string) => boolean }> = [
+  const navLinks: Array<{ href: string; label: string; isActive: (path: string) => boolean; comingSoon?: boolean }> = [
     {
-      href: "/explore",
-      label: "Trade",
+      href: "/discover",
+      label: "Discover",
       isActive: (path) =>
-        path === "/explore" ||
-        (path.startsWith("/explore/") && !path.startsWith("/explorer")),
-    },
-    {
-      href: "/dashboard",
-      label: "Dashboard",
-      isActive: (path) => path === "/dashboard" || path.startsWith("/dashboard/"),
+        path === "/discover" ||
+        path.startsWith("/discover/"),
     },
     {
       href: "/radar",
@@ -177,14 +172,20 @@ const Header: React.FC = () => {
       isActive: (path) => path === "/radar" || path.startsWith("/radar/"),
     },
     {
+      href: "/dashboard",
+      label: "Dashboard",
+      isActive: (path) => path === "/dashboard" || path.startsWith("/dashboard/"),
+    },
+    {
+      href: "/predict",
+      label: "Predict",
+      isActive: (path) => path === "/predict" || path.startsWith("/predict/"),
+      comingSoon: true,
+    },
+    {
       href: "/rewards",
       label: "Rewards",
       isActive: (path) => path === "/rewards" || path.startsWith("/rewards/"),
-    },
-    {
-      href: "/insights",
-      label: "Insights",
-      isActive: (path) => path === "/insights" || path.startsWith("/insights/"),
     },
     {
       href: "/explorer",
@@ -367,13 +368,27 @@ const Header: React.FC = () => {
 
                               {/* Desktop Navigation */}
               <nav className="hidden lg:flex items-center gap-2">
-                {navLinks.map(({ href, label, isActive }) => {
+                {navLinks.map(({ href, label, isActive, comingSoon }) => {
                   const active = isActive(currentPath);
                   const baseClasses =
-                    "text-sm font-medium px-3 py-2 transition-all duration-200";
-                  const stateClasses = active
+                    "text-sm font-normal px-3 py-2 transition-all duration-200";
+                  const stateClasses = comingSoon
+                    ? "text-gray-500 cursor-not-allowed"
+                    : active
                     ? "text-blue-300"
                     : "text-white hover:text-blue-300";
+
+                  if (comingSoon) {
+                    return (
+                      <div
+                        key={href}
+                        className={`${baseClasses} ${stateClasses} flex items-center gap-1.5`}
+                      >
+                        {label}
+                        <span className="px-1.5 py-0.5 rounded-full bg-blue-900/60 text-blue-300 text-[10px] font-medium">Soon</span>
+                      </div>
+                    );
+                  }
 
                   return (
                  <Link
@@ -402,7 +417,7 @@ const Header: React.FC = () => {
                 {/* Action Buttons */}
                 <div className="hidden lg:flex items-center space-x-2">
                   <motion.button
-                    className="relative flex items-center justify-center w-8 h-8 bg-gray-950/50 backdrop-blur-sm hover:bg-gray-900/50 text-white hover:text-blue-400 rounded-lg transition-all duration-200 border border-gray-600 hover:border-gray-500"
+                    className="relative flex items-center justify-center w-8 h-8 bg-[#111827] hover:bg-[#1f2937] text-white hover:text-blue-400 rounded-lg transition-all duration-200 border border-gray-600 hover:border-gray-500"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     title="Watchlist"
@@ -417,7 +432,7 @@ const Header: React.FC = () => {
                   </motion.button>
                   
                   <motion.button
-                    className="flex items-center justify-center w-8 h-8 bg-gray-950/50 backdrop-blur-sm hover:bg-gray-900/50 text-white hover:text-blue-400 rounded-lg transition-all duration-200 border border-gray-600 hover:border-gray-500"
+                    className="flex items-center justify-center w-8 h-8 bg-[#111827] hover:bg-[#1f2937] text-white hover:text-blue-400 rounded-lg transition-all duration-200 border border-gray-600 hover:border-gray-500"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     title="Settings"
@@ -462,7 +477,7 @@ const Header: React.FC = () => {
                        setRedirectTo(pathname);
                        setShowLoginModal(true);
                      }}
-                     className="w-8 h-8 rounded-full bg-gray-950/50 backdrop-blur-sm border border-gray-600 flex items-center justify-center hover:bg-gray-900/50 hover:border-gray-500 transition-all duration-200"
+                     className="w-8 h-8 rounded-full bg-[#111827] border border-gray-600 flex items-center justify-center hover:bg-[#1f2937] hover:border-gray-500 transition-all duration-200"
                    >
                      <FiUser className="w-5 h-5 text-gray-300" />
                    </button>
@@ -517,44 +532,57 @@ const Header: React.FC = () => {
 
                       <div className="space-y-2">
                         {[{
-                          href: "/explore",
-                          label: "Explore",
-                          delay: 0.05
-                        }, {
-                          href: "/dashboard",
-                          label: "Dashboard",
-                          delay: 0.075
+                          href: "/discover",
+                          label: "Discover",
+                          delay: 0.05,
+                          comingSoon: false
                         }, {
                           href: "/radar",
                           label: "Radar",
-                          delay: 0.1
+                          delay: 0.075,
+                          comingSoon: false
+                        }, {
+                          href: "/dashboard",
+                          label: "Dashboard",
+                          delay: 0.1,
+                          comingSoon: false
+                        }, {
+                          href: "/predict",
+                          label: "Predict",
+                          delay: 0.125,
+                          comingSoon: true
                         }, {
                           href: "/rewards",
                           label: "Rewards",
-                          delay: 0.15
-                        }, {
-                          href: "/insights",
-                          label: "Insights",
-                          delay: 0.25
+                          delay: 0.15,
+                          comingSoon: false
                         }, {
                           href: "/explorer",
                           label: "Explorer",
-                          delay: 0.3
-                        }].map(({ href, label, delay }, index) => (
+                          delay: 0.25,
+                          comingSoon: false
+                        }].map(({ href, label, delay, comingSoon }, index) => (
                           <motion.div
                             key={href}
                             initial={{ opacity: 0, y: 8 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay }}
                           >
-                            <Link
-                              href={href}
-                              className="block px-2 py-2 text-white text-sm font-medium tracking-wide hover:text-blue-300 transition-colors"
-                              prefetch={true}
-                              onClick={() => setIsMenuOpen(false)}
-                            >
-                              {label}
-                            </Link>
+                            {comingSoon ? (
+                              <div className="block px-2 py-2 text-gray-500 text-sm font-normal tracking-wide cursor-not-allowed flex items-center gap-1.5">
+                                {label}
+                                <span className="px-1.5 py-0.5 rounded-full bg-blue-900/60 text-blue-300 text-[10px] font-medium">Soon</span>
+                              </div>
+                            ) : (
+                              <Link
+                                href={href}
+                                className="block px-2 py-2 text-white text-sm font-normal tracking-wide hover:text-blue-300 transition-colors"
+                                prefetch={true}
+                                onClick={() => setIsMenuOpen(false)}
+                              >
+                                {label}
+                              </Link>
+                            )}
                             {index < 5 && <div className="h-px bg-gray-800/60" />}
                           </motion.div>
                         ))}
@@ -926,6 +954,7 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
         notifications,
         privacy,
         updatedAt: new Date(),
+        // Quick buy config will be saved separately via useQuickBuyConfig hook
       }, { merge: true });
       
       setSettingsStatus('success');

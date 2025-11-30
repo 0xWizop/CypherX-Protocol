@@ -234,6 +234,74 @@ export interface TransactionFilters {
   status?: WalletTransaction['status'];
 }
 
+// ============================================================================
+// PREDICTION POOLS (Gasless Alpha Drops)
+// ============================================================================
+
+export interface PredictionPool {
+  id?: string; // Document ID
+  creatorId?: string; // Optional: User who created the pool
+  creatorAddress?: string; // Wallet address of creator
+  
+  // Prediction Details
+  tokenAddress: string; // Base token being predicted on
+  tokenSymbol?: string;
+  tokenName?: string;
+  predictionType: 'PUMP' | 'DUMP'; // Will price go up or down
+  threshold: number; // Percentage threshold (e.g., 15 for 15%)
+  timeframe: number; // Duration in minutes (5-60)
+  
+  // Pool Status
+  status: 'ACTIVE' | 'RESOLVING' | 'RESOLVED' | 'CANCELLED';
+  
+  // Timing
+  startTime: Timestamp | Date; // When pool started
+  endTime: Timestamp | Date; // When pool expires
+  resolvedAt?: Timestamp | Date;
+  
+  // Price Tracking
+  startPrice: number; // Token price at pool start (USD)
+  endPrice?: number; // Token price at pool end (USD)
+  priceSource?: string; // e.g., 'dexscreener', 'coingecko'
+  
+  // Participants
+  participants: PredictionParticipant[]; // Array of participants
+  totalStaked: number; // Total amount staked (USD)
+  winnerCount: number; // Number of winners
+  loserCount: number; // Number of losers
+  
+  // Payouts
+  totalPot: number; // Total pot to split among winners (USD)
+  gasFeePool: number; // Amount reserved for gas fees (USD)
+  winnerPayout?: number; // Amount each winner gets (USD)
+  
+  // Execution
+  autoExecuteTrades: boolean; // Whether to auto-execute trades for winners
+  executedTrades?: string[]; // Array of transaction hashes for executed trades
+  executionStatus?: 'PENDING' | 'EXECUTING' | 'COMPLETED' | 'FAILED';
+  
+  // Metadata
+  createdAt: Timestamp | Date;
+  updatedAt: Timestamp | Date;
+  
+  metadata?: {
+    description?: string;
+    [key: string]: any;
+  };
+}
+
+export interface PredictionParticipant {
+  userId?: string; // Optional: Firebase Auth user ID
+  walletAddress: string; // Participant wallet
+  stakeAmount: number; // Amount staked (USD)
+  prediction: 'YES' | 'NO'; // Their prediction
+  isWinner?: boolean; // Whether they won
+  payout?: number; // Amount they received (USD)
+  tradeExecuted?: boolean; // Whether their trade was executed
+  tradeTxHash?: string; // Transaction hash if trade executed
+  joinedAt: Timestamp | Date;
+}
+
 
 
 

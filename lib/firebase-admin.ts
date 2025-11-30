@@ -159,24 +159,27 @@ const initializeAdmin = () => {
       }
     }
 
-    // Method 3: Try Firebase CLI credentials (fallback)
+    // Method 3: Try Application Default Credentials (works on Firebase Hosting/Cloud Run)
     if (!initialized) {
       try {
-        console.log("🔧 Method 3: Trying Firebase CLI credentials...");
+        console.log("🔧 Method 3: Trying Application Default Credentials (ADC)...");
         
         if (!admin.apps.length) {
+          // On Firebase Hosting/Cloud Run, ADC is automatically available
           admin.initializeApp({
-            projectId: 'homebase-dapp',
+            credential: admin.credential.applicationDefault(),
+            projectId: process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || 'homebase-dapp',
           });
         }
         
         adminDb = admin.firestore();
+        adminDb.settings({ ignoreUndefinedProperties: true });
         adminStorage = admin.storage();
         isInitialized = true;
         initialized = true;
-        console.log("✅ Successfully initialized with Firebase CLI credentials");
+        console.log("✅ Successfully initialized with Application Default Credentials");
       } catch (error) {
-        const errorMsg = `Firebase CLI credentials failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        const errorMsg = `Application Default Credentials failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
         console.log("❌ " + errorMsg);
         errorMessages.push(errorMsg);
       }

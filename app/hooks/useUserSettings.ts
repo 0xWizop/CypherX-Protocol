@@ -31,6 +31,13 @@ export interface UserSettings {
   swapFeeDiscount: number;
   totalReferrals: number;
   totalReferralEarnings: number;
+  quickBuyConfig?: {
+    amounts: number[];
+    defaultSlippage: number;
+    autoApprove: boolean;
+    preferredDex: string | null;
+    updatedAt?: Date;
+  };
   createdAt: Date;
   updatedAt: Date;
 }

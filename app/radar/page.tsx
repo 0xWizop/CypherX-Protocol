@@ -460,7 +460,14 @@ export default function RadarPage() {
         matchesTag = token.tags.includes(selectedTag);
       }
       
-      return matchesSearch && matchesTag;
+      // Market cap and volume filters - only allow pairs > $50k market cap and > $10k volume
+      const marketCap = typeof token.marketCap === 'string' ? parseFloat(token.marketCap) : (token.marketCap || 0);
+      const volume24h = typeof token.volume24h === 'string' ? parseFloat(token.volume24h) : (token.volume24h || 0);
+      
+      const meetsMarketCapThreshold = marketCap >= 50000; // $50k minimum
+      const meetsVolumeThreshold = volume24h >= 10000; // $10k minimum
+      
+      return matchesSearch && matchesTag && meetsMarketCapThreshold && meetsVolumeThreshold;
     })
     .sort((a, b) => {
       let aVal: number | Date, bVal: number | Date;
@@ -668,7 +675,7 @@ export default function RadarPage() {
 
     // Navigate to chart page
     const handleTokenClick = () => {
-      router.push(`/explore/${token.pairAddress || token.address}/chart`);
+      router.push(`/discover/${token.pairAddress || token.address}/chart`);
     };
 
     // Handle quick buy
@@ -985,7 +992,7 @@ export default function RadarPage() {
         <div className="w-full border-b border-gray-700/50"></div>
                        
         {/* 3-Column Layout - Full Width */}
-      <div className="flex-1 md:overflow-hidden overflow-auto">
+      <div className="flex-1 md:overflow-hidden overflow-auto min-h-0 min-w-0">
         {loading ? (
           <div className="text-gray-400 text-sm">Loading tokens...</div>
         ) : error ? (
@@ -999,9 +1006,9 @@ export default function RadarPage() {
                         </button>
                       </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 w-full h-full" style={{ height: 'calc(100vh - 200px)' }}>
+          <div className="grid grid-cols-1 md:grid-cols-3 w-full h-full min-w-0" style={{ height: 'calc(100vh - 200px)' }}>
             {/* New Tokens Column */}
-            <div className="flex flex-col md:h-full border-r border-gray-700/50">
+            <div className="flex flex-col md:h-full min-w-0 border-r border-gray-700/50">
               <ColumnHeader 
                 title="New Pairs" 
                 count={newTokens.length} 
@@ -1010,8 +1017,8 @@ export default function RadarPage() {
                 filterAmount={newPairsFilterAmount}
                 onFilterAmountChange={setNewPairsFilterAmount}
               />
-              <div className="flex-1 overflow-hidden">
-                <div className="h-full overflow-y-auto scrollbar-hide">
+              <div className="flex-1 overflow-hidden min-h-0">
+                <div className="h-full overflow-y-auto scrollbar-hide px-2 md:px-0">
                   {newTokens.map((token, index) => (
                     <TokenCard key={`${token.address}-${index}`} token={token} index={index} />
                   ))}
@@ -1020,7 +1027,7 @@ export default function RadarPage() {
             </div>
                         
             {/* Surging Tokens Column */}
-            <div className="flex flex-col md:h-full border-r border-gray-700/50">
+            <div className="flex flex-col md:h-full min-w-0 border-r border-gray-700/50">
               <ColumnHeader 
                 title="Surging" 
                 count={surgingTokens.length} 
@@ -1029,8 +1036,8 @@ export default function RadarPage() {
                 filterAmount={surgingFilterAmount}
                 onFilterAmountChange={setSurgingFilterAmount}
               />
-              <div className="flex-1 overflow-hidden">
-                <div className="h-full overflow-y-auto scrollbar-hide">
+              <div className="flex-1 overflow-hidden min-h-0">
+                <div className="h-full overflow-y-auto scrollbar-hide px-2 md:px-0">
                   {surgingTokens.map((token, index) => (
                     <TokenCard key={`${token.address}-${index}`} token={token} index={index} />
                   ))}
@@ -1039,7 +1046,7 @@ export default function RadarPage() {
             </div>
                       
             {/* Gainer Tokens Column */}
-            <div className="flex flex-col md:h-full">
+            <div className="flex flex-col md:h-full min-w-0">
               <ColumnHeader 
                 title="Top Gainers" 
                 count={gainerTokens.length} 
@@ -1048,8 +1055,8 @@ export default function RadarPage() {
                 filterAmount={gainersFilterAmount}
                 onFilterAmountChange={setGainersFilterAmount}
               />
-              <div className="flex-1 overflow-hidden">
-                <div className="h-full overflow-y-auto scrollbar-hide">
+              <div className="flex-1 overflow-hidden min-h-0">
+                <div className="h-full overflow-y-auto scrollbar-hide px-2 md:px-0">
                   {gainerTokens.map((token, index) => (
                     <TokenCard key={`${token.address}-${index}`} token={token} index={index} />
                   ))}

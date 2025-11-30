@@ -7,6 +7,20 @@ import { FieldValue } from "firebase-admin/firestore";
 const BASE_RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://base-mainnet.g.alchemy.com/v2/8KR6qwxbLlIISgrMCZfsrYeMmn6-S-bN";
 const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
 
+// Treasury configuration
+// Treasury address for future direct transfers: 0xC0dFa8af8b9d2Ed4e6b9AA76615CCf51ea3F3fdC
+const PLATFORM_FEE_PERCENT = 0.3; // 0.3% platform fee
+const BASE_CASHBACK_PERCENT = 5; // 5% of fee back to user
+
+// Referral volume tiers for extra cashback
+const REFERRAL_VOLUME_TIERS = [
+  { minVolume: 0, extraCashback: 0 },
+  { minVolume: 1000, extraCashback: 5 },
+  { minVolume: 5000, extraCashback: 10 },
+  { minVolume: 25000, extraCashback: 15 },
+  { minVolume: 100000, extraCashback: 20 },
+];
+
 // 🔧 FIXED: DEX Router Addresses on Base Chain - Updated with correct addresses
 const DEX_ROUTERS = {
   // Uniswap V2 - Most reliable on Base chain
@@ -525,6 +539,178 @@ async function executeSwap(
   };
 }
 
+// Get user's referral volume tier cashback bonus
+function getReferralVolumeCashback(referralVolume: number): number {
+  let extraCashback = 0;
+  for (const tier of REFERRAL_VOLUME_TIERS) {
+    if (referralVolume >= tier.minVolume) {
+      extraCashback = tier.extraCashback;
+    }
+  }
+  return extraCashback;
+}
+
+// Get ETH price (simplified - you may want to use an oracle)
+async function getEthPrice(): Promise<number> {
+  try {
+    const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd');
+    const data = await response.json();
+    return data.ethereum?.usd || 2500;
+  } catch {
+    return 2500; // Fallback price
+  }
+}
+
+// Process fees and rewards
+async function processFeesAndRewards(
+  walletAddress: string,
+  swapValueUsd: number,
+  swapValueEth: number,
+  transactionHash: string
+): Promise<{ platformFee: number; cashback: number; referralReward: number; referrerAddress?: string }> {
+  const db = adminDb();
+  if (!db) {
+    console.error("Database connection failed");
+    return { platformFee: 0, cashback: 0, referralReward: 0 };
+  }
+
+  try {
+    // Calculate platform fee (in ETH)
+    const platformFeeEth = swapValueEth * (PLATFORM_FEE_PERCENT / 100);
+    const platformFeeUsd = swapValueUsd * (PLATFORM_FEE_PERCENT / 100);
+
+    console.log(`💰 Platform fee: ${platformFeeEth.toFixed(6)} ETH ($${platformFeeUsd.toFixed(2)})`);
+
+    // Find user by wallet address
+    const userQuery = db.collection("users").where("walletAddress", "==", walletAddress);
+    const userSnapshot = await userQuery.get();
+    
+    let userId: string | null = null;
+    let referrerId: string | null = null;
+    let referralVolume = 0;
+
+    if (!userSnapshot.empty) {
+      userId = userSnapshot.docs[0].id;
+      const userData = userSnapshot.docs[0].data();
+      referrerId = userData.referredBy || null;
+
+      // Get user's referral volume (how much their referrals have traded)
+      const rewardsDoc = await db.collection("rewards").doc(userId).get();
+      if (rewardsDoc.exists) {
+        // Calculate referral volume from referrals
+        const referralsQuery = db.collection("referrals").where("referrerId", "==", userId);
+        const referralsSnapshot = await referralsQuery.get();
+        for (const ref of referralsSnapshot.docs) {
+          referralVolume += ref.data().swapValueUSD || 0;
+        }
+      }
+    }
+
+    // Calculate cashback (base + referral volume bonus)
+    const extraCashback = getReferralVolumeCashback(referralVolume);
+    const totalCashbackPercent = BASE_CASHBACK_PERCENT + extraCashback;
+    const cashbackEth = platformFeeEth * (totalCashbackPercent / 100);
+
+    console.log(`🎁 Cashback: ${cashbackEth.toFixed(6)} ETH (${totalCashbackPercent}% of fee)`);
+
+    // Credit cashback to user's rewards
+    if (userId) {
+      const rewardsRef = db.collection("rewards").doc(userId);
+      const rewardsDoc = await rewardsRef.get();
+      
+      if (rewardsDoc.exists) {
+        await rewardsRef.update({
+          ethRewards: FieldValue.increment(cashbackEth),
+          volumeTraded: FieldValue.increment(swapValueUsd),
+          transactions: FieldValue.increment(1),
+          lastUpdated: new Date().toISOString()
+        });
+      } else {
+        // Generate referral code for new user
+        const referralCode = 'CYPHERX' + Math.random().toString(36).substring(2, 8).toUpperCase();
+        await rewardsRef.set({
+          ethRewards: cashbackEth,
+          referralCode,
+          referrals: 0,
+          referralRate: 30,
+          volumeTraded: swapValueUsd,
+          transactions: 1,
+          lastUpdated: new Date().toISOString()
+        });
+      }
+      console.log(`✅ Credited ${cashbackEth.toFixed(6)} ETH cashback to user ${userId}`);
+    }
+
+    // Process referral reward (30% of platform fee to referrer)
+    let referralRewardEth = 0;
+    let referrerWalletAddress: string | undefined;
+
+    if (referrerId) {
+      referralRewardEth = platformFeeEth * 0.30; // 30% to referrer
+      
+      // Credit referral reward to referrer
+      const referrerRewardsRef = db.collection("rewards").doc(referrerId);
+      const referrerRewardsDoc = await referrerRewardsRef.get();
+      
+      if (referrerRewardsDoc.exists) {
+        await referrerRewardsRef.update({
+          ethRewards: FieldValue.increment(referralRewardEth),
+          lastUpdated: new Date().toISOString()
+        });
+        console.log(`✅ Credited ${referralRewardEth.toFixed(6)} ETH referral reward to referrer ${referrerId}`);
+      }
+
+      // Update referral record with this swap
+      await db.collection("referrals").add({
+        referrerId,
+        refereeId: userId,
+        refereeWallet: walletAddress,
+        swapValueUSD: swapValueUsd,
+        swapValueETH: swapValueEth,
+        platformFee: platformFeeEth,
+        referralReward: referralRewardEth,
+        transactionHash,
+        timestamp: new Date().toISOString()
+      });
+
+      // Get referrer's wallet address for logging
+      const referrerUserDoc = await db.collection("users").doc(referrerId).get();
+      if (referrerUserDoc.exists) {
+        referrerWalletAddress = referrerUserDoc.data()?.walletAddress;
+      }
+    }
+
+    // Net fee to treasury (platform fee - cashback - referral reward)
+    const netTreasuryFee = platformFeeEth - cashbackEth - referralRewardEth;
+    console.log(`🏦 Net to treasury: ${netTreasuryFee.toFixed(6)} ETH`);
+
+    // Record fee transaction
+    await db.collection("fee_transactions").add({
+      walletAddress,
+      userId,
+      swapValueUsd,
+      swapValueEth,
+      platformFeeEth,
+      cashbackEth,
+      referralRewardEth,
+      netTreasuryFee,
+      referrerId,
+      transactionHash,
+      timestamp: FieldValue.serverTimestamp()
+    });
+
+    return {
+      platformFee: platformFeeEth,
+      cashback: cashbackEth,
+      referralReward: referralRewardEth,
+      referrerAddress: referrerWalletAddress
+    };
+  } catch (error) {
+    console.error("Error processing fees and rewards:", error);
+    return { platformFee: 0, cashback: 0, referralReward: 0 };
+  }
+}
+
 // Record swap in database
 async function recordSwap(
   walletAddress: string,
@@ -536,21 +722,29 @@ async function recordSwap(
   gasUsed: string,
   gasPrice: string,
   dexUsed: string
-): Promise<void> {
+): Promise<{ platformFee: number; cashback: number; referralReward: number }> {
   const db = adminDb();
   if (!db) {
     console.error("Database connection failed");
-    return;
+    return { platformFee: 0, cashback: 0, referralReward: 0 };
   }
 
   try {
-    // Calculate USD values (simplified)
-    const inputValue = parseFloat(inputAmount) * 3000; // Assume ETH price
-    const outputValue = parseFloat(outputAmount) * 3000;
+    // Get current ETH price
+    const ethPrice = await getEthPrice();
+    
+    // Calculate values
+    const isEthInput = inputToken === "ETH";
+    const ethAmount = isEthInput ? parseFloat(inputAmount) : parseFloat(outputAmount);
+    const swapValueUsd = ethAmount * ethPrice;
+    const swapValueEth = ethAmount;
+    
     const gasUsedEth = parseFloat(ethers.formatEther(ethers.parseUnits(gasUsed, "wei")));
-    const gasPriceEth = parseFloat(ethers.formatEther(ethers.parseUnits(gasPrice, "wei")));
-    const gasCost = gasUsedEth * gasPriceEth;
-    const gasCostUsd = gasCost * 3000;
+    const gasPriceGwei = parseFloat(ethers.formatUnits(gasPrice, "gwei"));
+    const gasCostEth = (gasUsedEth * gasPriceGwei) / 1e9;
+    const gasCostUsd = gasCostEth * ethPrice;
+
+    console.log(`📊 Swap recorded: ${swapValueEth.toFixed(4)} ETH ($${swapValueUsd.toFixed(2)})`);
 
     // Record transaction
     await db.collection("wallet_transactions").add({
@@ -560,8 +754,8 @@ async function recordSwap(
       outputToken,
       inputAmount,
       outputAmount,
-      inputValue,
-      outputValue,
+      inputValue: isEthInput ? swapValueUsd : swapValueUsd,
+      outputValue: !isEthInput ? swapValueUsd : swapValueUsd,
       transactionHash,
       gasUsed,
       gasPrice,
@@ -571,28 +765,30 @@ async function recordSwap(
       status: "confirmed"
     });
 
-    // Update user points
-    const points = Math.floor(inputValue / 100) * 10;
+    // Process fees and rewards
+    const feeResult = await processFeesAndRewards(
+      walletAddress,
+      swapValueUsd,
+      swapValueEth,
+      transactionHash
+    );
+
+    // Update user activity
     const userQuery = db.collection("users").where("walletAddress", "==", walletAddress);
     const userSnapshot = await userQuery.get();
     
     if (!userSnapshot.empty) {
       await db.collection("users").doc(userSnapshot.docs[0].id).update({
-        points: FieldValue.increment(points),
-        lastActivity: FieldValue.serverTimestamp(),
-      });
-    } else {
-      await db.collection("users").add({
-        walletAddress,
-        points,
-        createdAt: FieldValue.serverTimestamp(),
         lastActivity: FieldValue.serverTimestamp(),
       });
     }
 
-    console.log(`Swap recorded: ${transactionHash}, Points awarded: ${points}, DEX: ${dexUsed}`);
+    console.log(`✅ Swap recorded: ${transactionHash}, DEX: ${dexUsed}, Fee: ${feeResult.platformFee.toFixed(6)} ETH`);
+    
+    return feeResult;
   } catch (error) {
     console.error("Error recording swap:", error);
+    return { platformFee: 0, cashback: 0, referralReward: 0 };
   }
 }
 
@@ -691,8 +887,8 @@ export async function POST(request: Request) {
       preferredDex
     );
     
-    // Record swap in database
-    await recordSwap(
+    // Record swap in database and process fees
+    const feeResult = await recordSwap(
       walletAddress,
       inputToken,
       outputToken,
@@ -713,7 +909,18 @@ export async function POST(request: Request) {
       dexUsed: result.dexUsed
     };
     
-    return NextResponse.json(response);
+    // Add fee info to response
+    return NextResponse.json({
+      ...response,
+      fees: {
+        platformFee: feeResult.platformFee,
+        cashback: feeResult.cashback,
+        referralReward: feeResult.referralReward,
+        message: feeResult.cashback > 0 
+          ? `You earned ${feeResult.cashback.toFixed(6)} ETH cashback!` 
+          : undefined
+      }
+    });
     
   } catch (error) {
     console.error("Swap execution error:", error);

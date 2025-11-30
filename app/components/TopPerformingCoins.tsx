@@ -230,7 +230,7 @@ const TopPerformingCoins = () => {
               </span>
               {/* Action */}
               <Link
-                href={`/explore/${coin.poolAddress || coin.tokenAddress}/chart`}
+                href={`/discover/${coin.poolAddress || coin.tokenAddress}/chart`}
                 className="text-sm text-blue-400 hover:text-blue-300 underline text-center transition-colors"
                 aria-label={`Trade ${coin.symbol}`}
               >
@@ -270,7 +270,7 @@ const TopPerformingCoins = () => {
                   )}
                 </div>
                 <Link
-                  href={`/explore/${coin.poolAddress || coin.tokenAddress}/chart`}
+                  href={`/discover/${coin.poolAddress || coin.tokenAddress}/chart`}
                   className="text-blue-400 hover:text-blue-300 text-xs underline"
                 >
                   Trade
@@ -304,7 +304,7 @@ const TopPerformingCoins = () => {
       {topCoins.length > 0 && (
         <div className="text-center mt-6">
           <Link 
-            href="/explore" 
+            href="/discover" 
             className="inline-flex items-center gap-2 text-blue-400 font-semibold text-sm px-4 py-2 rounded-full hover:bg-blue-500/20 transition-all duration-200 hover:scale-105"
           >
             Explore All Tokens

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaTimes } from 'react-icons/fa';
+import { FiX } from 'react-icons/fi';
 import { SiEthereum } from 'react-icons/si';
 import { useAuth } from '../providers';
 
@@ -87,23 +87,12 @@ export default function RefereeStatsModal({ isOpen, onClose, refereeId }: Refere
     if (!timestamp) return 'N/A';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
       month: 'short', 
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
     });
   };
-
-  const TIERS = {
-    normie: { name: 'Normie', color: 'text-gray-400' },
-    degen: { name: 'Degen', color: 'text-orange-500' },
-    alpha: { name: 'Alpha', color: 'text-green-500' },
-    mogul: { name: 'Mogul', color: 'text-yellow-500' },
-    titan: { name: 'Titan', color: 'text-purple-500' },
-  };
-
-  const currentTier = stats?.userData.tier ? TIERS[stats.userData.tier as keyof typeof TIERS] : null;
 
   return (
     <AnimatePresence>
@@ -114,7 +103,7 @@ export default function RefereeStatsModal({ isOpen, onClose, refereeId }: Refere
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/60"
             onClick={onClose}
           />
           
@@ -123,147 +112,114 @@ export default function RefereeStatsModal({ isOpen, onClose, refereeId }: Refere
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative bg-gray-900/95 backdrop-blur-xl border border-gray-700/50 rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl"
+            className="relative bg-gray-900 border border-gray-800 rounded-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col"
           >
             {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-200">
-                Referee Stats
-              </h2>
+            <div className="flex items-center justify-between p-4 border-b border-gray-800">
+              <div>
+                <h2 className="text-base font-semibold text-white">Referee Details</h2>
+                {stats && (
+                  <p className="text-xs text-gray-500 font-mono mt-0.5">
+                    {formatAddress(stats.refereeId)}
+                  </p>
+                )}
+              </div>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-gray-800 rounded-lg transition-colors duration-200"
+                className="p-1.5 hover:bg-gray-800 rounded-lg transition-colors"
               >
-                <FaTimes className="w-4 h-4 text-gray-400" />
+                <FiX className="w-5 h-5 text-gray-400" />
               </button>
             </div>
 
-            {loading && (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
-              </div>
-            )}
-
-            {error && (
-              <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-4 mb-6">
-                <p className="text-red-400 text-sm">{error}</p>
-              </div>
-            )}
-
-            {stats && !loading && (
-              <div className="space-y-6">
-                {/* User Info */}
-                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/30">
-                  <h3 className="text-sm font-semibold text-gray-300 mb-3">User Information</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">User ID</p>
-                      <p className="text-sm font-mono text-gray-200">{formatAddress(stats.refereeId)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">Wallet Address</p>
-                      <p className="text-sm font-mono text-gray-200">{formatAddress(stats.walletAddress)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">Tier</p>
-                      <p className={`text-sm font-bold ${currentTier?.color || 'text-gray-400'}`}>
-                        {currentTier?.name || stats.userData.tier}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">Points</p>
-                      <p className="text-sm font-bold text-gray-200">{stats.userData.points.toLocaleString()}</p>
-                    </div>
-                  </div>
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {loading && (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-6 w-6 border-2 border-gray-700 border-t-blue-500"></div>
                 </div>
+              )}
 
-                {/* Trading Stats */}
-                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/30">
-                  <h3 className="text-sm font-semibold text-gray-300 mb-3">
-                    Trading Statistics
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">Total Volume</p>
-                      <p className="text-lg font-bold text-green-400">
-                        ${stats.stats.totalVolume.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {error && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+                  <p className="text-red-400 text-sm">{error}</p>
+                </div>
+              )}
+
+              {stats && !loading && (
+                <div className="space-y-4">
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Total Volume</p>
+                      <p className="text-lg font-semibold text-white">
+                        ${stats.stats.totalVolume.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                       </p>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">Total Transactions</p>
-                      <p className="text-lg font-bold text-gray-200">{stats.stats.totalTransactions}</p>
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Transactions</p>
+                      <p className="text-lg font-semibold text-white">{stats.stats.totalTransactions}</p>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">Total Platform Fees</p>
-                      <p className="text-sm font-bold text-gray-300">
-                        ${stats.stats.totalPlatformFees.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Platform Fees</p>
+                      <p className="text-lg font-semibold text-white">
+                        ${stats.stats.totalPlatformFees.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </p>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">Your Referral Earnings</p>
-                      <p className="text-sm font-bold text-green-400 flex items-center space-x-1">
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Your Earnings</p>
+                      <p className="text-lg font-semibold text-white flex items-center gap-1">
                         <SiEthereum className="w-4 h-4 text-gray-400" />
-                        <span>{stats.stats.totalReferralRewards.toFixed(4)}</span>
+                        {stats.stats.totalReferralRewards.toFixed(4)}
                       </p>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">Volume Traded (All Time)</p>
-                      <p className="text-sm font-bold text-gray-200">
-                        ${stats.stats.volumeTraded.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </p>
+                  </div>
+
+                  {/* Wallet Info */}
+                  {stats.walletAddress && (
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Wallet Address</p>
+                      <p className="text-sm font-mono text-gray-300">{stats.walletAddress}</p>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">Total Trades (All Time)</p>
-                      <p className="text-sm font-bold text-gray-200">{stats.stats.transactions}</p>
-                    </div>
+                  )}
+
+                  {/* Recent Trades */}
+                  <div>
+                    <h3 className="text-sm font-medium text-white mb-3">Recent Trades</h3>
+                    {stats.recentTrades.length > 0 ? (
+                      <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-hide">
+                        {stats.recentTrades.map((trade) => (
+                          <div key={trade.id} className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${
+                                  trade.type === 'buy' ? 'bg-green-400' : 'bg-red-400'
+                                }`}></div>
+                                <span className="text-xs font-medium text-gray-300 capitalize">{trade.type}</span>
+                              </div>
+                              <span className="text-[10px] text-gray-500">{formatDate(trade.timestamp)}</span>
+                            </div>
+                            <p className="text-sm font-medium text-white mt-1">
+                              ${(trade.outputValue || trade.inputValue || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-gray-800/50 rounded-lg p-6 border border-gray-700/50 text-center">
+                        <p className="text-sm text-gray-500">No trades yet</p>
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                {/* Recent Trades */}
-                {stats.recentTrades.length > 0 && (
-                  <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/30">
-                    <h3 className="text-sm font-semibold text-gray-300 mb-3">
-                      Recent Trades
-                    </h3>
-                    <div className="space-y-2 max-h-64 overflow-y-auto">
-                      {stats.recentTrades.map((trade) => (
-                        <div key={trade.id} className="bg-gray-700/30 rounded-lg p-3 border border-gray-600/20">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center space-x-2">
-                              <div className={`w-2 h-2 rounded-full ${
-                                trade.type === 'buy' ? 'bg-green-400' : 'bg-red-400'
-                              }`}></div>
-                              <p className="text-xs font-medium text-gray-300 capitalize">{trade.type}</p>
-                            </div>
-                            <p className="text-xs text-gray-400">{formatDate(trade.timestamp)}</p>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-xs text-gray-400">Value</p>
-                              <p className="text-sm font-bold text-gray-200">
-                                ${(trade.outputValue || trade.inputValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {stats.recentTrades.length === 0 && (
-                  <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/30 text-center">
-                    <p className="text-sm text-gray-400">No recent trades found</p>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Footer */}
-            <div className="mt-6 pt-4 border-t border-gray-700/30">
+            <div className="p-4 border-t border-gray-800">
               <button
                 onClick={onClose}
-                className="w-full bg-gray-700 hover:bg-gray-600 text-gray-200 py-2 px-4 rounded-lg transition-colors duration-200"
+                className="w-full bg-gray-800 hover:bg-gray-700 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
               >
                 Close
               </button>
@@ -274,4 +230,3 @@ export default function RefereeStatsModal({ isOpen, onClose, refereeId }: Refere
     </AnimatePresence>
   );
 }
-
