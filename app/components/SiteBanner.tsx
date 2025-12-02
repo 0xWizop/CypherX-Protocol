@@ -55,6 +55,7 @@ const SiteBanner: React.FC = () => {
     setDismissed(true);
   };
 
+
   if (loading || dismissed || !bannerData || !bannerData.enabled) {
     return null;
   }
@@ -65,7 +66,8 @@ const SiteBanner: React.FC = () => {
 
   return (
     <div
-      className="sticky top-0 left-0 right-0 z-[100] w-full border-b border-gray-700/50 overflow-hidden"
+      data-banner
+      className="sticky top-0 left-0 right-0 z-[10000] w-full border-b border-gray-700/50 overflow-hidden"
       style={{ backgroundColor, color: textColor }}
     >
       <div className="max-w-[1400px] mx-auto px-4 py-1.5 flex items-center justify-center gap-2 relative">

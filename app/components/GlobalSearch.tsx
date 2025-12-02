@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { createPortal } from "react-dom";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
-import { FaWallet, FaExchangeAlt, FaCube, FaCoins, FaNewspaper, FaChartLine } from "react-icons/fa";
-import { SiEthereum } from "react-icons/si";
 import debounce from "lodash/debounce";
 
 // Search result types
@@ -521,44 +519,6 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
     if (num >= 1e6) return `${(num / 1e6).toFixed(1)}M`;
     if (num >= 1e3) return `${(num / 1e3).toFixed(1)}K`;
     return num.toLocaleString();
-  };
-
-  // Get result icon
-  const getResultIcon = (type: string) => {
-    switch (type) {
-      case "token":
-        return <FaCoins className="w-4 h-4 text-yellow-400" />;
-      case "wallet":
-        return <FaWallet className="w-4 h-4 text-blue-400" />;
-      case "transaction":
-        return <FaExchangeAlt className="w-4 h-4 text-green-400" />;
-      case "block":
-        return <FaCube className="w-4 h-4 text-purple-400" />;
-      case "news":
-        return <FaNewspaper className="w-4 h-4 text-orange-400" />;
-      case "index":
-        return <FaChartLine className="w-4 h-4 text-indigo-400" />;
-      default:
-        return <SiEthereum className="w-4 h-4 text-gray-400" />;
-    }
-  };
-
-
-
-  // Highlight search terms in text
-  const highlightSearchTerm = (text: string, searchTerm: string) => {
-    if (!searchTerm || !text) return text;
-    
-    const regex = new RegExp(`(${searchTerm})`, 'gi');
-    const parts = text.split(regex);
-    
-    return parts.map((part, index) => 
-      regex.test(part) ? (
-        <span key={index} className="bg-yellow-500/30 text-yellow-200 font-medium">
-          {part}
-        </span>
-      ) : part
-    );
   };
 
   // Render search results

@@ -7,7 +7,6 @@ import { FiZap, FiBarChart2, FiTrendingUp, FiEye, FiSearch } from "react-icons/f
 import { FaWallet } from "react-icons/fa";
 
 import Header from "./components/Header";
-import GlobalSearch from "./components/GlobalSearch";
 import CountUp from "./components/CountUp";
 
 // Enhanced animation variants with scroll triggers

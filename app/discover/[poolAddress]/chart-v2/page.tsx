@@ -3103,7 +3103,7 @@ export default function ChartV2Page() {
                           // Check balance when amount changes
                           if (value && parseFloat(value) > 0 && walletAddress) {
                             const swapQuoteTokenAddress = pair?.quoteToken?.address || WETH_ADDRESS;
-                            const sellToken = selectedPayToken ? selectedPayToken.address : (isBuy ? swapQuoteTokenAddress : pair.baseToken.address);
+                            const sellToken = selectedPayToken ? selectedPayToken.address : (isBuy ? swapQuoteTokenAddress : pair?.baseToken?.address || WETH_ADDRESS);
                             checkTokenBalance(sellToken, value).catch(err => console.error('Balance check error:', err));
                           } else {
                             setTokenBalance('0');

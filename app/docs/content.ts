@@ -982,6 +982,819 @@ ws.subscribe('price', { tokens: ['0x...'] });`,
         ]
       }
     ]
+  },
+  {
+    id: "discover",
+    title: "Discover",
+    content: `
+      The Discover page is your gateway to finding and analyzing tokens on Base Chain. Browse thousands 
+      of tokens, filter by various metrics, and dive deep into token analytics.
+    `,
+    subsections: [
+      {
+        id: "token-discovery",
+        title: "Token Discovery",
+        content: `
+          Discover new tokens and opportunities with our comprehensive token discovery tools.
+          
+          ## Browse Tokens
+          
+          ### Token List
+          
+          The Discover page displays a comprehensive list of tokens with:
+          
+          - **Token Information**: Name, symbol, logo, and contract address
+          - **Price Data**: Current price, 24h change, and price history
+          - **Market Metrics**: Market cap, volume, liquidity, and holders
+          - **Security Status**: Contract verification, liquidity locks, honeypot checks
+          
+          ### Filtering Options
+          
+          Filter tokens by:
+          
+          - **Liquidity**: Minimum liquidity thresholds
+          - **Volume**: 24h trading volume filters
+          - **Age**: Token creation date
+          - **Price Change**: 24h price movement
+          - **Market Cap**: Market capitalization ranges
+          - **Security**: Verified contracts, locked liquidity
+          
+          ### Sorting Options
+          
+          Sort tokens by:
+          
+          - **Volume**: Highest 24h volume
+          - **Price Change**: Biggest movers
+          - **Market Cap**: Largest market caps
+          - **Liquidity**: Most liquid tokens
+          - **Age**: Newest tokens first
+          
+          ## Token Details
+          
+          ### Token Page
+          
+          Each token has a dedicated page with:
+          
+          - **Price Chart**: Interactive TradingView charts
+          - **Market Data**: Comprehensive market metrics
+          - **Trading Interface**: Quick swap functionality
+          - **Transaction History**: Recent transactions
+          - **Holder Analysis**: Top holders and distribution
+          - **Security Audit**: Contract verification status
+          
+          ### Chart Analysis
+          
+          Professional charting features:
+          
+          - Multiple timeframes (1m to 1d)
+          - Technical indicators
+          - Drawing tools
+          - Price alerts
+          - Volume analysis
+        `
+      },
+      {
+        id: "quick-buy",
+        title: "Quick Buy",
+        content: `
+          Execute trades quickly with our one-click swap functionality.
+          
+          ## Quick Buy Features
+          
+          ### Instant Swaps
+          
+          - **1-Click Execution**: Swap tokens instantly
+          - **Best Price Routing**: Automatic DEX aggregation
+          - **Slippage Protection**: Configurable slippage tolerance
+          - **Gas Optimization**: Efficient transaction routing
+          
+          ### Quick Buy Configuration
+          
+          Customize your quick buy settings:
+          
+          - **Default Amounts**: Set preset swap amounts
+          - **Slippage Tolerance**: Configure default slippage
+          - **Gas Preferences**: Fast, standard, or slow
+          - **Token Preferences**: Favorite tokens for quick access
+          
+          ## Trading Flow
+          
+          1. **Select Token**: Choose from trending or search
+          2. **Enter Amount**: Specify swap amount
+          3. **Review**: Check price impact and fees
+          4. **Confirm**: Execute the swap
+          5. **Track**: Monitor transaction status
+        `
+      }
+    ]
+  },
+  {
+    id: "dashboard",
+    title: "Dashboard",
+    content: `
+      Your personal trading dashboard with portfolio tracking, position management, and comprehensive analytics.
+    `,
+    subsections: [
+      {
+        id: "portfolio-overview",
+        title: "Portfolio Overview",
+        content: `
+          Get a complete view of your trading portfolio and performance.
+          
+          ## Portfolio Metrics
+          
+          ### Total Value
+          
+          - **Portfolio Value**: Total USD value of all holdings
+          - **P&L**: Profit and loss tracking
+          - **24h Change**: Daily portfolio performance
+          - **All-Time Performance**: Historical P&L
+          
+          ### Multi-Wallet Support
+          
+          - **Wallet Aggregation**: View multiple wallets in one dashboard
+          - **Wallet Switching**: Easily switch between wallets
+          - **Combined Analytics**: Aggregate metrics across wallets
+          - **Individual Tracking**: Per-wallet breakdown
+          
+          ## Position Tracking
+          
+          ### Open Positions
+          
+          Track your active positions:
+          
+          - **Token Holdings**: Current token balances
+          - **Entry Price**: Average entry price
+          - **Current Price**: Real-time token prices
+          - **Unrealized P&L**: Current profit/loss
+          - **ROI**: Return on investment percentage
+          
+          ### Closed Positions
+          
+          Historical position data:
+          
+          - **Trade History**: All closed positions
+          - **Realized P&L**: Actualized profits/losses
+          - **Trade Analytics**: Win rate, average return
+          - **Tax Reporting**: Export for tax purposes
+        `
+      },
+      {
+        id: "analytics",
+        title: "Trading Analytics",
+        content: `
+          Deep dive into your trading performance with comprehensive analytics.
+          
+          ## Performance Metrics
+          
+          ### Trading Statistics
+          
+          - **Total Trades**: Number of completed swaps
+          - **Win Rate**: Percentage of profitable trades
+          - **Average Trade Size**: Mean transaction value
+          - **Total Volume**: Cumulative trading volume
+          - **Fees Paid**: Total fees and gas costs
+          
+          ### Timeframe Analysis
+          
+          Analyze performance over:
+          
+          - **7 Days**: Weekly performance
+          - **30 Days**: Monthly performance
+          - **90 Days**: Quarterly performance
+          - **All Time**: Complete trading history
+          
+          ## P&L Calendar
+          
+          Visualize your trading activity:
+          
+          - **Daily P&L**: Profit/loss by day
+          - **Heat Map**: Visual performance calendar
+          - **Best Days**: Top performing trading days
+          - **Trend Analysis**: Performance trends over time
+        `
+      },
+      {
+        id: "tax-reporting",
+        title: "Tax Reporting",
+        content: `
+          Generate comprehensive tax reports for your trading activity.
+          
+          ## Tax Features
+          
+          ### Report Generation
+          
+          - **CSV Export**: Download transaction data
+          - **Tax Year Selection**: Filter by tax year
+          - **Transaction Details**: Complete trade history
+          - **Cost Basis Tracking**: Calculate cost basis
+          
+          ### Tax Categories
+          
+          - **Realized Gains**: Profits from closed positions
+          - **Realized Losses**: Losses from closed positions
+          - **Unrealized P&L**: Current position values
+          - **Fees & Gas**: Trading costs
+        `
+      }
+    ]
+  },
+  {
+    id: "radar",
+    title: "Radar",
+    content: `
+      Smart token scanner with AI-powered analysis and customizable alerts.
+    `,
+    subsections: [
+      {
+        id: "smart-scanner",
+        title: "Smart Scanner",
+        content: `
+          AI-powered token scanning with advanced filtering and security analysis.
+          
+          ## Scanner Features
+          
+          ### Token Scanning
+          
+          - **Real-time Scanning**: Continuous token discovery
+          - **Multi-Criteria Filtering**: Advanced filter combinations
+          - **Security Analysis**: Automated security checks
+          - **Risk Scoring**: Comprehensive risk assessment
+          
+          ### Security Checks
+          
+          Automated security analysis:
+          
+          - **Contract Verification**: Verified smart contracts
+          - **Liquidity Locks**: Locked liquidity verification
+          - **Honeypot Detection**: Honeypot scanning
+          - **Rug Pull Risk**: Rug pull probability analysis
+          - **Owner Analysis**: Contract owner assessment
+          
+          ## Custom Alerts
+          
+          Set up custom alerts for:
+          
+          - **Price Movements**: Price change thresholds
+          - **Volume Spikes**: Unusual volume activity
+          - **New Listings**: New token launches
+          - **Security Events**: Security risk changes
+          - **Whale Activity**: Large transaction alerts
+        `
+      }
+    ]
+  },
+  {
+    id: "rewards",
+    title: "Rewards & Tiers",
+    content: `
+      Earn rewards on every trade with our tiered loyalty system, cashback program, and referral incentives.
+    `,
+    subsections: [
+      {
+        id: "tier-system",
+        title: "Tier System",
+        content: `
+          Progress through 5 tiers by earning points from trading activity.
+          
+          ## Tier Levels
+          
+          ### Tier 1: Normie (0-1,999 points)
+          
+          - **Swap Fee**: 0.75%
+          - **Cashback Rate**: 5% of net platform fee
+          - **Airdrop Allocation**: 1x
+          - **Benefits**: Basic platform access
+          
+          ### Tier 2: Degen (2,000-7,999 points)
+          
+          - **Swap Fee**: 0.60%
+          - **Cashback Rate**: 10% of net platform fee
+          - **Airdrop Allocation**: 1.5x
+          - **Benefits**: Reduced fees, higher cashback
+          
+          ### Tier 3: Alpha (8,000-19,999 points)
+          
+          - **Swap Fee**: 0.45%
+          - **Cashback Rate**: 15% of net platform fee
+          - **Airdrop Allocation**: 2x
+          - **Benefits**: Priority support, exclusive features
+          
+          ### Tier 4: Mogul (20,000-49,999 points)
+          
+          - **Swap Fee**: 0.30%
+          - **Cashback Rate**: 20% of net platform fee
+          - **Airdrop Allocation**: 3x
+          - **Benefits**: VIP access, exclusive events
+          
+          ### Tier 5: Titan (50,000+ points)
+          
+          - **Swap Fee**: 0.20%
+          - **Cashback Rate**: 25% of net platform fee
+          - **Airdrop Allocation**: 5x
+          - **Benefits**: Maximum benefits, governance rights
+          
+          ## Earning Points
+          
+          ### Trading Rewards
+          
+          - **0.1 points per $1 traded**: Earn points on every swap
+          - **No cap**: Unlimited point accumulation
+          - **Real-time updates**: Points credited immediately
+          
+          ### Streak Multipliers
+          
+          - **Daily Trading Streaks**: Maintain daily trading activity
+          - **Multiplier Bonuses**: Increase point earnings
+          - **Streak Rewards**: Bonus points for streaks
+        `
+      },
+      {
+        id: "cashback",
+        title: "Cashback System",
+        content: `
+          Earn ETH cashback on every trade based on your tier level.
+          
+          ## Cashback Calculation
+          
+          ### Fee Structure
+          
+          - **Platform Fee**: 0.75% of swap value
+          - **0x Protocol Fee**: 0.15% (deducted)
+          - **Net Platform Fee**: 0.60% available for cashback
+          - **Cashback**: Net Fee × Tier Cashback Rate
+          
+          ### Example Calculation
+          
+          For a $1,000 swap at Alpha tier (15% cashback):
+          
+          - Platform Fee: $7.50
+          - 0x Fee: $1.50
+          - Net Fee: $6.00
+          - Cashback: $6.00 × 15% = $0.90 ETH
+          
+          ## Cashback Features
+          
+          - **Automatic Crediting**: Cashback added to rewards balance
+          - **Withdrawable**: Withdraw ETH rewards anytime
+          - **No Minimum**: No minimum withdrawal threshold
+          - **Real-time Tracking**: Monitor cashback accumulation
+        `
+      },
+      {
+        id: "referrals",
+        title: "Referral Program",
+        content: `
+          Earn rewards by referring new users to CypherX.
+          
+          ## Referrer Rewards
+          
+          ### Earning Structure
+          
+          - **30% of net platform fee** from referred user's swaps
+          - **Lifetime rewards**: Earn from referral network forever
+          - **No limit**: Unlimited referrals
+          - **ETH rewards**: Rewards paid in ETH
+          
+          ### Referral Code
+          
+          - **Unique Code**: Format: CYPHERX[6 alphanumeric]
+          - **Shareable Link**: Generate referral links
+          - **Tracking**: Monitor referral performance
+          - **Analytics**: Detailed referral statistics
+          
+          ## Referee Benefits
+          
+          ### Signup Bonus
+          
+          - **50 points** upon signup with referral code
+          - **Full access**: All platform features
+          - **Rewards eligible**: All rewards and airdrops
+          
+          ## Referral Dashboard
+          
+          Track your referral network:
+          
+          - **Total Referrals**: Number of active referrals
+          - **Referral Volume**: Trading volume from referrals
+          - **Earnings**: Total ETH earned from referrals
+          - **Leaderboard**: Compare with other referrers
+        `
+      }
+    ]
+  },
+  {
+    id: "explorer",
+    title: "Explorer",
+    content: `
+      Explore Base Chain with our comprehensive blockchain explorer. View transactions, blocks, and wallet activity.
+    `,
+    subsections: [
+      {
+        id: "transaction-explorer",
+        title: "Transaction Explorer",
+        content: `
+          Explore and analyze transactions on Base Chain.
+          
+          ## Transaction Details
+          
+          ### Transaction Information
+          
+          - **Transaction Hash**: Unique transaction identifier
+          - **Block Number**: Block containing the transaction
+          - **From/To Addresses**: Transaction participants
+          - **Value**: ETH amount transferred
+          - **Gas Used**: Gas consumption
+          - **Status**: Success or failure
+          - **Timestamp**: Transaction time
+          
+          ### Token Transfers
+          
+          - **ERC-20 Transfers**: Token transfers in transaction
+          - **NFT Transfers**: NFT movements
+          - **Value Breakdown**: Detailed value analysis
+          
+          ## Block Explorer
+          
+          ### Block Information
+          
+          - **Block Number**: Block identifier
+          - **Timestamp**: Block creation time
+          - **Transactions**: Transaction count
+          - **Gas Used**: Total gas in block
+          - **Miner**: Block validator
+        `
+      },
+      {
+        id: "wallet-explorer",
+        title: "Wallet Explorer",
+        content: `
+          Analyze wallet activity and holdings.
+          
+          ## Wallet Analysis
+          
+          ### Wallet Overview
+          
+          - **Balance**: ETH and token balances
+          - **Transaction History**: All transactions
+          - **Token Holdings**: ERC-20 token portfolio
+          - **NFT Collection**: ERC-721 and ERC-1155 NFTs
+          
+          ### Activity Analysis
+          
+          - **Trading Activity**: Swap history
+          - **Volume Analysis**: Trading volume over time
+          - **Profit/Loss**: Estimated P&L
+          - **Top Tokens**: Most traded tokens
+        `
+      }
+    ]
+  },
+  {
+    id: "advanced-orders",
+    title: "Advanced Orders",
+    content: `
+      Set limit orders, stop-loss orders, and other advanced order types for automated trading.
+    `,
+    subsections: [
+      {
+        id: "limit-orders",
+        title: "Limit Orders",
+        content: `
+          Execute trades automatically when price conditions are met.
+          
+          ## Limit Order Types
+          
+          ### Limit Buy
+          
+          - **Trigger**: When token price ≤ target price
+          - **Action**: Buy token using ETH
+          - **Use Case**: Buy at a lower price
+          
+          ### Limit Sell
+          
+          - **Trigger**: When token price ≥ target price
+          - **Action**: Sell token for ETH
+          - **Use Case**: Sell at a higher price
+          
+          ## Order Management
+          
+          ### Creating Orders
+          
+          1. Select order type (buy/sell)
+          2. Choose token pair
+          3. Set target price
+          4. Enter amount
+          5. Configure slippage
+          6. Set expiration (optional)
+          
+          ### Order Status
+          
+          - **PENDING**: Waiting for price condition
+          - **EXECUTING**: Condition met, executing swap
+          - **EXECUTED**: Order completed
+          - **CANCELLED**: Order cancelled by user
+          - **EXPIRED**: Order expired
+          - **FAILED**: Execution failed
+          
+          ## Monitoring
+          
+          Orders are monitored every 5 minutes:
+          
+          - **Price Checks**: Continuous price monitoring
+          - **Condition Evaluation**: Automatic condition checking
+          - **Execution**: Automatic order execution
+          - **Notifications**: Order status updates
+        `,
+        codeExamples: [
+          {
+            language: "javascript",
+            code: `// Example: Create limit buy order
+const createLimitBuy = async (params) => {
+  const response = await fetch('/api/orders/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      walletAddress: params.walletAddress,
+      orderType: 'LIMIT_BUY',
+      tokenIn: 'ETH',
+      tokenOut: params.tokenSymbol,
+      tokenInAddress: '0x0000000000000000000000000000000000000000',
+      tokenOutAddress: params.tokenAddress,
+      amountIn: params.amount,
+      targetPrice: params.targetPrice,
+      slippage: 0.5,
+      goodTillCancel: true
+    })
+  });
+  
+  return await response.json();
+};`,
+            description: "Create a limit buy order"
+          }
+        ]
+      },
+      {
+        id: "stop-loss",
+        title: "Stop-Loss Orders",
+        content: `
+          Protect your positions with automatic stop-loss orders.
+          
+          ## Stop-Loss Features
+          
+          ### Stop-Loss Order
+          
+          - **Trigger**: When token price ≤ stop price
+          - **Action**: Sell token immediately (market order)
+          - **Use Case**: Limit losses when price drops
+          
+          ### Stop-Limit Order (Coming Soon)
+          
+          - **Trigger**: Stop price hit, then limit price
+          - **Action**: Sell at limit price after stop triggers
+          - **Use Case**: More control over stop-loss execution
+          
+          ## Setting Stop-Loss
+          
+          ### Configuration
+          
+          1. Select token position
+          2. Set stop price
+          3. Choose order type (market or limit)
+          4. Configure slippage
+          5. Confirm order
+          
+          ### Best Practices
+          
+          - Set stop-loss at 5-10% below entry price
+          - Consider volatility when setting stop price
+          - Use trailing stops for profit protection
+          - Monitor stop-loss orders regularly
+        `
+      }
+    ]
+  },
+  {
+    id: "trading",
+    title: "Trading Guide",
+    content: `
+      Master trading on CypherX with our comprehensive trading guides and strategies.
+    `,
+    subsections: [
+      {
+        id: "swap-execution",
+        title: "Swap Execution",
+        content: `
+          Execute token swaps with optimal pricing and minimal slippage.
+          
+          ## Swap Process
+          
+          ### Step-by-Step
+          
+          1. **Select Tokens**: Choose token pair
+          2. **Enter Amount**: Specify swap amount
+          3. **Review Quote**: Check price, fees, and impact
+          4. **Approve Token** (if needed): Approve token spending
+          5. **Confirm Swap**: Execute transaction
+          6. **Track Status**: Monitor transaction confirmation
+          
+          ### Price Routing
+          
+          CypherX uses 0x Protocol for optimal routing:
+          
+          - **Multi-DEX Aggregation**: Routes through multiple DEXs
+          - **Best Price**: Always gets best available price
+          - **Split Routing**: Splits large trades for better execution
+          - **Gas Optimization**: Minimizes gas costs
+          
+          ## Slippage Protection
+          
+          ### Slippage Settings
+          
+          - **Default**: 0.5% slippage tolerance
+          - **Custom**: Set your own slippage
+          - **Auto**: Automatic slippage optimization
+          
+          ### Price Impact
+          
+          - **Low Impact**: < 0.1% (green)
+          - **Medium Impact**: 0.1-0.5% (yellow)
+          - **High Impact**: > 0.5% (red)
+          - **Warning**: High impact trades show warnings
+          
+          ## Gas Optimization
+          
+          ### Gas Settings
+          
+          - **Standard**: Normal gas price
+          - **Fast**: Higher gas for faster confirmation
+          - **Slow**: Lower gas for cost savings
+          
+          ### Gas Estimation
+          
+          - Real-time gas price estimates
+          - Transaction cost calculation
+          - Gas optimization suggestions
+        `
+      },
+      {
+        id: "trading-strategies",
+        title: "Trading Strategies",
+        content: `
+          Learn effective trading strategies for Base Chain tokens.
+          
+          ## Basic Strategies
+          
+          ### Dollar Cost Averaging (DCA)
+          
+          - **Strategy**: Buy fixed amounts at regular intervals
+          - **Benefits**: Reduces impact of volatility
+          - **Implementation**: Use limit orders for automation
+          
+          ### Buy the Dip
+          
+          - **Strategy**: Buy when prices drop significantly
+          - **Implementation**: Set limit buy orders below current price
+          - **Risk Management**: Use stop-loss to protect positions
+          
+          ## Advanced Strategies
+          
+          ### Arbitrage
+          
+          - **Strategy**: Exploit price differences across DEXs
+          - **Tools**: Multi-DEX routing helps find opportunities
+          - **Timing**: Fast execution is critical
+          
+          ### Swing Trading
+          
+          - **Strategy**: Hold positions for days/weeks
+          - **Tools**: Charts and technical indicators
+          - **Risk Management**: Stop-loss and take-profit orders
+        `
+      }
+    ]
+  },
+  {
+    id: "wallet",
+    title: "Wallet Management",
+    content: `
+      Comprehensive guide to managing your self-custodial wallet and securing your assets.
+    `,
+    subsections: [
+      {
+        id: "wallet-setup",
+        title: "Wallet Setup",
+        content: `
+          Set up and secure your self-custodial wallet.
+          
+          ## Creating a Wallet
+          
+          ### New Wallet Creation
+          
+          1. Click "Create Wallet" in wallet dropdown
+          2. Save your backup phrase securely
+          3. Verify your backup phrase
+          4. Set a strong password
+          5. Confirm wallet creation
+          
+          ### Backup Security
+          
+          **Critical**: Save your backup phrase in a secure location:
+          
+          - Write it down on paper
+          - Store in a safe or vault
+          - Never share with anyone
+          - Consider multiple backup locations
+          
+          ## Importing a Wallet
+          
+          ### Import Options
+          
+          - **Private Key**: Import using 64-character private key
+          - **Backup File**: Import encrypted JSON backup
+          - **Recovery Phrase**: Import using 12/24-word mnemonic
+          
+          ### Import Process
+          
+          1. Click "Import Wallet"
+          2. Choose import method
+          3. Enter credentials
+          4. Verify wallet address
+          5. Access your funds
+        `
+      },
+      {
+        id: "wallet-features",
+        title: "Wallet Features",
+        content: `
+          Explore advanced wallet features and capabilities.
+          
+          ## Asset Management
+          
+          ### Token Management
+          
+          - **View Balances**: See all token holdings
+          - **Add Custom Tokens**: Add tokens by contract address
+          - **Hide Tokens**: Hide tokens from view
+          - **Token Details**: View token information
+          
+          ### Multi-Wallet Support
+          
+          - **Multiple Wallets**: Manage multiple wallets
+          - **Wallet Switching**: Easy wallet switching
+          - **Aggregated View**: Combined portfolio view
+          
+          ## Security Features
+          
+          ### Security Settings
+          
+          - **Password Protection**: Wallet password
+          - **Session Management**: Active session tracking
+          - **Transaction Signing**: Secure transaction approval
+          - **Backup Reminders**: Regular backup prompts
+          
+          ### Best Practices
+          
+          - **Regular Backups**: Backup wallet regularly
+          - **Secure Storage**: Store backups securely
+          - **Phishing Protection**: Verify URLs and contracts
+          - **Hardware Wallets**: Use hardware wallets for large amounts
+        `
+      },
+      {
+        id: "transactions",
+        title: "Transaction Management",
+        content: `
+          Send, receive, and track transactions with your wallet.
+          
+          ## Sending Tokens
+          
+          ### Send Process
+          
+          1. Click "Send" in wallet dropdown
+          2. Select token to send
+          3. Enter recipient address
+          4. Enter amount
+          5. Review transaction
+          6. Confirm and sign
+          
+          ### Transaction Fees
+          
+          - **Gas Fees**: ETH required for transactions
+          - **Gas Estimation**: Automatic gas calculation
+          - **Gas Optimization**: Efficient gas usage
+          
+          ## Transaction History
+          
+          ### Viewing History
+          
+          - **All Transactions**: Complete transaction list
+          - **Filtering**: Filter by type, token, date
+          - **Export**: Export transaction data
+          - **Details**: Detailed transaction information
+        `
+      }
+    ]
   }
 ];
 

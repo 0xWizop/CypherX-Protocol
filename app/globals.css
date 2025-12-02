@@ -9,14 +9,17 @@ body {
   font-family: 'Inter', sans-serif;
   /* Tailwind @apply directive - valid and processed by Tailwind */
   @apply text-gray-200 font-sans antialiased;
-  background-color: #0a0e17;
+  background-color: #030712; /* gray-950 to match page backgrounds */
 }
 
 /* Hide scrollbars globally */
 html, body {
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE and Edge */
+  margin: 0;
+  padding: 0;
 }
+
 
 html::-webkit-scrollbar, body::-webkit-scrollbar {
   display: none; /* Chrome, Safari, Opera */

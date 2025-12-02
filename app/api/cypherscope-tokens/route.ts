@@ -590,11 +590,16 @@ export async function GET(request: Request) {
       };
     });
 
-    console.log(`🎯 Final result: ${tokensWithTags.length} tokens with tags`);
+    // Filter out tokens with invalid addresses (must be 42 characters: 0x + 40 hex)
+    const validTokens = tokensWithTags.filter((token) => 
+      token.address && /^0x[a-fA-F0-9]{40}$/.test(token.address)
+    );
+
+    console.log(`🎯 Final result: ${validTokens.length} valid tokens with tags (filtered ${tokensWithTags.length - validTokens.length} invalid addresses)`);
 
     return new Response(JSON.stringify({
-      tokens: tokensWithTags,
-      total: tokensWithTags.length,
+      tokens: validTokens,
+      total: validTokens.length,
       sources: ['cypherscope', 'zora', 'clanker', 'screener', 'zora-local', 'sample'],
       debug: {
         cypherscopeCount: tokens.filter(t => t.source === 'zora' && t.id).length,

@@ -2,16 +2,18 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import Header from "../components/Header";
-import Footer from "../components/Footer";
 import { useLoading, PageLoader } from "../components/LoadingProvider";
-import { FiSettings } from "react-icons/fi";
+import LoadingSpinner from "../components/LoadingSpinner";
+import { FiSettings, FiX } from "react-icons/fi";
 import { SiEthereum } from "react-icons/si";
 import { useWatchlists } from "../hooks/useWatchlists";
+import { useFavorites } from "../hooks/useFavorites";
 
 // Icons
 const StarIcon = ({ filled }: { filled: boolean }) => (
-  <svg className="w-4 h-4" fill={filled ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+  <svg className="w-3.5 h-3.5 md:w-4 md:h-4" fill={filled ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
   </svg>
 );
@@ -136,7 +138,7 @@ const TagBadge = ({ tag }: { tag: string }) => {
   };
   
   return (
-    <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full border ${tagColors[tag] || "bg-gray-500/20 text-gray-300 border-gray-500/30"}`}>
+    <span className={`inline-block px-1.5 md:px-2 py-0.5 md:py-1 text-[9px] md:text-xs font-medium rounded-full border ${tagColors[tag] || "bg-gray-500/20 text-gray-300 border-gray-500/30"}`}>
       {tag}
     </span>
   );
@@ -226,7 +228,44 @@ const DexIcon = ({ dexId }: { dexId?: string }) => {
 
 export default function RadarPage() {
   const router = useRouter();
-  const [tokens, setTokens] = useState<Array<{
+  
+  // New pairs from APIs/SDKs (all tokens, no threshold)
+  const [newPairsTokens, setNewPairsTokens] = useState<Array<{
+    id?: string;
+    name: string;
+    symbol: string;
+    address: string;
+    pairAddress?: string;
+    marketCap?: string | number;
+    volume24h?: string | number;
+    uniqueHolders?: string | number;
+    liquidity?: { usd?: string | number };
+    createdAt?: string | Date;
+    tags: string[];
+    mediaContent?: { previewImage?: { small?: string; medium?: string } };
+    source?: string;
+    dexName?: string;
+    marketCapDelta24h?: string | number;
+    totalVolume?: string | number;
+    creatorAddress?: string;
+    totalSupply?: string | number;
+    description?: string;
+    website?: string;
+    telegram?: string;
+    twitter?: string;
+    tokenUri?: string;
+    lastUpdated?: string | Date;
+    priceChange?: {
+      m5?: number;
+      h1?: number;
+      h6?: number;
+      h24?: number;
+    };
+    [key: string]: unknown;
+  }>>([]);
+  
+  // Screener tokens from Firebase (meet thresholds: 50k MC, 10k volume)
+  const [screenerTokens, setScreenerTokens] = useState<Array<{
     id?: string;
     name: string;
     symbol: string;
@@ -273,7 +312,7 @@ export default function RadarPage() {
   const [sortOrder] = useState<"asc" | "desc">("desc");
   
   // Use the new favorites and watchlists hooks
-
+  const { toggleFavorite, isFavorite } = useFavorites();
   const { watchlists, addToWatchlist, removeFromWatchlist } = useWatchlists();
   
   // Individual column filter states
@@ -288,6 +327,32 @@ export default function RadarPage() {
   
   // Filter dropdown states
   const [showTagDropdown, setShowTagDropdown] = useState(false);
+  const [showFiltersModal, setShowFiltersModal] = useState(false);
+  
+  // Advanced filtering system (unused for now)
+  // const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState({
+    timeframes: [] as string[],
+    marketCapMin: "",
+    marketCapMax: "",
+    volumeMin: "",
+    volumeMax: "",
+    liquidityMin: "",
+    liquidityMax: "",
+    priceChangeMin: "",
+    priceChangeMax: "",
+    tokenAgeMin: "",
+    tokenAgeMax: "",
+    categories: [] as string[],
+    protocols: [] as string[],
+    quoteTokens: [] as string[],
+    keywords: "",
+    excludeKeywords: "",
+  });
+  
+  // Quick buy/swap modal state (unused for now)
+  // const [showQuickBuyModal, setShowQuickBuyModal] = useState(false); 
+  // const [selectedTokenForBuy, setSelectedTokenForBuy] = useState<any>(null);
   
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -322,47 +387,37 @@ export default function RadarPage() {
     }
   };
 
-  // Real-time fetching with smooth updates
+  // Fetch new pairs from APIs/SDKs (all tokens, no threshold filtering)
   useEffect(() => {
     let isMounted = true;
-    let fetchTimeout: NodeJS.Timeout | undefined;
     
-    async function fetchTokens(silent = false) {
-      if (!silent) setLoading(true);
-      setError(null);
+    async function fetchNewPairs(_silent = false) {
+      if (!_silent) setLoading(true);
       try {
-        // Fetch fresh tokens
+        // Fetch all tokens from APIs/SDKs
         const res = await fetch(`/api/cypherscope-tokens?t=${Date.now()}`);
         const data = await res.json();
         
         if (!isMounted) return;
         
-        console.log("🔍 API Response:", data);
-        console.log("🔍 Tokens from API:", data.tokens?.length || 0);
+        console.log("🔍 New Pairs API Response:", data);
+        console.log("🔍 New Pairs from API:", data.tokens?.length || 0);
         
-        // Process tokens with proper stats extraction
+        // Process tokens with proper stats extraction - NO THRESHOLD FILTERING
         const tokensWithTags = (data.tokens || []).map((token: any) => {
-          // Ensure we extract stats properly from nested structures
           const processedToken = {
             ...token,
-            // Extract volume from nested structure if needed
             volume24h: token.volume24h || token.volume?.h24 || 0,
-            // Extract marketCap
             marketCap: token.marketCap || 0,
-            // Extract priceChange
             priceChange: token.priceChange || {
               m5: 0,
               h1: 0,
               h6: 0,
               h24: 0,
             },
-            // Extract liquidity
             liquidity: token.liquidity || { usd: 0 },
-            // Extract uniqueHolders
             uniqueHolders: token.uniqueHolders || token.holders || 0,
-            // Extract priceUsd
             priceUsd: token.priceUsd || '0',
-            // Extract txns
             txns: token.txns || {
               m5: { buys: 0, sells: 0 },
               h1: { buys: 0, sells: 0 },
@@ -378,57 +433,78 @@ export default function RadarPage() {
           };
         });
         
-        console.log("🔍 Final tokens with tags:", tokensWithTags.length);
-        console.log("🔍 Sample token stats:", tokensWithTags[0] ? {
-          name: tokensWithTags[0].name,
-          marketCap: tokensWithTags[0].marketCap,
-          volume24h: tokensWithTags[0].volume24h,
-          priceChange: tokensWithTags[0].priceChange,
-        } : 'No tokens');
-        
-        // Smooth update - only update if data changed
-        setTokens(prevTokens => {
-          // Check if we have new tokens or updated data
-          const hasNewTokens = tokensWithTags.length > prevTokens.length;
-          const hasUpdatedData = tokensWithTags.some((newToken: any) => {
-            const oldToken = prevTokens.find((t: any) => t.address === newToken.address);
-            if (!oldToken) return true;
-            // Check if stats changed
-            return (
-              oldToken.marketCap !== newToken.marketCap ||
-              oldToken.volume24h !== newToken.volume24h ||
-              oldToken.priceChange?.h24 !== newToken.priceChange?.h24
-            );
-          });
-          
-          if (hasNewTokens || hasUpdatedData) {
-            return tokensWithTags;
-          }
-          return prevTokens;
-        });
+        setNewPairsTokens(tokensWithTags);
       } catch (error) {
-        console.error("❌ Fetch error:", error);
-        if (!silent) setError("Failed to fetch tokens.");
+        console.error("❌ Fetch new pairs error:", error);
+        if (!_silent) setError("Failed to fetch new pairs.");
       } finally {
-        if (!silent) setLoading(false);
+        if (!_silent) setLoading(false);
+      }
+    }
+    
+    // Fetch screener tokens from Firebase (meet thresholds: 50k MC, 10k volume)
+    async function fetchScreenerTokens(_silent = false) {
+      try {
+        const res = await fetch(`/api/tokens?source=all&limit=500&sortBy=createdAt&sortOrder=desc`);
+        const data = await res.json();
+        
+        if (!isMounted) return;
+        
+        console.log("🔍 Screener tokens:", data.tokens?.length || 0);
+        
+        // Process screener tokens (already meet thresholds)
+        const tokensWithTags = (data.tokens || []).map((token: any) => {
+          const processedToken = {
+            ...token,
+            volume24h: token.volume24h || token.volume?.h24 || 0,
+            marketCap: token.marketCap || 0,
+            priceChange: token.priceChange || {
+              m5: 0,
+              h1: 0,
+              h6: 0,
+              h24: 0,
+            },
+            liquidity: token.liquidity || { usd: 0 },
+            uniqueHolders: token.uniqueHolders || token.holders || 0,
+            priceUsd: token.priceUsd || '0',
+            txns: token.txns || {
+              m5: { buys: 0, sells: 0 },
+              h1: { buys: 0, sells: 0 },
+              h6: { buys: 0, sells: 0 },
+              h24: { buys: 0, sells: 0 },
+            },
+          };
+          
+          const tags = getTokenTags(processedToken);
+          return {
+            ...processedToken,
+            tags: tags
+          };
+        });
+        
+        setScreenerTokens(tokensWithTags);
+      } catch (error) {
+        console.error("❌ Fetch screener tokens error:", error);
       }
     }
     
     // Initial fetch
-    fetchTokens();
+    fetchNewPairs();
+    fetchScreenerTokens();
     
-    // Real-time polling every 30 seconds for new pairs and stats updates
+    // Real-time polling every 12 seconds
     const pollInterval = setInterval(() => {
-      fetchTokens(true); // Silent fetch
-    }, 30 * 1000);
+      fetchNewPairs(true);
+      fetchScreenerTokens(true);
+    }, 12 * 1000);
     
-    // Background sync every 2 minutes to save new tokens
+    // Background sync every 2 minutes
     const syncInterval = setInterval(async () => {
       try {
         await fetch('/api/tokens/sync', { method: 'GET' });
         console.log('🔄 Background token sync completed');
-        // Refresh tokens after sync
-        fetchTokens(true);
+        fetchNewPairs(true);
+        fetchScreenerTokens(true);
       } catch (error) {
         console.warn('⚠️ Background sync failed:', error);
       }
@@ -438,12 +514,11 @@ export default function RadarPage() {
       isMounted = false;
       clearInterval(pollInterval);
       clearInterval(syncInterval);
-      if (fetchTimeout) clearTimeout(fetchTimeout);
     };
   }, []);
 
-  // Filtering and sorting
-  const filteredAndSortedTokens = tokens
+  // Filter new pairs tokens (no threshold filtering - show all)
+  const filteredNewPairs = newPairsTokens
     .filter((token) => {
       if (showWatchlistOnly && !isInAnyWatchlist(token.address)) {
         return false;
@@ -454,20 +529,37 @@ export default function RadarPage() {
         token.symbol?.toLowerCase().includes(search.toLowerCase()) ||
         token.address?.toLowerCase().includes(search.toLowerCase());
       
-      // Tag filter
       let matchesTag = true;
       if (selectedTag && token.tags) {
         matchesTag = token.tags.includes(selectedTag);
       }
       
-      // Market cap and volume filters - only allow pairs > $50k market cap and > $10k volume
-      const marketCap = typeof token.marketCap === 'string' ? parseFloat(token.marketCap) : (token.marketCap || 0);
-      const volume24h = typeof token.volume24h === 'string' ? parseFloat(token.volume24h) : (token.volume24h || 0);
+      return matchesSearch && matchesTag;
+    })
+    .sort((a, b) => {
+      const aDate = new Date(a.createdAt || 0).getTime();
+      const bDate = new Date(b.createdAt || 0).getTime();
+      return bDate - aDate;
+    });
+
+  // Filter screener tokens (already meet thresholds)
+  const filteredScreenerTokens = screenerTokens
+    .filter((token) => {
+      if (showWatchlistOnly && !isInAnyWatchlist(token.address)) {
+        return false;
+      }
       
-      const meetsMarketCapThreshold = marketCap >= 50000; // $50k minimum
-      const meetsVolumeThreshold = volume24h >= 10000; // $10k minimum
+      const matchesSearch =
+        token.name?.toLowerCase().includes(search.toLowerCase()) ||
+        token.symbol?.toLowerCase().includes(search.toLowerCase()) ||
+        token.address?.toLowerCase().includes(search.toLowerCase());
       
-      return matchesSearch && matchesTag && meetsMarketCapThreshold && meetsVolumeThreshold;
+      let matchesTag = true;
+      if (selectedTag && token.tags) {
+        matchesTag = token.tags.includes(selectedTag);
+      }
+      
+      return matchesSearch && matchesTag;
     })
     .sort((a, b) => {
       let aVal: number | Date, bVal: number | Date;
@@ -501,120 +593,113 @@ export default function RadarPage() {
       }
     });
 
-  // Helper function to check if token is NEW (created within last 10 days)
-  const isNewToken = (token: any) => {
-    if (!token.createdAt) return false;
-    const created = new Date(token.createdAt);
-    const now = new Date();
-    const daysDiff = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
-    return daysDiff <= 10;
-  };
-
   // Helper function to check if token is SURGING
   const isSurgingToken = (token: any) => {
     // Must have SURGING tag from API
     if (token.tags?.includes("SURGING")) return true;
     
-    // OR must meet surging criteria:
-    // 1. Significant positive price movement (10%+ gain in 24h)
-    const priceChange24h = token.priceChange?.h24 || 0;
-    const hasGoodGain = priceChange24h >= 10;
+    // OR must meet surging criteria (very relaxed):
+    // 1. Positive price movement (any positive gain) OR high volume
+    const priceChange24h = token.priceChange?.h24 || token.priceChange24h || 0;
+    const priceChange6h = token.priceChange?.h6 || 0;
+    const priceChange1h = token.priceChange?.h1 || 0;
+    const hasPositiveGain = priceChange24h > 0 || priceChange6h > 0 || priceChange1h > 0;
     
-    // 2. High volume (at least $10K in 24h)
+    // 2. Some volume (at least $1K in 24h) - very low threshold
     const volume24h = typeof token.volume24h === 'string' ? parseFloat(token.volume24h) : (token.volume24h || 0);
-    const hasVolume = volume24h >= 10000;
+    const hasVolume = volume24h >= 1000;
     
-    // 3. Recent activity (created within last 30 days)
-    const isRecent = token.createdAt && 
-      ((Date.now() - new Date(token.createdAt).getTime()) / (1000 * 60 * 60 * 24)) < 30;
+    // 3. Recent activity (created within last 90 days) OR has tags indicating activity
+    const isRecent = token.createdAt ? 
+      ((Date.now() - new Date(token.createdAt).getTime()) / (1000 * 60 * 60 * 24)) < 90 :
+      true; // If no createdAt, assume recent
     
-    return hasGoodGain && hasVolume && isRecent;
+    // Show if: (has positive gain AND volume) OR (high volume alone) OR (has activity tags)
+    const hasActivityTags = token.tags?.some((tag: string) => 
+      ['SPIKE', 'VOLUME', 'RUNNER', 'TRENDING', 'GAINER'].includes(tag)
+    );
+    
+    return (hasPositiveGain && hasVolume) || (volume24h >= 10000) || hasActivityTags || isRecent;
   };
 
   // Helper function to check if token is a GAINER
   const isGainerToken = (token: any) => {
-    // Must have positive 24h price change (any positive gain)
-    const priceChange24h = token.priceChange?.h24 || 0;
-    return priceChange24h > 0;
+    // Check all available price change timeframes
+    const priceChange24h = token.priceChange?.h24 || token.priceChange24h || 0;
+    const priceChange6h = token.priceChange?.h6 || 0;
+    const priceChange1h = token.priceChange?.h1 || 0;
+    const priceChange5m = token.priceChange?.m5 || 0;
+    
+    // If any timeframe shows positive gain, it's a gainer
+    if (priceChange24h > 0 || priceChange6h > 0 || priceChange1h > 0 || priceChange5m > 0) {
+      return true;
+    }
+    
+    // Also check market cap delta if available
+    const marketCapDelta = typeof token.marketCapDelta24h === 'string' ? 
+      parseFloat(token.marketCapDelta24h) : (token.marketCapDelta24h || 0);
+    if (marketCapDelta > 0) return true;
+    
+    // If no price data, check if it has GAINER tag
+    if (token.tags?.includes("GAINER")) return true;
+    
+    // Default: show tokens with volume (they're likely active)
+    const volume24h = typeof token.volume24h === 'string' ? parseFloat(token.volume24h) : (token.volume24h || 0);
+    return volume24h > 0;
   };
 
   // Categorize tokens for 3-column layout
-  // NEW PAIRS: Tokens created in last 10 days (regardless of other metrics)
-  let newTokens = filteredAndSortedTokens
-    .filter(token => isNewToken(token))
+  // NEW PAIRS: ALL tokens from APIs/SDKs (filteredNewPairs) - NO FILTERING, show all
+  // These should NEVER appear in surging or gainers
+  let newTokens = filteredNewPairs
     .sort((a, b) => {
-      // Sort by creation date (newest first)
       const aDate = new Date(a.createdAt || 0).getTime();
       const bDate = new Date(b.createdAt || 0).getTime();
       return bDate - aDate;
     });
 
-  // SURGING: Tokens with significant momentum and activity
-  // Show ALL tokens that meet surging criteria (can include NEW tokens)
-  let surgingTokens = filteredAndSortedTokens
-    .filter(token => isSurgingToken(token))
+  // SURGING: ONLY tokens from screener (Firebase tokens collection) with significant momentum
+  // These are tokens that are already in /discover page (meet 50k MC, 10k volume thresholds)
+  let surgingTokens = filteredScreenerTokens
+    .filter(token => {
+      // Screener tokens come from /api/tokens which only returns tokens from Firebase tokens collection
+      // No need to filter by source - filteredScreenerTokens already only contains screener tokens
+      return isSurgingToken(token);
+    })
     .sort((a, b) => {
-      // Sort by price change (highest first)
       const aChange = a.priceChange?.h24 || 0;
       const bChange = b.priceChange?.h24 || 0;
       return bChange - aChange;
-    });
+    })
+    .slice(0, 50); // Show top 50 surging tokens
 
-  // TOP GAINERS: ALL tokens with positive 24h price increases, sorted by highest gains
-  let gainerTokens = filteredAndSortedTokens
-    .filter(token => isGainerToken(token))
+  // TOP GAINERS: ONLY tokens from screener (Firebase tokens collection) with positive price increases
+  // These are tokens that are already in /discover page (meet 50k MC, 10k volume thresholds)
+  let gainerTokens = filteredScreenerTokens
+    .filter(token => {
+      // Only use screener tokens - exclude any tokens that might be from new pairs sources
+      // Screener tokens come from /api/tokens which only returns tokens from Firebase tokens collection
+      return isGainerToken(token);
+    })
     .sort((a, b) => {
-      const aChange = a.priceChange?.h24 || 0;
-      const bChange = b.priceChange?.h24 || 0;
-      return bChange - aChange; // Sort by highest gains first
-    });
-
-  // Ensure sections always have at least one token (use placeholder if needed)
-  // Show ALL tokens, not limited
-  if (newTokens.length === 0 && filteredAndSortedTokens.length > 0) {
-    // If no new tokens, show the most recent token as placeholder
-    newTokens = [filteredAndSortedTokens.sort((a, b) => {
-      const aDate = new Date(a.createdAt || 0).getTime();
-      const bDate = new Date(b.createdAt || 0).getTime();
-      return bDate - aDate;
-    })[0]];
-  }
-  
-  if (surgingTokens.length === 0 && filteredAndSortedTokens.length > 0) {
-    // If no surging tokens, show token with highest volume
-    surgingTokens = [filteredAndSortedTokens.sort((a, b) => {
-      const aVol = typeof a.volume24h === 'string' ? parseFloat(a.volume24h) : (a.volume24h || 0);
-      const bVol = typeof b.volume24h === 'string' ? parseFloat(b.volume24h) : (b.volume24h || 0);
-      return bVol - aVol;
-    })[0]];
-  }
-  
-  if (gainerTokens.length === 0 && filteredAndSortedTokens.length > 0) {
-    // If no gainer tokens, show token with highest market cap
-    gainerTokens = [filteredAndSortedTokens.sort((a, b) => {
-      const aMC = typeof a.marketCap === 'string' ? parseFloat(a.marketCap) : (a.marketCap || 0);
-      const bMC = typeof b.marketCap === 'string' ? parseFloat(b.marketCap) : (b.marketCap || 0);
-      return bMC - aMC;
-    })[0]];
-  }
-  
-  // Show ALL tokens - no limit
+      const aChange = a.priceChange?.h24 || a.priceChange?.h6 || a.priceChange?.h1 || 0;
+      const bChange = b.priceChange?.h24 || b.priceChange?.h6 || b.priceChange?.h1 || 0;
+      return bChange - aChange;
+    })
+    .slice(0, 100); // Show top 100 gainers
 
   // Debug categorization
   console.log("🔍 Categorization Debug:");
-  console.log("🔍 Total filtered tokens:", filteredAndSortedTokens.length);
+  console.log("🔍 New pairs tokens:", filteredNewPairs.length);
+  console.log("🔍 Screener tokens:", filteredScreenerTokens.length);
   console.log("🔍 New tokens:", newTokens.length);
   console.log("🔍 Surging tokens:", surgingTokens.length);
   console.log("🔍 Gainer tokens:", gainerTokens.length);
-  
-  // Show first few tokens and their tags
-  filteredAndSortedTokens.slice(0, 5).forEach((token, index) => {
-    console.log(`🔍 Token ${index + 1}:`, token.name, "Tags:", token.tags);
-  });
 
 
 
-  const TokenCard = ({ token, index }: { token: any; index: number }) => {
+  const TokenCard = ({ token }: { token: any; index: number }) => {
+    // Animation tracking removed
     // Helper function to format price change with color
     const formatPriceChange = (change: number | undefined) => {
       if (change === undefined || change === null) return { text: "-", color: "text-gray-400" };
@@ -675,7 +760,13 @@ export default function RadarPage() {
 
     // Navigate to chart page
     const handleTokenClick = () => {
-      router.push(`/discover/${token.pairAddress || token.address}/chart`);
+      const addressToUse = token.pairAddress || token.address;
+      // Validate address before navigation (must be 42 characters: 0x + 40 hex)
+      if (addressToUse && /^0x[a-fA-F0-9]{40}$/.test(addressToUse)) {
+        router.push(`/discover/${addressToUse}/chart`);
+      } else {
+        console.warn("Invalid token address for navigation:", addressToUse);
+      }
     };
 
     // Handle quick buy
@@ -685,91 +776,115 @@ export default function RadarPage() {
     };
 
     return (
-      <div
-        className="bg-gray-800/30 border-b border-gray-700/50 p-2 md:p-2.5 hover:bg-gray-700/30 transition-all duration-300 cursor-pointer group animate-slide-in"
+      <motion.div
+        className="bg-gray-800/30 border-b border-gray-700/50 p-1.5 md:p-2.5 hover:bg-gray-700/30 transition-all duration-300 cursor-pointer group"
+        initial={false}
+        animate={{}}
+        transition={{
+          duration: 0.5,
+          ease: "easeOut",
+        }}
         style={{ 
-          minHeight: '70px',
-          animationDelay: `${index * 50}ms`,
+          minHeight: '60px',
         }}
         onClick={handleTokenClick}
       >
-        <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-center gap-2 md:gap-3 mb-1 md:mb-2">
                           <Image
-            src={token.info?.imageUrl || token.mediaContent?.previewImage?.small || `https://dexscreener.com/base/${token.address}/logo.png`}
+            src={token.info?.imageUrl || token.mediaContent?.previewImage?.small || (token.address && /^0x[a-fA-F0-9]{40}$/.test(token.address) ? `https://dexscreener.com/base/${token.address}/logo.png` : '/placeholder-token.png')}
                             alt={token.symbol || "Token"}
-            width={32}
-            height={32}
-            className="rounded-full bg-blue-900"
+            width={28}
+            height={28}
+            className="rounded-full bg-blue-900 md:w-8 md:h-8"
                 onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-                  e.currentTarget.src = `https://dexscreener.com/base/${token.address}/logo.png`;
+                  e.currentTarget.src = (token.address && /^0x[a-fA-F0-9]{40}$/.test(token.address) ? `https://dexscreener.com/base/${token.address}/logo.png` : '/placeholder-token.png');
                 }}
                           />
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-gray-200 group-hover:text-blue-200 transition truncate text-sm">
+            <div className="font-semibold text-gray-200 group-hover:text-blue-200 transition truncate text-xs md:text-sm">
                               {token.name || "Unknown"}
                             </div>
-            <div className="text-xs text-gray-400 truncate">{token.symbol}</div>
+            <div className="text-[10px] md:text-xs text-gray-400 truncate">{token.symbol}</div>
             {/* Price and 24h change */}
             {priceUsd && priceUsd !== '0' && (
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-1.5 md:gap-2 text-[10px] md:text-xs">
                 <span className="text-gray-300">${parseFloat(priceUsd).toFixed(6)}</span>
                 <span className={priceChange24h.color}>{priceChange24h.text}</span>
               </div>
             )}
                         </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleWatchlist(token.address);
-                          }}
-            className={`p-1 rounded transition ${
-                            isInAnyWatchlist(token.address)
-                              ? "text-yellow-400 hover:text-yellow-300"
-                              : "text-gray-400 hover:text-yellow-400"
-                          }`}
-                        >
-                          <StarIcon filled={isInAnyWatchlist(token.address)} />
-                        </button>
+                        <div className="flex items-center gap-0.5 md:gap-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFavorite(token.address);
+                            }}
+                            className={`p-0.5 md:p-1 rounded transition ${
+                              isFavorite(token.address)
+                                ? "text-yellow-400 hover:text-yellow-300"
+                                : "text-gray-400 hover:text-yellow-400"
+                            }`}
+                          >
+                            <StarIcon filled={isFavorite(token.address)} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleWatchlist(token.address);
+                            }}
+                            className={`p-0.5 md:p-1 rounded transition ${
+                              isInAnyWatchlist(token.address)
+                                ? "text-blue-400 hover:text-blue-300"
+                                : "text-gray-400 hover:text-blue-400"
+                            }`}
+                            title="Add to watchlist"
+                          >
+                            <svg className="w-3.5 h-3.5 md:w-4 md:h-4" fill={isInAnyWatchlist(token.address) ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                       
-        <div className="grid grid-cols-2 gap-1 md:gap-2 text-xs mb-2">
+        <div className="grid grid-cols-2 gap-0.5 md:gap-2 text-[10px] md:text-xs mb-1 md:mb-2">
           <div>
             <span className="text-gray-400">MC:</span>
-            <span className="text-gray-200 ml-1">
+            <span className="text-gray-200 ml-0.5 md:ml-1">
               {marketCap > 0 ? formatNumber(marketCap) : '-'}
             </span>
           </div>
           <div>
             <span className="text-gray-400">Vol:</span>
-            <span className="text-gray-200 ml-1">
+            <span className="text-gray-200 ml-0.5 md:ml-1">
               {volume24h > 0 ? formatNumber(volume24h) : '-'}
             </span>
           </div>
           <div>
             <span className="text-gray-400">Buy:</span>
-            <span className={`ml-1 ${buyPercentage.color}`}>{buyPercentage.text}</span>
+            <span className={`ml-0.5 md:ml-1 ${buyPercentage.color}`}>{buyPercentage.text}</span>
                       </div>
           <div>
             <span className="text-gray-400">Age:</span>
-            <span className="text-gray-200 ml-1">{token.createdAt ? getAgeFromTimestamp(token.createdAt) : "-"}</span>
+            <span className="text-gray-200 ml-0.5 md:ml-1">{token.createdAt ? getAgeFromTimestamp(token.createdAt) : "-"}</span>
                         </div>
                         </div>
         
         {/* DEX Row */}
-        <div className="flex items-center justify-between text-xs mb-1 md:mb-2">
+        <div className="flex items-center justify-between text-[10px] md:text-xs mb-1 md:mb-2">
           <DexIcon dexId={token.dexId} />
                       </div>
                       
                       {token.tags && token.tags.length > 0 && (
-          <div className="flex items-center justify-between">
-            <div className="flex gap-1 flex-wrap">
+          <div className="flex items-center justify-between gap-1 md:gap-2">
+            <div className="flex gap-0.5 md:gap-1 flex-wrap flex-1 min-w-0">
               {token.tags.slice(0, 2).map((tag: string) => (
                 <TagBadge key={tag} tag={tag} />
               ))}
             </div>
             
-            {/* Quick Buy Buttons */}
-            <div className="flex items-center gap-1.5">
+            {/* Quick Buy Buttons - Compact on mobile */}
+            <div className="flex items-center gap-0.5 md:gap-1.5 flex-shrink-0">
               {[0.01, 0.025, 0.05, 0.1].map((amount) => (
                 <button
                   key={amount}
@@ -777,16 +892,16 @@ export default function RadarPage() {
                     e.stopPropagation();
                     handleQuickBuy(token, amount);
                   }}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-gray-700/20 border border-gray-600/30 rounded-full hover:bg-gray-600/30 transition text-gray-300 hover:text-gray-200"
+                  className="flex items-center gap-0.5 md:gap-1 px-1.5 md:px-3 py-0.5 md:py-1.5 text-[9px] md:text-sm bg-gray-700/20 border border-gray-600/30 rounded-full hover:bg-gray-600/30 transition text-gray-300 hover:text-gray-200"
                 >
-                  <SiEthereum className="w-3 h-3 text-gray-400" />
-                  <span>{amount}</span>
+                  <SiEthereum className="w-2.5 h-2.5 md:w-3 md:h-3 text-gray-400" />
+                  <span className="hidden sm:inline">{amount}</span>
                 </button>
               ))}
             </div>
           </div>
                       )}
-      </div>
+      </motion.div>
     );
   };
 
@@ -798,15 +913,15 @@ export default function RadarPage() {
     filterAmount: string;
     onFilterAmountChange: (value: string) => void;
   }) => (
-    <div className="p-3 bg-gray-800/50 border-b border-gray-700/50 h-[60px] flex items-center">
+    <div className="p-1.5 md:p-3 bg-gray-800/50 border-b border-gray-700/50 h-[45px] md:h-[60px] flex items-center">
       <div className="flex items-center justify-between w-full">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-normal text-gray-200 font-sans uppercase">{title}</h2>
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 md:gap-3 flex-1 min-w-0">
+          <h2 className="text-xs md:text-base font-semibold text-gray-100 font-sans tracking-wide truncate">{title}</h2>
+          <div className="flex items-center gap-1 md:gap-2">
             <select
               value={filterValue}
               onChange={(e) => onFilterChange(e.target.value)}
-              className="bg-gray-900/50 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-200 focus:border-blue-500/50 focus:outline-none hover:bg-gray-800/50 transition-colors font-sans uppercase"
+              className="bg-gray-900/50 border border-gray-700 rounded-lg px-1.5 md:px-3 py-0.5 md:py-1.5 text-[9px] md:text-xs text-gray-200 focus:border-blue-500/50 focus:outline-none hover:bg-gray-800/50 transition-colors font-sans uppercase"
             >
               <option value="">All</option>
               <option value="age">Age</option>
@@ -821,14 +936,14 @@ export default function RadarPage() {
                 type="number"
                 value={filterAmount}
                 onChange={(e) => onFilterAmountChange(e.target.value)}
-                placeholder="Value"
-                className="bg-gray-900/50 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-200 focus:border-blue-500/50 focus:outline-none hover:bg-gray-800/50 transition-colors w-20 font-sans"
+                placeholder="Val"
+                className="bg-gray-900/50 border border-gray-700 rounded-lg px-1.5 md:px-3 py-0.5 md:py-1.5 text-[9px] md:text-xs text-gray-200 focus:border-blue-500/50 focus:outline-none hover:bg-gray-800/50 transition-colors w-12 md:w-20 font-sans"
               />
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-400 font-sans">{count}</span>
+        <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
+          <span className="text-[10px] md:text-sm text-gray-400 font-sans">{count}</span>
           {count > 5 && (
             <div className="hidden md:flex items-center gap-1">
               <span className="text-xs text-gray-500 font-sans">(scroll for more)</span>
@@ -843,14 +958,14 @@ export default function RadarPage() {
   );
 
   return (
-    <div className="h-screen bg-gray-950 text-gray-200 font-sans flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-gray-950 text-gray-200 font-sans flex flex-col overflow-hidden">
       <Header />
       
-      {/* Page Loader */}
+      {/* Page Loader - centered on page */}
       {pageLoading && <PageLoader />}
       
       {/* Compact Header */}
-      <div className="bg-gray-800/50 flex-shrink-0">
+      <div className="bg-gray-800/50 flex-shrink-0 border-b border-gray-700/50">
         <div className="w-full px-4 py-3">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div className="flex items-center justify-between md:justify-start gap-4">
@@ -858,13 +973,13 @@ export default function RadarPage() {
                 <h1 className="text-xl font-bold text-gray-200">Radar</h1>
                 <div className="hidden md:flex items-center gap-2 text-sm">
                   <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                  <span className="text-gray-400">{filteredAndSortedTokens.length} tokens</span>
+                  <span className="text-gray-400">{newPairsTokens.length + screenerTokens.length} tokens</span>
                   <span className="text-blue-400">•</span>
                   <span className="text-gray-400">{watchlists.reduce((total, w) => total + w.tokens.length, 0)} watchlisted</span>
                 </div>
                 <div className="md:hidden flex items-center gap-2 text-xs">
                   <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                  <span className="text-gray-400">{filteredAndSortedTokens.length} tokens</span>
+                  <span className="text-gray-400">{newPairsTokens.length + screenerTokens.length} tokens</span>
                 </div>
               </div>
               
@@ -927,8 +1042,16 @@ export default function RadarPage() {
               </div>
             </div>
                       
-            {/* Desktop Compact Filters */}
+              {/* Desktop Compact Filters */}
             <div className="hidden md:flex items-center justify-end gap-2">
+              {/* Filters Button */}
+              <button
+                onClick={() => setShowFiltersModal(true)}
+                className="px-3 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-gray-300 hover:bg-gray-600/50 transition text-sm flex items-center gap-2"
+              >
+                <FiSettings className="w-4 h-4" />
+                <span>Filters</span>
+              </button>
               {/* Combined Filter Button */}
               <div className="relative filter-dropdown">
                 <button
@@ -988,13 +1111,12 @@ export default function RadarPage() {
                                                   </div>
                         </div>
                        
-        {/* Separator Line */}
-        <div className="w-full border-b border-gray-700/50"></div>
-                       
         {/* 3-Column Layout - Full Width */}
-      <div className="flex-1 md:overflow-hidden overflow-auto min-h-0 min-w-0">
+      <div className="flex-1 overflow-hidden min-h-0 min-w-0">
         {loading ? (
-          <div className="text-gray-400 text-sm">Loading tokens...</div>
+          <div className="flex items-center justify-center h-full" style={{ paddingTop: '40px' }}>
+            <LoadingSpinner variant="dots" size="lg" text="Loading Radar..." />
+          </div>
         ) : error ? (
           <div className="text-center py-12">
             <div className="text-red-400 text-lg mb-2">{error}</div>
@@ -1006,9 +1128,9 @@ export default function RadarPage() {
                         </button>
                       </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 w-full h-full min-w-0" style={{ height: 'calc(100vh - 200px)' }}>
+          <div className="flex md:grid md:grid-cols-3 w-full h-full min-w-0 overflow-x-auto md:overflow-x-visible">
             {/* New Tokens Column */}
-            <div className="flex flex-col md:h-full min-w-0 border-r border-gray-700/50">
+            <div className="flex flex-col h-full min-w-0 flex-shrink-0 w-full md:w-auto border-r border-gray-700/50">
               <ColumnHeader 
                 title="New Pairs" 
                 count={newTokens.length} 
@@ -1017,17 +1139,15 @@ export default function RadarPage() {
                 filterAmount={newPairsFilterAmount}
                 onFilterAmountChange={setNewPairsFilterAmount}
               />
-              <div className="flex-1 overflow-hidden min-h-0">
-                <div className="h-full overflow-y-auto scrollbar-hide px-2 md:px-0">
+              <div className="flex-1 overflow-y-auto scrollbar-hide px-0" style={{ minHeight: 0 }}>
                   {newTokens.map((token, index) => (
                     <TokenCard key={`${token.address}-${index}`} token={token} index={index} />
                   ))}
-                </div>
               </div>
             </div>
                         
             {/* Surging Tokens Column */}
-            <div className="flex flex-col md:h-full min-w-0 border-r border-gray-700/50">
+            <div className="flex flex-col h-full min-w-0 flex-shrink-0 w-full md:w-auto border-r border-gray-700/50">
               <ColumnHeader 
                 title="Surging" 
                 count={surgingTokens.length} 
@@ -1036,17 +1156,15 @@ export default function RadarPage() {
                 filterAmount={surgingFilterAmount}
                 onFilterAmountChange={setSurgingFilterAmount}
               />
-              <div className="flex-1 overflow-hidden min-h-0">
-                <div className="h-full overflow-y-auto scrollbar-hide px-2 md:px-0">
+              <div className="flex-1 overflow-y-auto scrollbar-hide px-0" style={{ minHeight: 0 }}>
                   {surgingTokens.map((token, index) => (
                     <TokenCard key={`${token.address}-${index}`} token={token} index={index} />
                   ))}
-                </div>
               </div>
             </div>
                       
             {/* Gainer Tokens Column */}
-            <div className="flex flex-col md:h-full min-w-0">
+            <div className="flex flex-col h-full min-w-0 flex-shrink-0 w-full md:w-auto">
               <ColumnHeader 
                 title="Top Gainers" 
                 count={gainerTokens.length} 
@@ -1055,20 +1173,173 @@ export default function RadarPage() {
                 filterAmount={gainersFilterAmount}
                 onFilterAmountChange={setGainersFilterAmount}
               />
-              <div className="flex-1 overflow-hidden min-h-0">
-                <div className="h-full overflow-y-auto scrollbar-hide px-2 md:px-0">
+              <div className="flex-1 overflow-y-auto scrollbar-hide px-0" style={{ minHeight: 0 }}>
                   {gainerTokens.map((token, index) => (
                     <TokenCard key={`${token.address}-${index}`} token={token} index={index} />
                   ))}
-                </div>
               </div>
             </div>
           </div>
         )}
       </div>
-
-      {/* Main Footer */}
-      <Footer />
+      
+      {/* Filters Modal */}
+      {showFiltersModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4" onClick={() => setShowFiltersModal(false)}>
+          <div className="bg-gray-900 border border-gray-700 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 border-b border-gray-700 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-200">Filters</h2>
+              <button
+                onClick={() => setShowFiltersModal(false)}
+                className="text-gray-400 hover:text-gray-200 transition"
+              >
+                <FiX className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-6">
+              {/* Market Cap Range */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Market Cap</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="number"
+                    placeholder="Min"
+                    value={advancedFilters.marketCapMin}
+                    onChange={(e) => setAdvancedFilters({ ...advancedFilters, marketCapMin: e.target.value })}
+                    className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 focus:border-blue-500 focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Max"
+                    value={advancedFilters.marketCapMax}
+                    onChange={(e) => setAdvancedFilters({ ...advancedFilters, marketCapMax: e.target.value })}
+                    className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+              
+              {/* Volume Range */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Volume (24h)</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="number"
+                    placeholder="Min"
+                    value={advancedFilters.volumeMin}
+                    onChange={(e) => setAdvancedFilters({ ...advancedFilters, volumeMin: e.target.value })}
+                    className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 focus:border-blue-500 focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Max"
+                    value={advancedFilters.volumeMax}
+                    onChange={(e) => setAdvancedFilters({ ...advancedFilters, volumeMax: e.target.value })}
+                    className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+              
+              {/* Liquidity Range */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Liquidity</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="number"
+                    placeholder="Min"
+                    value={advancedFilters.liquidityMin}
+                    onChange={(e) => setAdvancedFilters({ ...advancedFilters, liquidityMin: e.target.value })}
+                    className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 focus:border-blue-500 focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Max"
+                    value={advancedFilters.liquidityMax}
+                    onChange={(e) => setAdvancedFilters({ ...advancedFilters, liquidityMax: e.target.value })}
+                    className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+              
+              {/* Price Change Range */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Price Change (24h)</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="number"
+                    placeholder="Min %"
+                    value={advancedFilters.priceChangeMin}
+                    onChange={(e) => setAdvancedFilters({ ...advancedFilters, priceChangeMin: e.target.value })}
+                    className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 focus:border-blue-500 focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Max %"
+                    value={advancedFilters.priceChangeMax}
+                    onChange={(e) => setAdvancedFilters({ ...advancedFilters, priceChangeMax: e.target.value })}
+                    className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+              
+              {/* Token Age Range */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Token Age (days)</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="number"
+                    placeholder="Min"
+                    value={advancedFilters.tokenAgeMin}
+                    onChange={(e) => setAdvancedFilters({ ...advancedFilters, tokenAgeMin: e.target.value })}
+                    className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 focus:border-blue-500 focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Max"
+                    value={advancedFilters.tokenAgeMax}
+                    onChange={(e) => setAdvancedFilters({ ...advancedFilters, tokenAgeMax: e.target.value })}
+                    className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+              
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-700">
+                <button
+                  onClick={() => {
+                    setAdvancedFilters({
+                      timeframes: [],
+                      marketCapMin: "",
+                      marketCapMax: "",
+                      volumeMin: "",
+                      volumeMax: "",
+                      liquidityMin: "",
+                      liquidityMax: "",
+                      priceChangeMin: "",
+                      priceChangeMax: "",
+                      tokenAgeMin: "",
+                      tokenAgeMax: "",
+                      categories: [],
+                      protocols: [],
+                      quoteTokens: [],
+                      keywords: "",
+                      excludeKeywords: "",
+                    });
+                  }}
+                  className="px-4 py-2 text-gray-300 hover:text-gray-200 transition"
+                >
+                  Reset
+                </button>
+                <button
+                  onClick={() => setShowFiltersModal(false)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition"
+                >
+                  Apply Filters
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

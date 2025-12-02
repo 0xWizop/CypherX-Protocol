@@ -18,16 +18,14 @@ import {
   FaArrowDown,
   FaVolumeUp,
   FaDollarSign,
-  FaEdit,
   FaRedo,
   FaExclamationTriangle,
-  FaShieldAlt,
-  FaRocket,
   FaCopy,
   FaChartLine,
   FaBookmark,
   FaFilter,
 } from "react-icons/fa";
+import { PencilIcon, ArrowPathIcon, TrashIcon } from "@heroicons/react/24/outline";
 
 import debounce from "lodash/debounce";
 
@@ -42,7 +40,7 @@ import { useLoginModal } from "@/app/providers";
 
 import { useWatchlists } from "@/app/hooks/useWatchlists";
 
-import { collection, onSnapshot, query, addDoc, deleteDoc, doc, serverTimestamp, setDoc, updateDoc, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, addDoc, deleteDoc, doc, serverTimestamp, setDoc, updateDoc, arrayUnion, arrayRemove, getDoc, getDocs, where } from "firebase/firestore";
 
 import { ToastContainer, toast as reactToast } from "react-toastify";
 
@@ -132,7 +130,7 @@ const TokenRow = React.memo(({ token, index, style, onTokenClick, favorites, onT
     return (
       <div style={style} className="p-2">
         <div
-          className="bg-gray-900 rounded-lg p-3 border border-blue-500/20 hover:border-blue-500/40 transition-colors cursor-pointer"
+          className="bg-gray-900 rounded-md p-3 border border-blue-500/20 hover:border-blue-500/40 transition-colors cursor-pointer"
           onClick={() => onTokenClick(token.poolAddress)}
         >
           <div className="flex items-center justify-between mb-2">
@@ -635,6 +633,7 @@ export default function TokenScreener() {
   const [customAlerts, setCustomAlerts] = useState<CustomAlert[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [notificationCount, setNotificationCount] = useState(0);
+  const [alertTokenData, setAlertTokenData] = useState<Map<string, { name: string; symbol: string; imageUrl: string }>>(new Map());
 
   const [_userAlerts, _setUserAlerts] = useState<UserAlert[]>([]);
   const [_isAlertModalOpen, _setIsAlertModalOpen] = useState(false);
@@ -1014,23 +1013,113 @@ export default function TokenScreener() {
 
   // Check Authentication & fetch custom alerts
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(firebaseAuth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(firebaseAuth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
         // Fetch custom alerts
         const customAlertsRef = collection(db, `users/${currentUser.uid}/customAlerts`);
-        const unsubCustomAlerts = onSnapshot(customAlertsRef, (snapshot) => {
+        const unsubCustomAlerts = onSnapshot(customAlertsRef, async (snapshot) => {
           const cas = snapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
           })) as CustomAlert[];
           setCustomAlerts(cas);
+          
+          // Fetch token data for alerts from Firebase tokens collection
+          const tokenDataMap = new Map<string, { name: string; symbol: string; imageUrl: string }>();
+          for (const alert of cas) {
+            // Early validation: Skip invalid pool addresses (must be 42 characters: 0x + 40 hex)
+            if (!alert.poolAddress || !/^0x[a-fA-F0-9]{40}$/.test(alert.poolAddress)) {
+              // Invalid address - skip this alert silently
+              continue;
+            }
+            
+            if (!tokenDataMap.has(alert.poolAddress)) {
+              try {
+                let tokenDoc: any = null;
+                let tokenAddress: string | null = null;
+                
+                // First try: Query by pool address
+                const poolQuery = query(collection(db, "tokens"), where("pool", "==", alert.poolAddress));
+                const poolSnapshot = await getDocs(poolQuery);
+                if (!poolSnapshot.empty) {
+                  tokenDoc = poolSnapshot.docs[0].data();
+                  tokenAddress = tokenDoc.address;
+                } else {
+                  // Second try: Query by pair address
+                  const pairQuery = query(collection(db, "tokens"), where("pair", "==", alert.poolAddress));
+                  const pairSnapshot = await getDocs(pairQuery);
+                  if (!pairSnapshot.empty) {
+                    tokenDoc = pairSnapshot.docs[0].data();
+                    tokenAddress = tokenDoc.address;
+                  } else {
+                    // Third try: Check if poolAddress is actually a token address
+                    if (/^0x[a-fA-F0-9]{40}$/.test(alert.poolAddress)) {
+                      const addressQuery = query(collection(db, "tokens"), where("address", "==", alert.poolAddress));
+                      const addressSnapshot = await getDocs(addressQuery);
+                      if (!addressSnapshot.empty) {
+                        tokenDoc = addressSnapshot.docs[0].data();
+                        tokenAddress = tokenDoc.address || alert.poolAddress;
+                      } else {
+                        // Fallback: Use poolAddress as token address (only if valid)
+                        tokenAddress = alert.poolAddress;
+                      }
+                    }
+                  }
+                }
+                
+                // Validate tokenAddress before making API calls
+                if (tokenAddress && /^0x[a-fA-F0-9]{40}$/.test(tokenAddress)) {
+                  // Only fetch from DexScreener if we have a valid Ethereum address
+                  try {
+                    const dexResponse = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`);
+                    const dexData = await dexResponse.json();
+                    if (dexData.pairs && dexData.pairs.length > 0) {
+                      const pair = dexData.pairs[0];
+                      const baseToken = pair.baseToken || {};
+                      tokenDataMap.set(alert.poolAddress, {
+                        name: tokenDoc?.name || baseToken.name || tokenDoc?.symbol || baseToken.symbol || "Unknown",
+                        symbol: tokenDoc?.symbol || baseToken.symbol || "Unknown",
+                        imageUrl: pair.info?.imageUrl || baseToken.logoURI || `https://dexscreener.com/base/${tokenAddress}/logo.png`,
+                      });
+                    } else {
+                      tokenDataMap.set(alert.poolAddress, {
+                        name: tokenDoc?.name || tokenDoc?.symbol || "Unknown",
+                        symbol: tokenDoc?.symbol || "Unknown",
+                        imageUrl: `https://dexscreener.com/base/${tokenAddress}/logo.png`,
+                      });
+                    }
+                  } catch (dexError) {
+                    tokenDataMap.set(alert.poolAddress, {
+                      name: tokenDoc?.name || tokenDoc?.symbol || "Unknown",
+                      symbol: tokenDoc?.symbol || "Unknown",
+                      imageUrl: `https://dexscreener.com/base/${tokenAddress}/logo.png`,
+                    });
+                  }
+                } else if (tokenDoc) {
+                  // If we have tokenDoc but invalid address, use what we have from Firebase
+                  tokenDataMap.set(alert.poolAddress, {
+                    name: tokenDoc.name || tokenDoc.symbol || "Unknown",
+                    symbol: tokenDoc.symbol || "Unknown",
+                    imageUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Crect width='24' height='24' fill='%23374151'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%239CA3AF' font-size='10'%3E?%3C/text%3E%3C/svg%3E",
+                  });
+                }
+              } catch (error) {
+                // Silently skip invalid addresses - don't log errors for known invalid addresses
+                if (alert.poolAddress && /^0x[a-fA-F0-9]{40}$/.test(alert.poolAddress)) {
+                  console.error(`Error fetching token data for ${alert.poolAddress}:`, error);
+                }
+              }
+            }
+          }
+          setAlertTokenData(tokenDataMap);
         });
         return () => {
           unsubCustomAlerts();
         };
       } else {
         setCustomAlerts([]);
+        setAlertTokenData(new Map());
       }
     });
     return () => unsubscribe();
@@ -1606,13 +1695,13 @@ export default function TokenScreener() {
   };
 
   const desktopPagination = totalPages > 1 ? (
-    <div className="flex w-full items-center justify-center gap-2 text-[11px] uppercase text-gray-200">
+    <div className="flex w-full items-center justify-center gap-3 text-[11px] uppercase text-gray-200">
       <motion.button
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
         disabled={currentPage === 1}
-        className="rounded border border-blue-500/30 bg-gray-900/60 px-3 py-1.5 font-sans transition-colors hover:bg-gray-800 disabled:opacity-50"
+        className="rounded-full border border-blue-500/30 bg-gray-900/60 px-4 py-1.5 font-sans transition-colors hover:bg-gray-800 disabled:opacity-50"
       >
         Previous
       </motion.button>
@@ -1625,17 +1714,17 @@ export default function TokenScreener() {
             debouncedSetCurrentPage(page);
           }
         }}
-        className="w-20 rounded border border-blue-500/30 bg-gray-900/60 px-2 py-1.5 text-center font-sans text-gray-200 uppercase focus:outline-none focus:ring-2 focus:ring-blue-400 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        className="w-16 rounded-full border border-blue-500/30 bg-gray-900/60 px-3 py-1.5 text-center font-sans text-gray-200 uppercase focus:outline-none focus:ring-2 focus:ring-blue-400 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         min={1}
         max={totalPages}
       />
-      <span className="font-sans text-gray-400">of {totalPages}</span>
+      <span className="font-sans text-gray-400 px-1">of {totalPages}</span>
       <motion.button
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
         disabled={currentPage === totalPages}
-        className="rounded border border-blue-500/30 bg-gray-900/60 px-3 py-1.5 font-sans transition-colors hover:bg-gray-800 disabled:opacity-50"
+        className="rounded-full border border-blue-500/30 bg-gray-900/60 px-4 py-1.5 font-sans transition-colors hover:bg-gray-800 disabled:opacity-50"
       >
         Next
       </motion.button>
@@ -1781,7 +1870,7 @@ export default function TokenScreener() {
       />
       {/* Error Toast */}
       {error && (
-        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-900 text-gray-200 font-sans py-2 px-4 rounded-lg shadow-xl z-50 border border-blue-500/30 uppercase">
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-900 text-gray-200 font-sans py-2 px-4 rounded-md shadow-xl z-50 border border-blue-500/30 uppercase">
           {error}
           <button onClick={() => setError("")} className="ml-2 text-sm font-bold">
             ×
@@ -1791,7 +1880,7 @@ export default function TokenScreener() {
       {/* Submit Listing Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="relative bg-gray-900 text-gray-200 p-6 rounded-lg shadow-xl w-80 border border-blue-500/30 md:w-96">
+          <div className="relative bg-gray-900 text-gray-200 p-6 rounded-md shadow-xl w-80 border border-blue-500/30 md:w-96">
             <button onClick={closeModal} className="absolute top-2 right-2 text-xl font-bold">
               ×
             </button>
@@ -1805,7 +1894,7 @@ export default function TokenScreener() {
                       type="text"
                       value={tokenSymbol}
                       onChange={(e) => setTokenSymbol(e.target.value)}
-                      className="w-full border border-blue-500/30 p-2 rounded font-sans bg-gray-900 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase"
+                      className="w-full border border-blue-500/30 p-2 rounded-md font-sans bg-gray-900 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase"
                       required
                       maxLength={10}
                     />
@@ -1816,7 +1905,7 @@ export default function TokenScreener() {
                       type="text"
                       value={tokenAddress}
                       onChange={(e) => setTokenAddress(e.target.value)}
-                      className="w-full border border-blue-500/30 p-2 rounded font-sans bg-gray-900 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase"
+                      className="w-full border border-blue-500/30 p-2 rounded-md font-sans bg-gray-900 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase"
                       required
                       placeholder="0x..."
                     />
@@ -1827,7 +1916,7 @@ export default function TokenScreener() {
                       type="url"
                       value={tokenLogo}
                       onChange={(e) => setTokenLogo(e.target.value)}
-                      className="w-full border border-blue-500/30 p-2 rounded font-sans bg-gray-900 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase"
+                      className="w-full border border-blue-500/30 p-2 rounded-md font-sans bg-gray-900 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase"
                       required
                       placeholder="https://..."
                     />
@@ -1836,14 +1925,14 @@ export default function TokenScreener() {
                     <button
                       type="button"
                       onClick={closeModal}
-                      className="bg-gray-900 hover:bg-gray-800 text-gray-200 py-2 px-4 rounded font-sans border border-blue-500/30 uppercase"
+                      className="bg-gray-900 hover:bg-gray-800 text-gray-200 py-2 px-4 rounded-full font-sans border border-blue-500/30 uppercase"
                     >
                       Cancel
                     </button>
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       type="submit"
-                      className="bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 py-2 px-4 rounded font-sans uppercase border border-blue-500/30"
+                      className="bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 py-2 px-4 rounded-full font-sans uppercase border border-blue-500/30"
                     >
                       Submit
                     </motion.button>
@@ -1859,7 +1948,7 @@ export default function TokenScreener() {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   onClick={closeModal}
-                  className="bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 py-2 px-4 rounded font-sans uppercase border border-blue-500/30"
+                  className="bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 py-2 px-4 rounded-full font-sans uppercase border border-blue-500/30"
                 >
                   Close
                 </motion.button>
@@ -1871,7 +1960,7 @@ export default function TokenScreener() {
       {/* Boost Info Modal */}
       {showBoostModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="relative bg-gray-900 text-gray-200 p-6 rounded-lg shadow-xl w-80 border border-blue-500/30 md:w-96">
+          <div className="relative bg-gray-900 text-gray-200 p-6 rounded-md shadow-xl w-80 border border-blue-500/30 md:w-96">
             <button onClick={() => setShowBoostModal(false)} className="absolute top-2 right-2 text-xl font-bold">
               ×
             </button>
@@ -1913,7 +2002,7 @@ export default function TokenScreener() {
       {/* Favorite Popup Modal */}
       {showFavoritePopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="relative bg-gray-900 text-gray-200 p-6 rounded-lg shadow-xl w-80 border border-blue-500/30 md:w-96">
+          <div className="relative bg-gray-900 text-gray-200 p-6 rounded-md shadow-xl w-80 border border-blue-500/30 md:w-96">
             <button
               onClick={() => setShowFavoritePopup(false)}
               className="absolute top-2 right-2 text-xl font-bold"
@@ -1931,7 +2020,7 @@ export default function TokenScreener() {
                   setRedirectTo(pathname);
                   setShowLoginModal(true);
                 }}
-                className="bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 py-2 px-4 rounded w-full font-sans uppercase border border-blue-500/30"
+                className="bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 py-2 px-4 rounded-full w-full font-sans uppercase border border-blue-500/30"
               >
                 Sign In
               </motion.button>
@@ -1939,7 +2028,7 @@ export default function TokenScreener() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setShowFavoritePopup(false)}
-                className="bg-gray-900 hover:bg-gray-800 text-gray-200 py-2 px-4 rounded w-full font-sans border border-blue-500/30 uppercase"
+                className="bg-gray-900 hover:bg-gray-800 text-gray-200 py-2 px-4 rounded-full w-full font-sans border border-blue-500/30 uppercase"
               >
                 Cancel
               </motion.button>
@@ -1947,158 +2036,148 @@ export default function TokenScreener() {
           </div>
         </div>
       )}
-      {/* Selected Alerts Modal */}
+      {/* Selected Alerts Modal - Dark Theme with Blue Accents */}
       {selectedAlerts && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 text-gray-200 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] border border-blue-500/30 flex flex-col">
-            {/* Header */}
-            <div className="p-6 border-b border-gray-700 flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <FaBell className="w-6 h-6 text-blue-400" />
-                <h2 className="text-2xl font-bold font-sans uppercase">Alerts</h2>
-                <span className="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-sm font-bold border border-blue-500/30">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-[#0a0e17] text-gray-200 rounded-md shadow-2xl w-full max-w-3xl max-h-[85vh] border border-blue-500/30 flex flex-col"
+          >
+            {/* Compact Header */}
+            <div className="p-4 border-b border-gray-800/50 flex items-center justify-between bg-[#070c14]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 bg-blue-500/20 rounded-md flex items-center justify-center border border-blue-500/30">
+                  <FaBell className="w-4 h-4 text-blue-400" />
+                </div>
+                <h2 className="text-lg font-bold font-sans uppercase text-gray-100">Token Alerts</h2>
+                <span className="bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded text-xs font-bold border border-blue-500/30">
                   {selectedAlerts.length}
                 </span>
               </div>
               <button
                 onClick={() => setSelectedAlerts(null)}
-                className="text-gray-400 hover:text-gray-200 text-2xl font-bold transition-colors"
+                className="text-gray-400 hover:text-gray-200 text-xl font-bold transition-colors p-1 hover:bg-gray-800/50 rounded"
               >
                 ×
               </button>
             </div>
             
-            {/* Alerts Content */}
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="grid gap-4">
-                {selectedAlerts.map((alert, idx) => {
-                  const token = tokens.find((t) => t.poolAddress === alert.poolAddress);
-                  const colorClass =
-                    alert.type === "volume_spike" || alert.type === "boost" || alert.type === "volume_above"
-                      ? "text-blue-400"
-                      : alert.type === "mover" || alert.type === "price_above" || alert.type === "price_spike" || alert.type === "price_spike_long"
-                      ? "text-green-500"
-                      : "text-red-500";
-                  const messageParts = alert.message.split(/(\d+\.?\d*)/);
-                  const formattedMessage = messageParts.map((part, index) => (
-                    /^\d+\.?\d*$/.test(part) ? (
-                      <span key={index} className={colorClass}>
-                        {part}
-                      </span>
-                    ) : (
-                      <span key={index}>{part}</span>
-                    )
-                  ));
-                  
-                  return (
-                    <div key={idx} className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 hover:bg-gray-800/70 transition-colors">
-                      <div className="flex items-start space-x-4">
-                        {/* Token Icon */}
-                        <div className="flex-shrink-0">
-                          {token?.info ? (
-                            <Image
-                              src={token.info.imageUrl || "/fallback.png"}
-                              alt={token.symbol}
-                              width={48}
-                              height={48}
-                              className="rounded-full border border-blue-500/30"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 bg-gray-700 rounded-full border-2 border-blue-500/30 flex items-center justify-center">
-                              <span className="text-gray-400 text-lg font-bold">?</span>
+            {/* Compact Alerts List */}
+            <div className="flex-1 overflow-y-auto p-4 bg-[#0a0e17]">
+              {selectedAlerts.length === 0 ? (
+                <div className="text-center py-12">
+                  <FaBell className="w-12 h-12 text-gray-700 mx-auto mb-3" />
+                  <p className="text-sm text-gray-500 font-sans uppercase">No alerts found</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {selectedAlerts.map((alert, idx) => {
+                    const token = tokens.find((t) => t.poolAddress === alert.poolAddress);
+                    const colorClass =
+                      alert.type === "volume_spike" || alert.type === "boost" || alert.type === "volume_above"
+                        ? "text-blue-400"
+                        : alert.type === "mover" || alert.type === "price_above" || alert.type === "price_spike" || alert.type === "price_spike_long"
+                        ? "text-green-400"
+                        : "text-red-400";
+                    const messageParts = alert.message.split(/(\d+\.?\d*)/);
+                    const formattedMessage = messageParts.map((part, index) => (
+                      /^\d+\.?\d*$/.test(part) ? (
+                        <span key={index} className={colorClass}>
+                          {part}
+                        </span>
+                      ) : (
+                        <span key={index}>{part}</span>
+                      )
+                    ));
+                    
+                    return (
+                      <div key={idx} className="bg-gray-900/50 border border-gray-800/50 rounded-md p-3 hover:bg-gray-900/70 hover:border-blue-500/30 transition-all">
+                        <div className="flex items-center gap-3">
+                            {token?.info ? (
+                              <Image
+                                src={token.info.imageUrl || "/fallback.png"}
+                                alt={token.symbol}
+                                width={32}
+                                height={32}
+                                className="rounded-full border border-blue-500/30 flex-shrink-0"
+                                onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+                                  if (!e.currentTarget.src.includes('data:image/svg')) {
+                                    e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Crect width='32' height='32' fill='%23374151'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%239CA3AF' font-size='12'%3E?%3C/text%3E%3C/svg%3E";
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <div className="w-8 h-8 bg-gray-800 rounded-full border border-blue-500/30 flex items-center justify-center flex-shrink-0">
+                                <span className="text-gray-500 text-xs font-bold">?</span>
+                              </div>
+                            )}
+                          
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${colorClass} bg-opacity-10 border border-current`}>
+                                {alert.type.replace("_", " ")}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
                             </div>
-                          )}
-                        </div>
-                        
-                        {/* Alert Content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-3 mb-2">
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${colorClass} bg-opacity-20 border border-current`}>
-                              {alert.type.replace("_", " ")}
-                            </span>
-                            <span className="text-gray-400 text-sm">
-                              {new Date(alert.timestamp).toLocaleString()}
-                            </span>
+                            <div className="text-sm font-sans">
+                              <span className="font-semibold text-gray-200">{token?.symbol || "Unknown"}</span>
+                              <span className="text-gray-600 mx-1.5">•</span>
+                              <span className={colorClass}>{formattedMessage}</span>
+                            </div>
                           </div>
                           
-                          <div className="text-base font-sans">
-                            <span className="font-semibold text-gray-200">{token?.symbol || "Unknown"}</span>
-                            <span className="text-gray-400 mx-2">•</span>
-                            <span className={colorClass}>{formattedMessage}</span>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button
+                              onClick={() => {
+                                if (token?.poolAddress) {
+                                  router.push(`/discover/${token.poolAddress}/chart`);
+                                  setSelectedAlerts(null);
+                                }
+                              }}
+                              className="p-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-full transition-colors border border-blue-500/20"
+                              title="View Chart"
+                            >
+                              <FaChartLine className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (token?.poolAddress) {
+                                  handleCopy(token);
+                                }
+                              }}
+                              className="p-2 bg-gray-800/50 hover:bg-gray-800 text-gray-400 rounded-full transition-colors border border-gray-700/50"
+                              title="Copy Address"
+                            >
+                              <FaCopy className="w-3.5 h-3.5" />
+                            </button>
                           </div>
-                          
-                          {token?.name && (
-                            <div className="text-sm text-gray-400 mt-1">
-                              {token.name}
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Action Buttons */}
-                        <div className="flex-shrink-0 flex space-x-2">
-                          <button
-                            onClick={() => {
-                              if (token?.poolAddress) {
-                                router.push(`/discover/${token.poolAddress}/chart`);
-                                setSelectedAlerts(null);
-                              }
-                            }}
-                            className="p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors border border-blue-500/30"
-                            title="View Chart"
-                          >
-                            <FaChartLine className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (token?.poolAddress) {
-                                handleCopy(token);
-                              }
-                            }}
-                            className="p-2 bg-gray-700/50 text-gray-400 rounded-lg hover:bg-gray-700 transition-colors border border-gray-600/50"
-                            title="Copy Address"
-                          >
-                            <FaCopy className="w-4 h-4" />
-                          </button>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-              
-              {selectedAlerts.length === 0 && (
-                <div className="text-center py-12">
-                  <FaBell className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                  <h3 className="text-xl font-bold text-gray-400 mb-2">No Alerts</h3>
-                  <p className="text-gray-500">No alerts found for this token.</p>
+                    );
+                  })}
                 </div>
               )}
             </div>
             
-            {/* Footer */}
-            <div className="p-6 border-t border-gray-700 flex justify-between items-center">
-              <div className="text-sm text-gray-400">
-                Showing {selectedAlerts.length} alert{selectedAlerts.length !== 1 ? 's' : ''}
+            {/* Compact Footer */}
+            <div className="p-4 border-t border-gray-800/50 flex justify-between items-center bg-[#070c14]">
+              <div className="text-xs text-gray-500 font-sans uppercase">
+                {selectedAlerts.length} alert{selectedAlerts.length !== 1 ? 's' : ''}
               </div>
-              <div className="flex space-x-3">
+              <div className="flex gap-2">
                 <button
                   onClick={() => setSelectedAlerts(null)}
-                  className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg transition-colors font-sans uppercase"
+                  className="px-4 py-2 bg-gray-800/50 hover:bg-gray-800 text-gray-300 rounded-full transition-colors text-xs font-sans uppercase border border-gray-700/50"
                 >
                   Close
                 </button>
-                <button
-                  onClick={() => {
-                    // Clear all alerts for this token
-                    setSelectedAlerts(null);
-                  }}
-                  className="px-6 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors font-sans uppercase border border-red-500/30"
-                >
-                  Clear All
-                </button>
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
       {/* Create Watchlist Modal */}
@@ -2108,7 +2187,7 @@ export default function TokenScreener() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="relative bg-gray-900 text-gray-200 p-6 rounded-xl shadow-2xl w-full max-w-md border border-blue-500/30"
+            className="relative bg-gray-900 text-gray-200 p-6 rounded-md shadow-2xl w-full max-w-md border border-blue-500/30"
           >
             <button 
               onClick={() => setShowCreateWatchlistModal(false)} 
@@ -2120,7 +2199,7 @@ export default function TokenScreener() {
             </button>
             
             <div className="flex items-center space-x-3 mb-6">
-              <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-blue-500/20 rounded-md flex items-center justify-center">
                 <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                 </svg>
@@ -2138,7 +2217,7 @@ export default function TokenScreener() {
                   type="text"
                   value={newWatchlistName}
                   onChange={(e) => setNewWatchlistName(e.target.value)}
-                  className="w-full border border-gray-700 p-3 rounded-lg font-sans bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="w-full border border-gray-700 p-3 rounded-md font-sans bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   placeholder="e.g., Top Performers, DeFi Gems"
                   required
                   maxLength={30}
@@ -2166,7 +2245,7 @@ export default function TokenScreener() {
                 whileTap={{ scale: 0.98 }}
                 onClick={handleCreateWatchlist}
                 disabled={!newWatchlistName.trim()}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white py-2 px-6 rounded-lg font-medium transition-colors"
+                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white py-2 px-6 rounded-md font-medium transition-colors"
               >
                 Create Watchlist
               </motion.button>
@@ -2181,7 +2260,7 @@ export default function TokenScreener() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="relative bg-gray-900 text-gray-200 p-6 rounded-xl shadow-2xl w-full max-w-md border border-blue-500/30"
+            className="relative bg-gray-900 text-gray-200 p-6 rounded-md shadow-2xl w-full max-w-md border border-blue-500/30"
           >
             <button 
               onClick={() => setShowAddToWatchlistModal(false)} 
@@ -2193,7 +2272,7 @@ export default function TokenScreener() {
             </button>
             
             <div className="flex items-center space-x-3 mb-6">
-              <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-blue-500/20 rounded-md flex items-center justify-center">
                 <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                 </svg>
@@ -2217,7 +2296,7 @@ export default function TokenScreener() {
                     setShowAddToWatchlistModal(false);
                     setShowCreateWatchlistModal(true);
                   }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors"
+                  className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md font-medium transition-colors"
                 >
                   Create First Watchlist
                 </button>
@@ -2232,7 +2311,7 @@ export default function TokenScreener() {
                       <motion.div
                         key={wl.id}
                         whileHover={{ scale: 1.02 }}
-                        className={`p-3 rounded-lg border transition-all cursor-pointer ${
+                        className={`p-3 rounded-md border transition-all cursor-pointer ${
                           isSelected 
                             ? 'bg-blue-500/20 border-blue-500/50' 
                             : 'bg-gray-800/50 border-gray-700 hover:bg-gray-800'
@@ -2287,7 +2366,7 @@ export default function TokenScreener() {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleUpdateWatchlistSelections}
-                    className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-6 rounded-lg font-medium transition-colors"
+                    className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-6 rounded-md font-medium transition-colors"
                   >
                     Update Watchlists
                   </motion.button>
@@ -2300,7 +2379,7 @@ export default function TokenScreener() {
       {/* Custom Alert Modal */}
       {showCustomAlertModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="relative bg-gray-900 text-gray-200 p-6 rounded-lg shadow-xl w-80 border border-blue-500/30 md:w-96">
+          <div className="relative bg-gray-900 text-gray-200 p-6 rounded-md shadow-xl w-80 border border-blue-500/30 md:w-96">
             <button onClick={() => { setShowCustomAlertModal(false); setEditingCustomAlert(null); }} className="absolute top-2 right-2 text-xl font-bold">
               ×
             </button>
@@ -2312,7 +2391,7 @@ export default function TokenScreener() {
                   type="text"
                   value={customAlertForm.poolAddress}
                   onChange={(e) => setCustomAlertForm({ ...customAlertForm, poolAddress: e.target.value })}
-                  className="w-full border border-blue-500/30 p-2 rounded font-sans bg-gray-900 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase"
+                  className="w-full border border-blue-500/30 p-2 rounded-full font-sans bg-gray-900 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase"
                   required
                   placeholder="0x..."
                 />
@@ -2322,7 +2401,7 @@ export default function TokenScreener() {
                 <select
                   value={customAlertForm.type}
                   onChange={(e) => setCustomAlertForm({ ...customAlertForm, type: e.target.value as "price_above" | "price_below" | "volume_above" | "mc_above" })}
-                  className="w-full border border-blue-500/30 p-2 rounded font-sans bg-gray-900 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase"
+                  className="w-full border border-blue-500/30 p-2 rounded-full font-sans bg-gray-900 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase"
                 >
                   <option value="price_above">Price Above</option>
                   <option value="price_below">Price Below</option>
@@ -2336,7 +2415,7 @@ export default function TokenScreener() {
                   type="number"
                   value={customAlertForm.threshold}
                   onChange={(e) => setCustomAlertForm({ ...customAlertForm, threshold: e.target.value })}
-                  className="w-full border border-blue-500/30 p-2 rounded font-sans bg-gray-900 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase"
+                  className="w-full border border-blue-500/30 p-2 rounded-full font-sans bg-gray-900 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase"
                   required
                   placeholder="e.g. 1.5"
                   step="any"
@@ -2347,7 +2426,7 @@ export default function TokenScreener() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   type="submit"
-                  className="bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 py-2 px-4 rounded font-sans uppercase border border-blue-500/30"
+                  className="bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 py-2 px-4 rounded-full font-sans uppercase border border-blue-500/30"
                 >
                   {editingCustomAlert ? "Update" : "Add"} Alert
                 </motion.button>
@@ -2380,7 +2459,7 @@ export default function TokenScreener() {
                     setViewMode("all");
                     setShowFilterMenu(false);
                   }}
-                  className={`p-3 text-gray-200 rounded-lg text-base font-sans transition-colors border border-blue-500/30 uppercase ${
+                  className={`px-3 py-1.5 text-gray-200 rounded-full text-sm font-sans transition-colors uppercase ${
                     viewMode === "all" ? "bg-blue-500/20 text-blue-400" : "bg-gray-800 hover:bg-gray-700"
                   }`}
                 >
@@ -2392,7 +2471,7 @@ export default function TokenScreener() {
                     setViewMode("favorites");
                     setShowFilterMenu(false);
                   }}
-                  className={`p-3 text-gray-200 rounded-lg text-base font-sans transition-colors border border-blue-500/30 uppercase ${
+                  className={`px-3 py-1.5 text-gray-200 rounded-full text-sm font-sans transition-colors uppercase ${
                     viewMode === "favorites" ? "bg-blue-500/20 text-blue-400" : "bg-gray-800 hover:bg-gray-700"
                   }`}
                 >
@@ -2404,7 +2483,7 @@ export default function TokenScreener() {
                     setViewMode("watchlist");
                     setShowFilterMenu(false);
                   }}
-                  className={`p-3 text-gray-200 rounded-lg text-base font-sans transition-colors border border-blue-500/30 uppercase ${
+                  className={`px-3 py-1.5 text-gray-200 rounded-full text-sm font-sans transition-colors uppercase ${
                     viewMode === "watchlist" ? "bg-blue-500/20 text-blue-400" : "bg-gray-800 hover:bg-gray-700"
                   }`}
                 >
@@ -2416,15 +2495,15 @@ export default function TokenScreener() {
                     setViewMode("alerts");
                     setShowFilterMenu(false);
                   }}
-                  className={`p-3 text-gray-200 rounded-lg text-base font-sans transition-colors border border-blue-500/30 uppercase ${
-                    viewMode === "alerts" ? "bg-red-500/20 text-red-400" : "bg-gray-800 hover:bg-gray-700"
+                  className={`px-3 py-1.5 text-gray-200 rounded-full text-sm font-sans transition-colors uppercase ${
+                    viewMode === "alerts" ? "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30" : "bg-gray-800 hover:bg-gray-700"
                   }`}
                 >
                   Alerts
                 </motion.button>
                 <motion.button
                   disabled
-                  className="p-3 text-gray-400 rounded-lg text-base font-sans transition-colors border border-blue-500/30 bg-gray-800 opacity-50 cursor-not-allowed truncate uppercase"
+                  className="p-3 text-gray-400 rounded-full text-base font-sans transition-colors border border-blue-500/30 bg-gray-800 opacity-50 cursor-not-allowed truncate uppercase"
                 >
                   New Pairs v2
                 </motion.button>
@@ -2438,7 +2517,7 @@ export default function TokenScreener() {
                     placeholder="Any"
                     value={filters.minLiquidity || ""}
                     onChange={(e) => setFilters({ ...filters, minLiquidity: Number(e.target.value) })}
-                    className="w-full p-3 bg-gray-800/50 text-gray-200 border border-blue-500/30 rounded-lg text-base font-sans placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="w-full p-3 bg-gray-800/50 text-gray-200 border border-blue-500/30 rounded-full text-base font-sans placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                 </div>
                 <div>
@@ -2448,7 +2527,7 @@ export default function TokenScreener() {
                     placeholder="Any"
                     value={filters.minVolume || ""}
                     onChange={(e) => setFilters({ ...filters, minVolume: Number(e.target.value) })}
-                    className="w-full p-3 bg-gray-800/50 text-gray-200 border border-blue-500/30 rounded-lg text-base font-sans placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="w-full p-3 bg-gray-800/50 text-gray-200 border border-blue-500/30 rounded-full text-base font-sans placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                 </div>
                 <div>
@@ -2458,7 +2537,7 @@ export default function TokenScreener() {
                     placeholder="Any"
                     value={filters.minAge || ""}
                     onChange={(e) => setFilters({ ...filters, minAge: Number(e.target.value) })}
-                    className="w-full p-3 bg-gray-800/50 text-gray-200 border border-blue-500/30 rounded-lg text-base font-sans placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="w-full p-3 bg-gray-800/50 text-gray-200 border border-blue-500/30 rounded-full text-base font-sans placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                 </div>
                 <div>
@@ -2473,7 +2552,7 @@ export default function TokenScreener() {
                         maxAge: e.target.value ? Number(e.target.value) : Infinity,
                       })
                     }
-                    className="w-full p-3 bg-gray-800/50 text-gray-200 border border-blue-500/30 rounded-lg text-base font-sans placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="w-full p-3 bg-gray-800/50 text-gray-200 border border-blue-500/30 rounded-full text-base font-sans placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                 </div>
               </div>
@@ -2482,7 +2561,7 @@ export default function TokenScreener() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => setShowFilterMenu(false)}
-                  className="bg-gray-800/50 hover:bg-gray-700/50 text-gray-200 py-3 px-6 rounded-lg font-sans uppercase border border-blue-500/30"
+                  className="bg-gray-800/50 hover:bg-gray-700/50 text-gray-200 py-3 px-6 rounded-full font-sans uppercase border border-blue-500/30"
                 >
                   Apply
                 </motion.button>
@@ -2497,7 +2576,7 @@ export default function TokenScreener() {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 onClick={() => setViewMode("all")}
-                className={`p-2 text-gray-200 rounded-lg text-sm sm:text-base w-full sm:w-auto font-sans transition-colors shadow-sm border border-blue-500/30 truncate uppercase ${
+                className={`px-3 py-1.5 text-gray-200 rounded-full text-xs sm:text-sm w-full sm:w-auto font-sans transition-colors shadow-sm truncate uppercase ${
                   viewMode === "all" ? "bg-blue-500/20 text-blue-400" : "bg-gray-800/50 hover:bg-gray-700/50"
                 }`}
               >
@@ -2506,7 +2585,7 @@ export default function TokenScreener() {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 onClick={() => setViewMode("favorites")}
-                className={`p-2 text-gray-200 rounded-lg text-sm sm:text-base w-full sm:w-auto font-sans transition-colors shadow-sm border border-blue-500/30 truncate uppercase ${
+                className={`px-3 py-1.5 text-gray-200 rounded-full text-xs sm:text-sm w-full sm:w-auto font-sans transition-colors shadow-sm truncate uppercase ${
                   viewMode === "favorites" ? "bg-blue-500/20 text-blue-400" : "bg-gray-800/50 hover:bg-gray-700/50"
                 }`}
               >
@@ -2515,7 +2594,7 @@ export default function TokenScreener() {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 onClick={() => setViewMode("watchlist")}
-                className={`p-2 text-gray-200 rounded-lg text-sm sm:text-base w-full sm:w-auto font-sans transition-colors shadow-sm border border-blue-500/30 truncate uppercase ${
+                className={`px-3 py-1.5 text-gray-200 rounded-full text-xs sm:text-sm w-full sm:w-auto font-sans transition-colors shadow-sm truncate uppercase ${
                   viewMode === "watchlist" ? "bg-blue-500/20 text-blue-400" : "bg-gray-800/50 hover:bg-gray-700/50"
                 }`}
               >
@@ -2524,8 +2603,8 @@ export default function TokenScreener() {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 onClick={() => setViewMode("alerts")}
-                className={`p-2 text-gray-200 rounded-lg text-sm sm:text-base w-full sm:w-auto font-sans transition-colors border border-blue-500/30 uppercase ${
-                  viewMode === "alerts" ? "bg-red-500/20 text-red-400" : "bg-gray-800 hover:bg-gray-700"
+                className={`px-3 py-1.5 text-gray-200 rounded-full text-xs sm:text-sm w-full sm:w-auto font-sans transition-colors uppercase ${
+                  viewMode === "alerts" ? "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30" : "bg-gray-800 hover:bg-gray-700"
                 }`}
               >
                 Alerts
@@ -2537,7 +2616,7 @@ export default function TokenScreener() {
                 placeholder="Min Liq ($)"
                 value={filters.minLiquidity || ""}
                 onChange={(e) => setFilters({ ...filters, minLiquidity: Number(e.target.value) })}
-                className="p-2 bg-gray-800/50 text-gray-200 border border-blue-500/30 rounded-lg text-sm sm:text-base w-full sm:w-32 font-sans placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="px-3 py-1.5 bg-gray-800/50 text-gray-200 border border-blue-500/30 rounded-full text-xs sm:text-sm w-full sm:w-28 font-sans placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 title="Minimum Liquidity ($)"
               />
               <input
@@ -2545,7 +2624,7 @@ export default function TokenScreener() {
                 placeholder="Min Vol ($)"
                 value={filters.minVolume || ""}
                 onChange={(e) => setFilters({ ...filters, minVolume: Number(e.target.value) })}
-                className="p-2 bg-gray-800/50 text-gray-200 border border-blue-500/30 rounded-lg text-sm sm:text-base w-full sm:w-32 font-sans placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="px-3 py-1.5 bg-gray-800/50 text-gray-200 border border-blue-500/30 rounded-full text-xs sm:text-sm w-full sm:w-28 font-sans placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 title="Minimum Volume ($)"
               />
               <input
@@ -2553,7 +2632,7 @@ export default function TokenScreener() {
                 placeholder="Min Age (d)"
                 value={filters.minAge || ""}
                 onChange={(e) => setFilters({ ...filters, minAge: Number(e.target.value) })}
-                className="p-2 bg-gray-800/50 text-gray-200 border border-blue-500/30 rounded-lg text-sm sm:text-base w-full sm:w-32 font-sans placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="px-3 py-1.5 bg-gray-800/50 text-gray-200 border border-blue-500/30 rounded-full text-xs sm:text-sm w-full sm:w-28 font-sans placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 title="Minimum Age (days)"
               />
               <input
@@ -2566,43 +2645,41 @@ export default function TokenScreener() {
                     maxAge: e.target.value ? Number(e.target.value) : Infinity,
                   })
                 }
-                className="p-2 bg-gray-800/50 text-gray-200 border border-blue-500/30 rounded-lg text-sm sm:text-base w-full sm:w-32 font-sans placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="px-3 py-1.5 bg-gray-800/50 text-gray-200 border border-blue-500/30 rounded-full text-xs sm:text-sm w-full sm:w-28 font-sans placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 title="Maximum Age (days)"
               />
             </div>
           </div>
         )}
-        {/* Watchlist Selector */}
+        {/* Watchlist Selector - Single Line */}
         {viewMode === "watchlist" && (
-          <div className="bg-gray-950 p-4 border-b border-gray-800 shadow-inner border-t border-gray-800">
-            <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
-              <div className="flex space-x-2">
+          <div className="bg-gray-950 px-3 py-2 border-b border-gray-800 shadow-inner">
+            <div className="flex items-center gap-2 flex-wrap">
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setShowCreateWatchlistModal(true)}
-                  className="bg-gray-800/50 hover:bg-gray-700/50 text-gray-200 py-3 px-4 rounded-lg font-sans text-sm transition-colors flex items-center space-x-2 border border-gray-700/50"
+                  className="bg-gray-800/50 hover:bg-gray-700/50 text-gray-200 py-1.5 px-3 rounded-full text-xs font-sans transition-colors flex items-center gap-1.5 border border-gray-700/50 whitespace-nowrap"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                   </svg>
-                  <span>New Watchlist</span>
+                  <span>New</span>
                 </motion.button>
-              </div>
               
-              <div className="flex items-center space-x-2">
-                <div className="w-64 relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div className="relative flex-1 min-w-0 max-w-xs">
+                  <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                    <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                     </svg>
                   </div>
                   <select
                     value={selectedWatchlist || ""}
                     onChange={(e) => setSelectedWatchlist(e.target.value)}
-                    className="w-full bg-gray-800/50 text-gray-200 border border-blue-500/30 p-3 pl-10 rounded-lg font-sans text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                    className="w-full bg-gray-800/50 text-gray-200 border border-blue-500/30 py-1.5 pl-8 pr-2 rounded-full text-xs font-sans focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all truncate"
                   >
-                    <option value="">Select a watchlist</option>
+                    <option value="">Select watchlist</option>
                     {watchlists.map((wl) => (
                       <option key={wl.id} value={wl.id}>
                         {wl.name}
@@ -2610,44 +2687,41 @@ export default function TokenScreener() {
                     ))}
                   </select>
                 </div>
-                {selectedWatchlist && watchlists.length > 1 && (
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={async () => {
-                      const watchlistName = watchlists.find(w => w.id === selectedWatchlist)?.name || 'this watchlist';
-                      if (confirm(`Are you sure you want to delete "${watchlistName}"? This action cannot be undone.`)) {
-                        await deleteWatchlist(selectedWatchlist);
-                        setSelectedWatchlist(watchlists.find(w => w.id !== selectedWatchlist)?.id || '');
-                      }
-                    }}
-                    className="bg-gray-700/50 hover:bg-gray-600/50 text-gray-200 hover:text-red-400 py-3 px-4 rounded-lg font-sans text-sm transition-colors flex items-center space-x-2 border border-gray-600/50"
-                    title="Delete watchlist"
-                  >
-                    <FaTrash className="w-4 h-4" />
-                    <span>Delete</span>
-                  </motion.button>
+                
+                {selectedWatchlist && (
+                  <>
+                    <div className="flex items-center gap-2 text-xs text-gray-400 whitespace-nowrap">
+                      <span>{watchlists.find(w => w.id === selectedWatchlist)?.tokens.length || 0} tokens</span>
+                      <span>•</span>
+                      <span>Updated {new Date().toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+                    </div>
+                    {watchlists.length > 1 && (
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={async () => {
+                          const watchlistName = watchlists.find(w => w.id === selectedWatchlist)?.name || 'this watchlist';
+                          if (confirm(`Delete "${watchlistName}"?`)) {
+                            await deleteWatchlist(selectedWatchlist);
+                            setSelectedWatchlist(watchlists.find(w => w.id !== selectedWatchlist)?.id || '');
+                          }
+                        }}
+                        className="p-1.5 bg-gray-800/50 hover:bg-red-500/20 text-gray-400 hover:text-red-400 rounded-full text-xs transition-colors border border-gray-700/50 hover:border-red-500/30"
+                        title="Delete watchlist"
+                      >
+                        <FaTrash className="w-3 h-3" />
+                      </motion.button>
+                    )}
+                    <button
+                      onClick={() => setSelectedWatchlist("")}
+                      className="text-xs text-blue-400 hover:text-blue-300 transition-colors whitespace-nowrap px-2"
+                    >
+                      View All
+                    </button>
+                  </>
                 )}
               </div>
             </div>
-            
-            {selectedWatchlist && (
-              <div className="mt-3 flex items-center justify-between text-sm text-gray-400">
-                <div className="flex items-center space-x-4">
-                  <span>
-                    {watchlists.find(w => w.id === selectedWatchlist)?.tokens.length || 0} tokens in this watchlist
-                  </span>
-                  <span>•</span>
-                  <span>Last updated: {new Date().toLocaleDateString()}</span>
-                </div>
-                <button
-                  onClick={() => setSelectedWatchlist("")}
-                  className="text-blue-400 hover:text-blue-300 transition-colors"
-                >
-                  View All Tokens
-                </button>
-              </div>
-            )}
           </div>
         )}
         {/* Main Table or Alerts Feed */}
@@ -2661,7 +2735,7 @@ export default function TokenScreener() {
               overscrollBehaviorY: 'contain',
               scrollbarWidth: 'none',
               msOverflowStyle: 'none',
-              paddingBottom: isMobile ? 0 : '60px'
+              paddingBottom: isMobile ? 0 : '80px'
             }}
           >
           {loading ? (
@@ -2674,289 +2748,268 @@ export default function TokenScreener() {
             </div>
           ) : viewMode === "alerts" ? (
             <div className="w-full h-full bg-gray-950 overflow-y-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              <div className="p-4 border-b border-gray-800 flex justify-between items-center">
-                <h2 className="text-xl font-bold font-sans text-gray-200 uppercase">Alerts</h2>
+              {/* Compact Header - Single Line */}
+              <div className="p-3 border-b border-gray-800 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <h2 className="text-sm font-bold font-sans text-gray-200 uppercase whitespace-nowrap">Alerts</h2>
+                  <div className="flex gap-1.5 flex-1 min-w-0">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setAlertTab("feed")}
+                      className={`px-3 py-1.5 text-xs font-sans transition-colors border rounded-full uppercase whitespace-nowrap ${
+                        alertTab === "feed" ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-gray-900/50 hover:bg-gray-800/50 text-gray-300 border-gray-700/50"
+                      }`}
+                    >
+                      Feed
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setAlertTab("triggers")}
+                      className={`px-3 py-1.5 text-xs font-sans transition-colors border rounded-full uppercase whitespace-nowrap ${
+                        alertTab === "triggers" ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-gray-900/50 hover:bg-gray-800/50 text-gray-300 border-gray-700/50"
+                      }`}
+                    >
+                      Triggers
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setAlertTab("history")}
+                      className={`px-3 py-1.5 text-xs font-sans transition-colors border rounded-full uppercase whitespace-nowrap ${
+                        alertTab === "history" ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-gray-900/50 hover:bg-gray-800/50 text-gray-300 border-gray-700/50"
+                      }`}
+                    >
+                      History
+                    </motion.button>
+                  </div>
+                </div>
                 <motion.button
-                  whileHover={{ scale: 1.05 }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => { setEditingCustomAlert(null); setShowCustomAlertModal(true); }}
-                  className="bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 py-2 px-4 rounded font-sans uppercase border border-blue-500/30"
+                  className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 py-1.5 px-3 rounded-md text-xs font-sans uppercase border border-blue-500/30 whitespace-nowrap"
                 >
-                  Set Custom Alert
-                </motion.button>
-              </div>
-              <div className="flex space-x-4 p-4">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  onClick={() => setAlertTab("feed")}
-                  className={`p-2 text-gray-200 rounded-lg text-sm font-sans transition-colors border border-blue-500/30 uppercase ${
-                    alertTab === "feed" ? "bg-blue-500/20 text-blue-400" : "bg-gray-950 hover:bg-gray-800"
-                  }`}
-                >
-                  Feed
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  onClick={() => setAlertTab("triggers")}
-                  className={`p-2 text-gray-200 rounded-lg text-sm font-sans transition-colors border border-blue-500/30 uppercase ${
-                    alertTab === "triggers" ? "bg-blue-500/20 text-blue-400" : "bg-gray-950 hover:bg-gray-800"
-                  }`}
-                >
-                  Triggers
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  onClick={() => setAlertTab("history")}
-                  className={`p-2 text-gray-200 rounded-lg text-sm font-sans transition-colors border border-blue-500/30 uppercase ${
-                    alertTab === "history" ? "bg-blue-500/20 text-blue-400" : "bg-gray-950 hover:bg-gray-800"
-                  }`}
-                >
-                  History
+                  + Alert
                 </motion.button>
               </div>
               {alertTab === "feed" ? (
                 !alerts || alerts.length === 0 ? (
-                  <p className="p-4 text-gray-400 font-sans uppercase">No recent alerts.</p>
+                  <p className="p-4 text-xs text-gray-400 font-sans uppercase">No recent alerts.</p>
                 ) : (
-                  <ul className="space-y-2">
-                    {alerts
-                      .map((alert, idx) => {
-                        const token = tokens.find((t) => t.poolAddress === alert.poolAddress);
-                        const colorClass =
-                          alert.type === "volume_spike" || alert.type === "boost" || alert.type === "volume_above"
-                            ? "text-blue-400"
-                            : alert.type === "mover" || alert.type === "price_above" || alert.type === "price_spike" || alert.type === "price_spike_long"
-                            ? "text-green-500"
-                            : "text-red-500";
-                        const messageParts = alert.message.split(/(\d+\.?\d*)/);
-                        const formattedMessage = messageParts.map((part, index) => (
-                          /^\d+\.?\d*$/.test(part) ? (
-                            <span key={index} className={colorClass}>
-                              {part}
-                            </span>
-                          ) : (
-                            <span key={index}>{part}</span>
-                          )
-                        ));
-                        return (
-                          <li key={idx} className="text-sm font-sans flex items-center space-x-3 uppercase relative pb-2">
-                            {token?.info && (
-                              <Image
-                                src={token.info.imageUrl || "/fallback.png"}
-                                alt={token.symbol}
-                                width={24}
-                                height={24}
-                                className="rounded-full border border-blue-500/30"
-                              />
-                            )}
-                            <div>
-                              <span className="font-bold">{alert.type.replace("_", " ").toUpperCase()}:</span>{" "}
-                              <span className={colorClass}>{formattedMessage}</span>
-                              <br />
-                              <span className="text-xs text-gray-400 font-sans uppercase">
-                                {new Date(alert.timestamp).toLocaleString()}
-                              </span>
-                            </div>
-                            {idx < alerts.length - 1 && (
-                              <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent"></div>
-                            )}
-                          </li>
-                        );
-                      })}
-                  </ul>
+                  <div className="divide-y divide-gray-800/50">
+                    {alerts.map((alert, idx) => {
+                      const token = tokens.find((t) => t.poolAddress === alert.poolAddress);
+                      const colorClass =
+                        alert.type === "volume_spike" || alert.type === "boost" || alert.type === "volume_above"
+                          ? "text-blue-400"
+                          : alert.type === "mover" || alert.type === "price_above" || alert.type === "price_spike" || alert.type === "price_spike_long"
+                          ? "text-green-500"
+                          : "text-red-500";
+                      const messageParts = alert.message.split(/(\d+\.?\d*)/);
+                      const formattedMessage = messageParts.map((part, index) => (
+                        /^\d+\.?\d*$/.test(part) ? (
+                          <span key={index} className={colorClass}>
+                            {part}
+                          </span>
+                        ) : (
+                          <span key={index}>{part}</span>
+                        )
+                      ));
+                      return (
+                        <div key={idx} className="px-3 py-3 hover:bg-gray-900/30 transition-colors flex items-center gap-3 text-sm">
+                          {token?.info && (
+                            <Image
+                              src={token.info.imageUrl || "/fallback.png"}
+                              alt={token.symbol}
+                              width={24}
+                              height={24}
+                              className="rounded-full border border-blue-500/30 flex-shrink-0"
+                              onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+                                if (!e.currentTarget.src.includes('data:image/svg')) {
+                                  e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Crect width='24' height='24' fill='%23374151'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%239CA3AF' font-size='10'%3E?%3C/text%3E%3C/svg%3E";
+                                }
+                              }}
+                            />
+                          )}
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <span className="font-semibold text-gray-300 uppercase whitespace-nowrap hover:text-blue-400 transition-colors cursor-pointer">{alert.type.replace("_", " ")}</span>
+                            <span className="text-gray-500">•</span>
+                            <span className="font-semibold text-gray-200 truncate">{token?.symbol || "Unknown"}</span>
+                            <span className="text-gray-500">•</span>
+                            <span className={colorClass}>{formattedMessage}</span>
+                          </div>
+                          <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">
+                            {new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )
               ) : alertTab === "triggers" ? (
                 <>
                   {filteredCustomAlerts.length === 0 ? (
-                    <div className="p-8 text-center">
-                      <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-8 border border-blue-500/10 shadow-2xl">
-                        <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6">
-                          <FaExclamationTriangle className="w-8 h-8 text-gray-500" />
-                        </div>
-                        <h3 className="text-xl font-bold text-gray-200 mb-3">No Active Triggers</h3>
-                        <p className="text-gray-400 text-sm mb-6 max-w-md mx-auto">Set up custom alerts to monitor specific price levels, volume thresholds, or market cap targets with precision.</p>
-                        <motion.button
-                          whileHover={{ scale: 1.05, y: -2 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => { setEditingCustomAlert(null); setShowCustomAlertModal(true); }}
-                          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl"
-                        >
-                          <FaRocket className="w-4 h-4 inline mr-2" />
-                          Create First Trigger
-                        </motion.button>
-                      </div>
+                    <div className="p-6 text-center">
+                      <FaExclamationTriangle className="w-8 h-8 text-gray-600 mx-auto mb-3" />
+                      <p className="text-xs text-gray-400 font-sans uppercase mb-3">No active triggers</p>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => { setEditingCustomAlert(null); setShowCustomAlertModal(true); }}
+                        className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 py-1.5 px-3 rounded-md text-xs font-sans uppercase border border-blue-500/30"
+                      >
+                        Create Trigger
+                      </motion.button>
                     </div>
                   ) : (
                     <>
-                      <div className="p-6 bg-gradient-to-r from-gray-900 to-gray-800 border-b border-blue-500/10">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                            <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
-                              <FaShieldAlt className="w-5 h-5 text-blue-400" />
-                            </div>
-                            <div>
-                              <h3 className="text-xl font-bold text-gray-100">Active Triggers</h3>
-                              <p className="text-gray-400 text-sm">Monitor your custom alerts</p>
-                            </div>
-                            <span className="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-xs font-bold border border-blue-500/30">
-                              {filteredCustomAlerts.length}
-                            </span>
-                          </div>
-                          <select
-                            value={triggerFilter}
-                            onChange={(e) => setTriggerFilter(e.target.value as typeof triggerFilter)}
-                            className="bg-gray-800/50 text-gray-200 border border-blue-500/20 p-3 rounded-xl font-sans text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 backdrop-blur-sm"
-                          >
-                            <option value="all">All Types</option>
-                            <option value="price_above">Price Above</option>
-                            <option value="price_below">Price Below</option>
-                            <option value="volume_above">Volume Above</option>
-                            <option value="mc_above">Market Cap Above</option>
-                          </select>
+                      {/* Compact Filter Bar - Single Line */}
+                      <div className="p-3 border-b border-gray-800 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-400 font-sans uppercase">Active:</span>
+                          <span className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 px-2 py-0.5 rounded-md text-sm font-bold border border-blue-500/30 transition-colors cursor-pointer">
+                            {filteredCustomAlerts.length}
+                          </span>
                         </div>
+                        <select
+                          value={triggerFilter}
+                          onChange={(e) => setTriggerFilter(e.target.value as typeof triggerFilter)}
+                          className="bg-gray-900/50 text-gray-200 border border-blue-500/20 px-3 py-1.5 rounded-md text-sm font-sans focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                        >
+                          <option value="all">All Types</option>
+                          <option value="price_above">Price Above</option>
+                          <option value="price_below">Price Below</option>
+                          <option value="volume_above">Volume Above</option>
+                          <option value="mc_above">Market Cap Above</option>
+                        </select>
                       </div>
-                      <div className="p-6 space-y-4">
+                      {/* Compact Trigger List - Larger Text */}
+                      <div className="divide-y divide-gray-800/50">
                         {filteredCustomAlerts.map((ca) => {
                           const token = tokens.find((t) => t.poolAddress === ca.poolAddress);
+                          const alertToken = alertTokenData.get(ca.poolAddress);
+                          const tokenSymbol = alertToken?.symbol || token?.symbol || "Unknown";
+                          const tokenImage = alertToken?.imageUrl || token?.info?.imageUrl || `https://dexscreener.com/base/${ca.poolAddress}/logo.png`;
+                          
                           const currentPrice = token ? parseFloat(token.priceUsd || "0") : 0;
                           const volumeH1 = token ? token.volume?.h1 || 0 : 0;
                           const marketCap = token ? token.marketCap || 0 : 0;
                           let color = "text-gray-400";
                           let progress = 0;
                           let icon = null;
-                          let isPositive = true;
                           if (ca.notified) {
-                            color = "text-red-400";
+                            color = "text-green-400";
                           } else {
                             if (ca.type === "price_above") {
                               progress = Math.min(100, (currentPrice / ca.threshold) * 100);
                               color = "text-green-400";
-                              icon = <FaArrowUp className="w-3 h-3" />;
-                              isPositive = true;
+                              icon = <FaArrowUp className="w-4 h-4" />;
                             } else if (ca.type === "price_below") {
                               progress = currentPrice > ca.threshold ? (ca.threshold / currentPrice * 100) : 100;
                               color = "text-red-400";
-                              icon = <FaArrowDown className="w-3 h-3" />;
-                              isPositive = false;
+                              icon = <FaArrowDown className="w-4 h-4" />;
                             } else if (ca.type === "volume_above") {
                               progress = Math.min(100, (volumeH1 / ca.threshold) * 100);
                               color = "text-blue-400";
-                              icon = <FaVolumeUp className="w-3 h-3" />;
-                              isPositive = true;
+                              icon = <FaVolumeUp className="w-4 h-4" />;
                             } else if (ca.type === "mc_above") {
                               progress = Math.min(100, (marketCap / ca.threshold) * 100);
                               color = "text-purple-400";
-                              icon = <FaDollarSign className="w-3 h-3" />;
-                              isPositive = true;
+                              icon = <FaDollarSign className="w-4 h-4" />;
                             }
                           }
+                          const currentValue = ca.type === "price_above" || ca.type === "price_below"
+                            ? currentPrice.toFixed(4)
+                            : ca.type === "volume_above"
+                            ? volumeH1.toLocaleString()
+                            : marketCap.toLocaleString();
                           return (
-                            <motion.div
-                              key={ca.id}
-                              className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-6 border border-blue-500/10 hover:border-blue-500/30 transition-all duration-300 shadow-xl hover:shadow-2xl backdrop-blur-sm"
-                              whileHover={{ scale: 1.02, y: -2 }}
-                              whileTap={{ scale: 0.98 }}
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="flex items-start space-x-4 flex-1">
-                                  <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center border border-blue-500/20">
-                                    {token?.info ? (
-                                      <Image
-                                        src={token.info.imageUrl || "/fallback.png"}
-                                        alt={token.symbol}
-                                        width={32}
-                                        height={32}
-                                        className="rounded-lg"
-                                      />
-                                    ) : (
-                                      <div className="w-6 h-6 bg-gray-600 rounded-lg"></div>
-                                    )}
-                                  </div>
-                                  <div className="flex-1 space-y-3">
-                                    <div className="flex items-center space-x-2">
-                                      <div className="flex items-center space-x-2">
-                                        <div className="w-4 h-4 text-gray-400">
-                                          {icon}
-                                        </div>
-                                        <span className="text-lg font-bold text-gray-100">{token ? token.symbol : "Unknown"}</span>
+                            <div key={ca.id} className="px-3 py-3 hover:bg-gray-900/30 transition-colors flex items-center gap-3 text-sm">
+                              <Image
+                                src={tokenImage}
+                                alt={tokenSymbol}
+                                width={24}
+                                height={24}
+                                className="rounded-full border border-blue-500/30 flex-shrink-0"
+                                onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+                                  // Prevent infinite loops by checking if we've already tried fallback
+                                  if (e.currentTarget.src.includes('data:image/svg')) return;
+                                  // Use placeholder SVG instead of trying more URLs
+                                  e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Crect width='24' height='24' fill='%23374151'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%239CA3AF' font-size='10'%3E?%3C/text%3E%3C/svg%3E";
+                                }}
+                              />
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <div className={`${color} flex-shrink-0`}>{icon}</div>
+                                <span className="font-semibold text-gray-200 truncate">{tokenSymbol}</span>
+                                <span className="text-gray-500">•</span>
+                                <span className="text-gray-400 uppercase text-xs hover:text-blue-400 transition-colors cursor-pointer">{ca.type.replace("_", " ")}</span>
+                                <span className="text-gray-500">•</span>
+                                <span className="text-gray-400">Target: <span className="text-gray-200">${ca.threshold.toFixed(2)}</span></span>
+                                <span className="text-gray-500">•</span>
+                                <span className={color}>Current: ${currentValue}</span>
+                                {!ca.notified && (
+                                  <>
+                                    <span className="text-gray-500">•</span>
+                                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                                      <div className="w-20 bg-gray-800 rounded-md h-1.5 border border-blue-500/10">
+                                        <div
+                                          className={`h-1.5 rounded-md transition-all duration-500 ${getProgressColor(ca.type, progress > 0)}`}
+                                          style={{ width: `${Math.min(100, progress)}%` }}
+                                        ></div>
                                       </div>
-                                      <span className="text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded-full border border-blue-500/20">
-                                        {ca.type.replace("_", " ").toUpperCase()}
-                                      </span>
+                                      <span className="text-xs text-gray-500 w-10">{progress.toFixed(0)}%</span>
                                     </div>
-                                    <div className="space-y-2">
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-sm text-gray-400">Target:</span>
-                                        <span className="text-sm font-semibold text-gray-200">${ca.threshold.toFixed(4)}</span>
-                                      </div>
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-sm text-gray-400">Current:</span>
-                                        <span className={`text-sm font-semibold ${color}`}>
-                                          ${ca.type === "price_above" || ca.type === "price_below"
-                                            ? currentPrice.toFixed(4)
-                                            : ca.type === "volume_above"
-                                            ? volumeH1.toLocaleString()
-                                            : marketCap.toLocaleString()}
-                                        </span>
-                                      </div>
-                                    </div>
-                                    {!ca.notified && (
-                                      <div className="space-y-2">
-                                        <div className="flex items-center justify-between text-xs">
-                                          <span className="text-gray-400">Progress</span>
-                                          <span className="text-gray-300">{progress.toFixed(1)}%</span>
-                                        </div>
-                                        <div className="w-32 bg-gray-800 rounded-full h-1.5 border border-blue-500/10">
-                                          <div
-                                            className={`h-1.5 rounded-full transition-all duration-500 ${getProgressColor(ca.type, isPositive)}`}
-                                            style={{ width: `${progress}%` }}
-                                          ></div>
-                                        </div>
-                                      </div>
-                                    )}
-                                    {ca.notified && (
-                                      <div className="flex items-center space-x-2 text-green-400">
-                                        <FaCheck className="w-4 h-4" />
-                                        <span className="text-sm font-semibold">Triggered</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="flex flex-col space-y-1">
-                                  <motion.button
-                                    whileHover={{ scale: 1.05 }}
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={() => setEditingCustomAlert(ca)}
-                                    className="w-8 h-8 bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center justify-center text-blue-400 transition-colors"
-                                    title="Edit Alert"
-                                  >
-                                    <FaEdit className="w-3.5 h-3.5" />
-                                  </motion.button>
+                                  </>
+                                )}
+                                {ca.notified && (
+                                  <>
+                                    <span className="text-gray-500">•</span>
+                                    <span className="text-green-400 flex items-center gap-1">
+                                      <FaCheck className="w-3.5 h-3.5" />
+                                      <span className="text-xs">Triggered</span>
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <motion.button
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  onClick={() => setEditingCustomAlert(ca)}
+                                  className="p-1.5 bg-gray-800/60 hover:bg-gray-700/80 rounded-lg text-gray-300 hover:text-blue-400 transition-all"
+                                  title="Edit"
+                                >
+                                  <PencilIcon className="w-4 h-4" />
+                                </motion.button>
+                                {ca.notified && (
                                   <motion.button
                                     whileHover={{ scale: 1.05 }}
                                     whileTap={{ scale: 0.95 }}
                                     onClick={() => handleResetNotified(ca.id!)}
-                                    className="w-8 h-8 bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center justify-center text-green-400 transition-colors"
-                                    title="Reset Alert"
+                                    className="p-1.5 bg-gray-800/60 hover:bg-gray-700/80 rounded-lg text-gray-300 hover:text-blue-400 transition-all"
+                                    title="Reset"
                                   >
-                                    <FaRedo className="w-3.5 h-3.5" />
+                                    <ArrowPathIcon className="w-4 h-4" />
                                   </motion.button>
-                                  <motion.button
-                                    whileHover={{ scale: 1.05 }}
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={() => {
-                                      if (ca.id) {
-                                        deleteDoc(doc(db, `users/${user?.uid ?? ''}/customAlerts`, ca.id));
-                                        reactToast.success("Alert removed", { position: "bottom-left" });
-                                      }
-                                    }}
-                                    className="w-8 h-8 bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center justify-center text-red-400 transition-colors"
-                                    title="Remove Alert"
-                                  >
-                                    <FaTrash className="w-3.5 h-3.5" />
-                                  </motion.button>
-                                </div>
+                                )}
+                                <motion.button
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  onClick={() => {
+                                    if (ca.id) {
+                                      deleteDoc(doc(db, `users/${user?.uid ?? ''}/customAlerts`, ca.id));
+                                      reactToast.success("Alert removed", { position: "bottom-left" });
+                                    }
+                                  }}
+                                  className="p-1.5 bg-gray-800/60 hover:bg-gray-700/80 rounded-lg text-gray-300 hover:text-red-400 transition-all"
+                                  title="Delete"
+                                >
+                                  <TrashIcon className="w-4 h-4" />
+                                </motion.button>
                               </div>
-                            </motion.div>
+                            </div>
                           );
                         })}
                       </div>
@@ -2964,7 +3017,7 @@ export default function TokenScreener() {
                   )}
                 </>
               ) : (
-                <p className="p-4 text-gray-400 font-sans uppercase">Coming soon: Alert history and analytics</p>
+                <p className="p-4 text-xs text-gray-400 font-sans uppercase">Coming soon: Alert history and analytics</p>
               )}
             </div>
           ) : (
@@ -3062,8 +3115,8 @@ export default function TokenScreener() {
                       currentTokens.map((token, index) => {
                         const rank = indexOfFirstToken + index + 1;
                         const tokenAlerts = alerts.filter((alert) => alert.poolAddress === token.poolAddress);
+                        // Skip invalid addresses silently (they might be transaction hashes or other identifiers)
                         if (!/^0x[a-fA-F0-9]{40}$/.test(token.poolAddress)) {
-                          console.warn(`Invalid pool address: ${token.poolAddress}`);
                           return null;
                         }
                         return (
@@ -3102,6 +3155,11 @@ export default function TokenScreener() {
                                     width={24}
                                     height={24}
                                     className="rounded-full border border-blue-500/30"
+                                    onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+                                      if (!e.currentTarget.src.includes('data:image/svg')) {
+                                        e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Crect width='24' height='24' fill='%23374151'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%239CA3AF' font-size='10'%3E?%3C/text%3E%3C/svg%3E";
+                                      }
+                                    }}
                                   />
                                 )}
                                 <div>
@@ -3227,7 +3285,19 @@ export default function TokenScreener() {
                       <th className="px-2 py-3 text-left font-semibold tracking-wide whitespace-nowrap" style={{ width: '7%' }}>#</th>
                       <th className="px-2 py-3 text-left font-semibold tracking-wide" style={{ width: '24%' }}>Token</th>
                       <th className="px-2 py-3 text-right font-semibold tracking-wide whitespace-nowrap" style={{ width: '18%' }}>Price</th>
-                      <th className="px-2 py-3 text-right font-semibold tracking-wide whitespace-nowrap" style={{ width: '16%' }}>24h</th>
+                      <th 
+                        className="px-2 py-3 text-right font-semibold tracking-wide whitespace-nowrap cursor-pointer hover:text-blue-400 transition-colors" 
+                        style={{ width: '16%' }}
+                        onClick={() => {
+                          const filters = ["5m", "1h", "6h", "24h"];
+                          const currentIndex = filters.indexOf(sortFilter);
+                          const nextFilter = filters[(currentIndex + 1) % filters.length];
+                          handleFilterChange(nextFilter);
+                        }}
+                        title="Click to cycle: 5m → 1h → 6h → 24h"
+                      >
+                        {sortFilter === "5m" ? "5m" : sortFilter === "1h" ? "1h" : sortFilter === "6h" ? "6h" : "24h"}
+                      </th>
                       <th className="px-2 py-3 text-right font-semibold tracking-wide whitespace-nowrap" style={{ width: '18%' }}>Mcap</th>
                       <th className="px-2 py-3 text-right font-semibold tracking-wide whitespace-nowrap" style={{ width: '17%' }}>Time</th>
                     </tr>
@@ -3268,10 +3338,20 @@ export default function TokenScreener() {
                     ) : (
                       currentTokens.map((token, index) => {
                         const rank = indexOfFirstToken + index + 1;
-                        const change24h = token.priceChange?.h24 ?? 0;
+                        // Filter-aware price change based on sortFilter
+                        let priceChange = 0;
+                        if (sortFilter === "5m") {
+                          priceChange = token.priceChange?.m5 ?? 0;
+                        } else if (sortFilter === "1h") {
+                          priceChange = token.priceChange?.h1 ?? 0;
+                        } else if (sortFilter === "6h") {
+                          priceChange = token.priceChange?.h6 ?? 0;
+                        } else {
+                          priceChange = token.priceChange?.h24 ?? 0;
+                        }
 
+                        // Skip invalid addresses silently (they might be transaction hashes or other identifiers)
                         if (!/^0x[a-fA-F0-9]{40}$/.test(token.poolAddress)) {
-                          console.warn(`Invalid pool address: ${token.poolAddress}`);
                           return null;
                         }
 
@@ -3321,8 +3401,8 @@ export default function TokenScreener() {
                             <td className="px-2 py-3 text-right text-gray-200 whitespace-nowrap" style={{ width: '18%' }}>
                               <span className="text-[11px]">{formatPrice(token.priceUsd || 0)}</span>
                             </td>
-                            <td className={`px-2 py-3 text-right font-semibold whitespace-nowrap ${getColorClass(change24h)}`} style={{ width: '16%' }}>
-                              <span className="text-[11px]">{`${change24h >= 0 ? "+" : ""}${change24h.toFixed(2)}%`}</span>
+                            <td className={`px-2 py-3 text-right font-semibold whitespace-nowrap ${getColorClass(priceChange)}`} style={{ width: '16%' }}>
+                              <span className="text-[11px]">{`${priceChange >= 0 ? "+" : ""}${priceChange.toFixed(2)}%`}</span>
                             </td>
                             <td className="px-2 py-3 text-right text-gray-200 whitespace-nowrap" style={{ width: '18%' }}>
                               <span className="text-[11px]">{formatCompactCurrency(token.marketCap || 0)}</span>
@@ -3381,7 +3461,7 @@ export default function TokenScreener() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setShowMobileFilterModal(true)}
-            className="ml-4 flex items-center gap-2 px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-800 hover:border-gray-600 hover:text-white transition-all"
+            className="ml-4 flex items-center gap-2 px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-md text-gray-300 hover:bg-gray-800 hover:border-gray-600 hover:text-white transition-all"
           >
             <FaFilter className="w-3 h-3" />
             <span className="text-[10px] font-medium">

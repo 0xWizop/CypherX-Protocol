@@ -17,7 +17,7 @@ import GlobalSearch from "./GlobalSearch";
 import UserProfileDropdown from "./UserProfileDropdown";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { FiMenu, FiX, FiStar, FiTrash2, FiUser, FiSettings, FiCheck, FiAlertCircle } from "react-icons/fi";
+import { FiMenu, FiX, FiStar, FiTrash2, FiUser, FiSettings, FiCheck, FiAlertCircle, FiBook } from "react-icons/fi";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 
@@ -199,7 +199,6 @@ const Header: React.FC = () => {
   const walletDropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
-  const [headerHeight, setHeaderHeight] = useState<number>(72);
 
   // Fetch user stats from API
   useEffect(() => {
@@ -262,24 +261,50 @@ const Header: React.FC = () => {
     const updateHeaderHeight = () => {
       if (headerRef.current) {
         const height = headerRef.current.offsetHeight;
-        setHeaderHeight(height);
         document.documentElement.style.setProperty('--header-height', `${height}px`);
       }
     };
+    
     updateHeaderHeight();
     window.addEventListener('resize', updateHeaderHeight);
-    return () => window.removeEventListener('resize', updateHeaderHeight);
+    
+    return () => {
+      window.removeEventListener('resize', updateHeaderHeight);
+    };
   }, []);
 
-  // Prevent body scroll when mobile menu is open
+  // Prevent body scroll and hide header/footer/banner when mobile menu is open
   useEffect(() => {
     if (isMenuOpen) {
       document.body.style.overflow = 'hidden';
+      document.body.setAttribute('data-menu-open', 'true');
+      // Hide header, footer, and banner
+      const header = document.querySelector('header');
+      const footer = document.querySelector('footer');
+      const banner = document.querySelector('[data-banner]');
+      if (header) header.style.display = 'none';
+      if (footer) footer.style.display = 'none';
+      if (banner) (banner as HTMLElement).style.display = 'none';
     } else {
       document.body.style.overflow = '';
+      document.body.removeAttribute('data-menu-open');
+      // Show header, footer, and banner
+      const header = document.querySelector('header');
+      const footer = document.querySelector('footer');
+      const banner = document.querySelector('[data-banner]');
+      if (header) header.style.display = '';
+      if (footer) footer.style.display = '';
+      if (banner) (banner as HTMLElement).style.display = '';
     }
     return () => {
       document.body.style.overflow = '';
+      document.body.removeAttribute('data-menu-open');
+      const header = document.querySelector('header');
+      const footer = document.querySelector('footer');
+      const banner = document.querySelector('[data-banner]');
+      if (header) header.style.display = '';
+      if (footer) footer.style.display = '';
+      if (banner) (banner as HTMLElement).style.display = '';
     };
   }, [isMenuOpen]);
 
@@ -297,7 +322,7 @@ const Header: React.FC = () => {
 
   return (
     <>
-            <header ref={headerRef} className="bg-gray-950 border-b border-gray-800/20 sticky top-0 z-40">
+            <header ref={headerRef} className="bg-gray-950 border-b border-gray-800/20 sticky z-40" style={{ top: 'var(--banner-height, 0px)' }}>
         <div className="w-full">
                      <div className="flex items-center justify-between px-4 py-3 lg:px-6 lg:py-4">
             {/* Left Side - Menu, Logo & Navigation */}
@@ -504,33 +529,34 @@ const Header: React.FC = () => {
                   {/* Menu */}
                   <motion.div
                     ref={mobileMenuRef}
-                    className="fixed left-0 right-0 bottom-0 z-50 bg-gray-950 lg:hidden overflow-hidden"
-                    style={{ top: `${headerHeight}px` }}
+                    className="fixed inset-0 z-[10001] bg-gray-950 lg:hidden overflow-hidden"
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.18, ease: "easeOut" }}
                   >
-                    <div className="h-full overflow-y-auto px-4 py-5 space-y-5">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-white text-xs font-semibold tracking-[0.3em] uppercase">
+                    <div className="h-full flex flex-col px-6 py-6">
+                      <div className="flex items-center justify-between mb-4 flex-shrink-0">
+                        <h3 className="text-white text-lg font-semibold tracking-wide uppercase">
                           Menu
                         </h3>
                         <button
                           onClick={() => setIsMenuOpen(false)}
-                          className="text-gray-400 hover:text-white transition-colors"
+                          className="text-gray-400 hover:text-white transition-colors p-2"
                           aria-label="Close menu"
                         >
-                          <FiX className="w-4 h-4" />
+                          <FiX className="w-6 h-6" />
                         </button>
                       </div>
 
-                      <GlobalSearch 
-                        placeholder="Search tokens, addresses, transactions..."
-                        variant="header"
-                      />
+                      <div className="mb-4 flex-shrink-0">
+                        <GlobalSearch 
+                          placeholder="Search tokens, addresses, transactions..."
+                          variant="header"
+                        />
+                      </div>
 
-                      <div className="space-y-2">
+                      <div className="space-y-1 flex-1 overflow-y-auto min-h-0 mb-4">
                         {[{
                           href: "/discover",
                           label: "Discover",
@@ -559,9 +585,15 @@ const Header: React.FC = () => {
                         }, {
                           href: "/explorer",
                           label: "Explorer",
+                          delay: 0.2,
+                          comingSoon: false
+                        }, {
+                          href: "/docs",
+                          label: "Docs",
+                          icon: <FiBook className="w-5 h-5" />,
                           delay: 0.25,
                           comingSoon: false
-                        }].map(({ href, label, delay, comingSoon }, index) => (
+                        }].map(({ href, label, icon, delay, comingSoon }, index) => (
                           <motion.div
                             key={href}
                             initial={{ opacity: 0, y: 8 }}
@@ -569,32 +601,33 @@ const Header: React.FC = () => {
                             transition={{ delay }}
                           >
                             {comingSoon ? (
-                              <div className="block px-2 py-2 text-gray-500 text-sm font-normal tracking-wide cursor-not-allowed flex items-center gap-1.5">
-                                {label}
-                                <span className="px-1.5 py-0.5 rounded-full bg-blue-900/60 text-blue-300 text-[10px] font-medium">Soon</span>
+                              <div className="block px-4 py-4 text-gray-500 text-base font-normal tracking-wide cursor-not-allowed flex items-center gap-3 rounded-lg">
+                                <span className="flex-1">{label}</span>
+                                <span className="px-2 py-1 rounded-full bg-blue-900/60 text-blue-300 text-xs font-medium">Soon</span>
                               </div>
                             ) : (
                               <Link
                                 href={href}
-                                className="block px-2 py-2 text-white text-sm font-normal tracking-wide hover:text-blue-300 transition-colors"
+                                className="block px-4 py-4 text-white text-base font-normal tracking-wide hover:text-blue-300 hover:bg-gray-800/30 transition-all rounded-lg flex items-center gap-3"
                                 prefetch={true}
                                 onClick={() => setIsMenuOpen(false)}
                               >
-                                {label}
+                                {icon && <span className="text-blue-400">{icon}</span>}
+                                <span className="flex-1">{label}</span>
                               </Link>
                             )}
-                            {index < 5 && <div className="h-px bg-gray-800/60" />}
+                            {index < 6 && <div className="h-px bg-gray-800/60 my-1" />}
                           </motion.div>
                         ))}
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div className="grid grid-cols-2 gap-4 flex-shrink-0">
                         <button
                           onClick={() => {
                             setIsMenuOpen(false);
                             setShowWatchlistsModal(true);
                           }}
-                          className="px-3 py-2 rounded-lg bg-gray-900/50 text-white text-xs font-medium hover:bg-gray-900/80 transition-colors"
+                          className="px-4 py-3 rounded-full bg-gray-900/50 text-white text-sm font-medium hover:bg-gray-900/80 transition-colors border border-blue-500/30"
                         >
                           Watchlists
                         </button>
@@ -603,7 +636,7 @@ const Header: React.FC = () => {
                             setIsMenuOpen(false);
                             setShowSettingsModal(true);
                           }}
-                          className="px-3 py-2 rounded-lg bg-gray-900/50 text-white text-xs font-medium hover:bg-gray-900/80 transition-colors"
+                          className="px-4 py-3 rounded-full bg-gray-900/50 text-white text-sm font-medium hover:bg-gray-900/80 transition-colors border border-blue-500/30"
                         >
                           Settings
                         </button>

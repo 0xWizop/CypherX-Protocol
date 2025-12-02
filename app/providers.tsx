@@ -103,17 +103,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isFullScreenLayout = pathname?.includes('/discover/') && pathname?.includes('/chart');
   const isExplorerPage = pathname?.startsWith('/explorer');
-  const isPredictPage = pathname?.startsWith('/predict');
-  const isDashboardPage = pathname?.startsWith('/dashboard');
+  const isDocsPage = pathname?.startsWith('/docs');
   const isHomepage = pathname === "/";
-  const [footerHeight, setFooterHeight] = useState(0);
 
   useEffect(() => {
     const updateFooterHeight = () => {
       if (typeof window === "undefined") return;
       const footerEl = document.getElementById("app-footer");
       const height = footerEl?.offsetHeight ?? 0;
-      setFooterHeight(height);
       if (typeof document !== "undefined") {
         document.documentElement.style.setProperty("--app-footer-height", `${height}px`);
       }
@@ -257,16 +254,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
               }}
             >
               <div className={`flex min-h-screen flex-col ${isExplorerPage ? 'bg-gray-950' : ''}`}>
-                <SiteBanner />
+                {!isDocsPage && <SiteBanner />}
                 <main
                   className={`flex-1 ${isExplorerPage ? 'bg-gray-950' : ''}`}
                   style={{ 
-                    paddingBottom: `${isFullScreenLayout || isExplorerPage || isPredictPage || isDashboardPage ? 0 : footerHeight ? footerHeight + 16 : 72}px` 
+                    paddingBottom: 0,
+                    backgroundColor: '#030712', // gray-950 to match background
+                    margin: 0,
+                    marginBottom: 0
                   }}
                 >
                   {children}
                 </main>
-                <Footer isSticky={!isHomepage} />
+                {!isDocsPage && <Footer isSticky={!isHomepage} />}
               </div>
               <LoginModal
                 isOpen={showLoginModal}
