@@ -284,11 +284,9 @@ export default function Page() {
                 <div className="lg:col-span-2 lg:pr-12">
                   {/* Token Table - Simplified to match image */}
                   <div className="bg-[#0d1117] border border-gray-800/30 overflow-hidden backdrop-blur-sm">
-                    {/* Mobile: Horizontal scroll container */}
-                    <div className="overflow-x-auto">
                       {/* Table Header */}
-                      <div className="bg-[#0d1117] px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-800/30 min-w-[600px]">
-                        <div className="grid grid-cols-4 gap-2 sm:gap-4 text-[10px] sm:text-xs text-gray-400 font-medium">
+                      <div className="bg-[#0d1117] px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-800/30">
+                        <div className="grid grid-cols-4 gap-2 sm:gap-4 text-[10px] sm:text-xs text-white font-semibold">
                           <div>TOKEN</div>
                           <div className="text-right">PRICE</div>
                           <div className="text-right">24H</div>
@@ -297,90 +295,90 @@ export default function Page() {
                       </div>
                     
                       {/* Table Body */}
-                      <div className="divide-y divide-gray-800/50 min-w-[600px]">
+                      <div className="divide-y divide-gray-800/50">
                         {/* Token Row 1 - $CYPHX */}
                         <div className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-900/30 transition-colors">
-                          <div className="grid grid-cols-4 gap-2 sm:gap-4 items-center">
-                            <div className="flex items-center gap-1.5 sm:gap-2">
+                          <div className="grid grid-cols-4 gap-1.5 sm:gap-2 md:gap-4 items-center">
+                            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                               <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0">C</div>
-                              <div className="min-w-0">
-                                <div className="text-white font-medium text-xs sm:text-sm truncate">$CYPHX</div>
-                                <div className="text-gray-400 text-[10px] sm:text-xs truncate">CypherX</div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-white font-medium text-[11px] sm:text-xs md:text-sm truncate">$CYPHX</div>
+                                <div className="text-gray-400 text-[9px] sm:text-[10px] md:text-xs truncate">CypherX</div>
                               </div>
                             </div>
-                            <div className="text-white text-right text-xs sm:text-sm">$0.0024</div>
-                            <div className="text-green-400 text-right text-xs sm:text-sm">+468.64%</div>
-                            <div className="text-white text-right text-xs sm:text-sm">$2.1M</div>
+                            <div className="text-white text-right text-[11px] sm:text-xs md:text-sm">$0.0024</div>
+                            <div className="text-green-400 text-right text-[11px] sm:text-xs md:text-sm font-semibold">+468.64%</div>
+                            <div className="text-white text-right text-[11px] sm:text-xs md:text-sm">$2.1M</div>
                           </div>
                         </div>
 
                         {/* Token Row 2 - $ALPHA */}
                         <div className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-900/30 transition-colors">
-                          <div className="grid grid-cols-4 gap-2 sm:gap-4 items-center">
-                            <div className="flex items-center gap-1.5 sm:gap-2">
+                          <div className="grid grid-cols-4 gap-1.5 sm:gap-2 md:gap-4 items-center">
+                            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                               <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0">A</div>
-                              <div className="min-w-0">
-                                <div className="text-white font-medium text-xs sm:text-sm truncate">$ALPHA</div>
-                                <div className="text-gray-400 text-[10px] sm:text-xs truncate">AlphaFi</div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-white font-medium text-[11px] sm:text-xs md:text-sm truncate">$ALPHA</div>
+                                <div className="text-gray-400 text-[9px] sm:text-[10px] md:text-xs truncate">AlphaFi</div>
                               </div>
                             </div>
-                            <div className="text-white text-right text-xs sm:text-sm">$0.0018</div>
-                            <div className="text-green-400 text-right text-xs sm:text-sm">+433.30%</div>
-                            <div className="text-white text-right text-xs sm:text-sm">$1.8M</div>
+                            <div className="text-white text-right text-[11px] sm:text-xs md:text-sm">$0.0018</div>
+                            <div className="text-green-400 text-right text-[11px] sm:text-xs md:text-sm font-semibold">+433.30%</div>
+                            <div className="text-white text-right text-[11px] sm:text-xs md:text-sm">$1.8M</div>
                           </div>
                         </div>
 
                         {/* Token Row 3 - $NEXUS */}
                         <div className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-900/30 transition-colors">
-                          <div className="grid grid-cols-4 gap-2 sm:gap-4 items-center">
-                            <div className="flex items-center gap-1.5 sm:gap-2">
+                          <div className="grid grid-cols-4 gap-1.5 sm:gap-2 md:gap-4 items-center">
+                            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                               <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0">N</div>
-                              <div className="min-w-0">
-                                <div className="text-white font-medium text-xs sm:text-sm truncate">$NEXUS</div>
-                                <div className="text-gray-400 text-[10px] sm:text-xs truncate">NexusAI</div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-white font-medium text-[11px] sm:text-xs md:text-sm truncate">$NEXUS</div>
+                                <div className="text-gray-400 text-[9px] sm:text-[10px] md:text-xs truncate">NexusAI</div>
                               </div>
                             </div>
-                            <div className="text-white text-right text-xs sm:text-sm">$0.0009</div>
-                            <div className="text-green-400 text-right text-xs sm:text-sm">+156.23%</div>
-                            <div className="text-white text-right text-xs sm:text-sm">$890K</div>
+                            <div className="text-white text-right text-[11px] sm:text-xs md:text-sm">$0.0009</div>
+                            <div className="text-green-400 text-right text-[11px] sm:text-xs md:text-sm font-semibold">+156.23%</div>
+                            <div className="text-white text-right text-[11px] sm:text-xs md:text-sm">$890K</div>
                           </div>
                         </div>
 
                         {/* Token Row 4 - $SWIFT */}
                         <div className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-900/30 transition-colors">
-                          <div className="grid grid-cols-4 gap-2 sm:gap-4 items-center">
-                            <div className="flex items-center gap-1.5 sm:gap-2">
+                          <div className="grid grid-cols-4 gap-1.5 sm:gap-2 md:gap-4 items-center">
+                            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                               <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0">S</div>
-                              <div className="min-w-0">
-                                <div className="text-white font-medium text-xs sm:text-sm truncate">$SWIFT</div>
-                                <div className="text-gray-400 text-[10px] sm:text-xs truncate">SwiftPay</div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-white font-medium text-[11px] sm:text-xs md:text-sm truncate">$SWIFT</div>
+                                <div className="text-gray-400 text-[9px] sm:text-[10px] md:text-xs truncate">SwiftPay</div>
                               </div>
                             </div>
-                            <div className="text-white text-right text-xs sm:text-sm">$0.0032</div>
-                            <div className="text-red-400 text-right text-xs sm:text-sm">-12.45%</div>
-                            <div className="text-white text-right text-xs sm:text-sm">$720K</div>
+                            <div className="text-white text-right text-[11px] sm:text-xs md:text-sm">$0.0032</div>
+                            <div className="text-red-400 text-right text-[11px] sm:text-xs md:text-sm font-semibold">-12.45%</div>
+                            <div className="text-white text-right text-[11px] sm:text-xs md:text-sm">$720K</div>
                           </div>
                         </div>
 
                         {/* Token Row 5 - $QUANT */}
                         <div className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-900/30 transition-colors">
-                          <div className="grid grid-cols-4 gap-2 sm:gap-4 items-center">
-                            <div className="flex items-center gap-1.5 sm:gap-2">
+                          <div className="grid grid-cols-4 gap-1.5 sm:gap-2 md:gap-4 items-center">
+                            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                               <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0">Q</div>
-                              <div className="min-w-0">
-                                <div className="text-white font-medium text-xs sm:text-sm truncate">$QUANT</div>
-                                <div className="text-gray-400 text-[10px] sm:text-xs truncate">QuantumX</div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-white font-medium text-[11px] sm:text-xs md:text-sm truncate">$QUANT</div>
+                                <div className="text-gray-400 text-[9px] sm:text-[10px] md:text-xs truncate">QuantumX</div>
                               </div>
                             </div>
-                            <div className="text-white text-right text-xs sm:text-sm">$0.0006</div>
-                            <div className="text-green-400 text-right text-xs sm:text-sm">+89.12%</div>
-                            <div className="text-white text-right text-xs sm:text-sm">$340K</div>
+                            <div className="text-white text-right text-[11px] sm:text-xs md:text-sm">$0.0006</div>
+                            <div className="text-green-400 text-right text-[11px] sm:text-xs md:text-sm font-semibold">+89.12%</div>
+                            <div className="text-white text-right text-[11px] sm:text-xs md:text-sm">$340K</div>
                           </div>
                         </div>
                       </div>
                       
                       {/* Table Footer */}
-                      <div className="bg-[#0d1117] px-3 sm:px-4 py-2 sm:py-3 border-t border-gray-800/30 min-w-[600px]">
+                      <div className="bg-[#0d1117] px-3 sm:px-4 py-2 sm:py-3 border-t border-gray-800/30">
                         <div className="flex flex-wrap gap-2 sm:gap-2 md:gap-3">
                           <div className="inline-flex items-center gap-1 sm:gap-1.5 px-2 py-1 rounded-full bg-green-500/10 border border-green-500/20">
                             <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -396,13 +394,12 @@ export default function Page() {
                           </div>
                           <div className="inline-flex items-center gap-1 sm:gap-1.5 px-2 py-1 rounded-full bg-green-500/10 border border-green-500/20">
                             <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                             </svg>
                             <span className="text-[10px] sm:text-xs text-green-300 whitespace-nowrap">Not Honeypot</span>
                           </div>
                         </div>
                       </div>
-                    </div>
                   </div>
                 </div>
       </div>

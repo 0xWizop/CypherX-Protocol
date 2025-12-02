@@ -108,12 +108,14 @@ interface GlobalSearchProps {
   placeholder?: string;
   className?: string;
   variant?: "header" | "homepage";
+  fullScreenMobile?: boolean;
 }
 
 const GlobalSearch: React.FC<GlobalSearchProps> = ({ 
   placeholder = "Search for tokens, symbols, addresses, transactions, blocks...",
   className = "",
-  variant = "header"
+  variant = "header",
+  fullScreenMobile = false
 }) => {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -154,7 +156,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
             'Accept': 'application/json',
           },
           // Add timeout for better error handling
-          signal: AbortSignal.timeout(15000), // 15 second timeout
+          signal: AbortSignal.timeout(20000), // 20 second timeout
         });
         
         if (response.ok) {
@@ -548,8 +550,8 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
 
       {/* Results Summary */}
       {!isLoading && !error && totalResults > 0 && (
-        <div className="px-4 py-2 bg-[#111827] border-b border-gray-800/30 sticky top-0 z-20 flex-shrink-0">
-          <div className="text-xs text-gray-400">
+        <div className={`${fullScreenMobile ? 'px-4 py-2' : 'px-4 py-2'} bg-gray-950 border-b border-gray-800/30 sticky top-0 z-20 flex-shrink-0`}>
+          <div className={`${fullScreenMobile ? 'text-[11px]' : 'text-xs'} text-gray-400`}>
             Found {totalResults} token{totalResults !== 1 ? 's' : ''} for "{query}"
           </div>
         </div>
@@ -559,7 +561,11 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
       <div 
         ref={resultsRef}
         className={`overflow-y-auto scrollbar-hide transition-all duration-200 ${
-          variant === "homepage" ? "h-[250px] pr-2" : "max-h-[400px] pr-6"
+          fullScreenMobile 
+            ? "flex-1 min-h-0 px-4 pb-4" 
+            : variant === "homepage" 
+              ? "h-[250px] pr-2" 
+              : "max-h-[400px] pr-6"
         } ${isMouseInResults ? 'ring-1 ring-blue-400/30' : ''}`}
         style={{
           scrollBehavior: 'smooth',
@@ -584,19 +590,19 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
                        initial={{ opacity: 0, x: -20 }}
                        animate={{ opacity: 1, x: 0 }}
                        transition={{ delay: index * 0.05 }}
-                       className={`p-3 hover:bg-[#1f2937] cursor-pointer border-b border-gray-800/30 last:border-b-0 transition-all duration-200 ${
-                         isSelected ? "bg-[#1f2937]" : "bg-[#0d1117]"
+                       className={`${fullScreenMobile ? 'p-2.5' : 'p-3'} hover:bg-gray-800/50 cursor-pointer border-b border-gray-800/30 last:border-b-0 transition-all duration-200 ${
+                         isSelected ? "bg-gray-800/50" : "bg-gray-950"
                        }`}
                        onClick={() => handleResultClick({ type: "token", result: token })}
                      >
-                       <div className="flex items-start space-x-3">
+                       <div className={`flex items-center ${fullScreenMobile ? 'gap-2.5' : 'space-x-3'}`}>
                          {/* Token Icon */}
                          <div className="relative flex-shrink-0">
                            {token.imageUrl ? (
                              <img
                                src={token.imageUrl}
                                alt={token.name}
-                               className="w-10 h-10 rounded-full border border-gray-600"
+                               className={`${fullScreenMobile ? 'w-9 h-9' : 'w-10 h-10'} rounded-full border border-gray-600`}
                                onError={(e) => {
                                  e.currentTarget.src = `https://ui-avatars.com/api/?name=${token.symbol}&background=1f2937&color=60a5fa&size=40`;
                                }}
@@ -605,78 +611,106 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
                              <img
                                src={`https://ui-avatars.com/api/?name=${token.symbol}&background=1f2937&color=60a5fa&size=40`}
                                alt={token.name}
-                               className="w-10 h-10 rounded-full border border-gray-600"
+                               className={`${fullScreenMobile ? 'w-9 h-9' : 'w-10 h-10'} rounded-full border border-gray-600`}
                              />
                            )}
-                           <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-gray-800"></div>
+                           {!fullScreenMobile && (
+                             <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-gray-800"></div>
+                           )}
                          </div>
                          
-                         {/* Token Info - Compact Layout */}
+                         {/* Token Info - Mobile Optimized */}
                          <div className="flex-1 min-w-0">
-                           {/* First Row: Symbol, Name, and Metrics */}
-                           <div className="flex items-center justify-between mb-2">
-                             <div className="flex items-center space-x-2 min-w-0">
-                               <span className="font-bold text-gray-200 truncate">{token.symbol}</span>
-                               <span className="text-sm text-gray-400 truncate max-w-[120px]">
-                                 ({token.name.length > 20 ? token.name.substring(0, 20) + '...' : token.name})
-                               </span>
-                             </div>
-                             <div className="flex items-center space-x-2">
-                               {token.priceChange?.h24 && (
-                                 <span className={`text-xs px-2 py-1 rounded-md font-medium ${
-                                   parseFloat(token.priceChange.h24.toString()) > 0 
-                                     ? 'bg-green-500/20 text-green-400' 
-                                     : 'bg-red-500/20 text-red-400'
-                                 }`}>
-                                   {parseFloat(token.priceChange.h24.toString()) > 0 ? '+' : ''}{parseFloat(token.priceChange.h24.toString()).toFixed(2)}%
-                                 </span>
-                               )}
-                               {token.dexId && (
-                                 <span
-                                   className={`text-xs px-2 py-1 rounded-md font-medium border uppercase ${
-                                     token.dexId?.toLowerCase() === 'aerodrome'
-                                       ? 'bg-blue-500/40 text-white border-blue-400/50'
-                                       : (token.dexId?.toLowerCase() === 'uniswap' || token.dexId?.toLowerCase() === 'uniswap_v3')
-                                         ? 'bg-pink-500/40 text-white border-pink-400/50'
-                                         : 'bg-gray-500/20 text-gray-300 border-gray-500/30'
-                                   }`}
-                                 >
-                                   {token.dexId}
-                                 </span>
-                               )}
-                               {token.metrics && token.metrics.buyRatio24h > 0 && (
-                                 <span className={`text-xs px-2 py-1 rounded-md font-medium ${
-                                   token.metrics.buyRatio24h > 0.6 ? 'bg-green-500/20 text-green-400' : 
-                                   token.metrics.buyRatio24h > 0.4 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'
-                                 }`}>
-                                   Buy: {(token.metrics.buyRatio24h * 100).toFixed(0)}%
-                                 </span>
-                               )}
-                               {token.metrics && token.metrics.volumeChange24h !== 0 && (
-                                 <span className={`text-xs px-2 py-1 rounded-md font-medium ${
-                                   token.metrics.volumeChange24h > 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'
-                                 }`}>
-                                   Vol: {token.metrics.volumeChange24h > 0 ? '+' : ''}{token.metrics.volumeChange24h.toFixed(1)}%
-                                 </span>
-                               )}
-                             </div>
-                           </div>
-                           
-                           {/* Second Row: Market Cap, Volume, Transactions */}
-                           <div className="flex items-center justify-between">
-                             <div className="flex items-center space-x-4 text-xs text-gray-400">
-                               <span>MC: ${formatNumber(token.marketCap)}</span>
-                               {token.volume?.h24 && (
-                                 <span>Vol: ${formatNumber(token.volume.h24)}</span>
-                               )}
-                               {token.liquidity?.usd !== undefined && (
-                                 <span>Liq: ${formatNumber(token.liquidity.usd)}</span>
-                               )}
-                               {token.txns?.h24 && (
-                                 <span>{token.txns.h24.buys + token.txns.h24.sells} txns</span>
-                               )}
-                             </div>
-                           </div>
+                           {fullScreenMobile ? (
+                             /* Mobile Layout - Simplified */
+                             <>
+                               <div className="flex items-center justify-between mb-1">
+                                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                   <span className="font-semibold text-sm text-white truncate">{token.symbol}</span>
+                                   {token.priceChange?.h24 && (
+                                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
+                                       parseFloat(token.priceChange.h24.toString()) > 0 
+                                         ? 'bg-green-500/20 text-green-400' 
+                                         : 'bg-red-500/20 text-red-400'
+                                     }`}>
+                                       {parseFloat(token.priceChange.h24.toString()) > 0 ? '+' : ''}{parseFloat(token.priceChange.h24.toString()).toFixed(1)}%
+                                     </span>
+                                   )}
+                                 </div>
+                               </div>
+                               <div className="flex items-center gap-2 text-[11px] text-gray-400">
+                                 <span className="truncate">{token.name.length > 25 ? token.name.substring(0, 25) + '...' : token.name}</span>
+                                 {token.priceUsd && (
+                                   <span className="text-gray-300 flex-shrink-0">${parseFloat(token.priceUsd).toFixed(6)}</span>
+                                 )}
+                               </div>
+                             </>
+                           ) : (
+                             /* Desktop Layout - Full Details */
+                             <>
+                               <div className="flex items-center justify-between mb-2">
+                                 <div className="flex items-center space-x-2 min-w-0">
+                                   <span className="font-bold text-gray-200 truncate">{token.symbol}</span>
+                                   <span className="text-sm text-gray-400 truncate max-w-[120px]">
+                                     ({token.name.length > 20 ? token.name.substring(0, 20) + '...' : token.name})
+                                   </span>
+                                 </div>
+                                 <div className="flex items-center space-x-2 flex-wrap">
+                                   {token.priceChange?.h24 && (
+                                     <span className={`text-xs px-2 py-1 rounded-md font-medium ${
+                                       parseFloat(token.priceChange.h24.toString()) > 0 
+                                         ? 'bg-green-500/20 text-green-400' 
+                                         : 'bg-red-500/20 text-red-400'
+                                     }`}>
+                                       {parseFloat(token.priceChange.h24.toString()) > 0 ? '+' : ''}{parseFloat(token.priceChange.h24.toString()).toFixed(2)}%
+                                     </span>
+                                   )}
+                                   {token.dexId && (
+                                     <span
+                                       className={`text-xs px-2 py-1 rounded-md font-medium border uppercase ${
+                                         token.dexId?.toLowerCase() === 'aerodrome'
+                                           ? 'bg-blue-500/40 text-white border-blue-400/50'
+                                           : (token.dexId?.toLowerCase() === 'uniswap' || token.dexId?.toLowerCase() === 'uniswap_v3')
+                                             ? 'bg-pink-500/40 text-white border-pink-400/50'
+                                             : 'bg-gray-500/20 text-gray-300 border-gray-500/30'
+                                       }`}
+                                     >
+                                       {token.dexId}
+                                     </span>
+                                   )}
+                                   {token.metrics && token.metrics.buyRatio24h > 0 && (
+                                     <span className={`text-xs px-2 py-1 rounded-md font-medium ${
+                                       token.metrics.buyRatio24h > 0.6 ? 'bg-green-500/20 text-green-400' : 
+                                       token.metrics.buyRatio24h > 0.4 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'
+                                     }`}>
+                                       Buy: {(token.metrics.buyRatio24h * 100).toFixed(0)}%
+                                     </span>
+                                   )}
+                                   {token.metrics && token.metrics.volumeChange24h !== 0 && (
+                                     <span className={`text-xs px-2 py-1 rounded-md font-medium ${
+                                       token.metrics.volumeChange24h > 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'
+                                     }`}>
+                                       Vol: {token.metrics.volumeChange24h > 0 ? '+' : ''}{token.metrics.volumeChange24h.toFixed(1)}%
+                                     </span>
+                                   )}
+                                 </div>
+                               </div>
+                               <div className="flex items-center justify-between">
+                                 <div className="flex items-center space-x-4 text-xs text-gray-400">
+                                   <span>MC: ${formatNumber(token.marketCap)}</span>
+                                   {token.volume?.h24 && (
+                                     <span>Vol: ${formatNumber(token.volume.h24)}</span>
+                                   )}
+                                   {token.liquidity?.usd !== undefined && (
+                                     <span>Liq: ${formatNumber(token.liquidity.usd)}</span>
+                                   )}
+                                   {token.txns?.h24 && (
+                                     <span>{token.txns.h24.buys + token.txns.h24.sells} txns</span>
+                                   )}
+                                 </div>
+                               </div>
+                             </>
+                           )}
                          </div>
                        </div>
                      </motion.div>
@@ -694,7 +728,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
   );
 
   return (
-    <div ref={searchRef} data-search-container className={`relative ${className} ${variant === "homepage" ? "z-[9999999]" : ""}`}>
+    <div ref={searchRef} data-search-container className={`${fullScreenMobile ? 'relative h-full flex flex-col' : 'relative'} ${className} ${variant === "homepage" ? "z-[9999999]" : ""}`}>
       {/* Search Input */}
       <div className={`relative group ${variant === "header" ? "mr-2" : ""}`}>
         <input
@@ -713,16 +747,26 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
             }
           }}
           onBlur={(e) => {
+            // Don't close if in full-screen mobile mode or clicking into results
+            if (fullScreenMobile) {
+              return;
+            }
             // Don't close if clicking into results
             if (!isMouseInResults && !resultsRef.current?.contains(e.relatedTarget as Node)) {
               setTimeout(() => {
-                if (!isMouseInResults) {
+                if (!isMouseInResults && !fullScreenMobile) {
                   setShowResults(false);
                 }
               }, 200);
             }
           }}
-          className={`w-full pl-10 pr-10 py-1.5 text-sm text-gray-100 bg-[#111827] border border-gray-600 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-gray-500 transition-all duration-300 placeholder-gray-400 shadow-lg group-hover:border-gray-500 ${
+          onClick={(e) => {
+            // Prevent click from bubbling up in mobile menu
+            if (fullScreenMobile) {
+              e.stopPropagation();
+            }
+          }}
+          className={`w-full pl-10 pr-10 py-1.5 text-sm text-gray-100 ${variant === "header" ? "bg-[#111827]" : "bg-gray-950"} border border-gray-600 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-gray-500 transition-all duration-300 placeholder-gray-400 shadow-lg group-hover:border-gray-500 ${
             variant === "header" ? "max-w-[580px]" : ""
           }`}
         />
@@ -766,8 +810,21 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
             <motion.div
               ref={resultsRef}
               key="search-dropdown"
-              className="fixed bg-[#0d1117] border border-gray-800/30 shadow-2xl overflow-hidden flex flex-col max-h-[60vh] rounded-xl"
-              style={{
+              className={`${fullScreenMobile ? 'absolute' : 'fixed'} bg-gray-950 border border-gray-800/30 shadow-2xl overflow-hidden flex flex-col ${
+                fullScreenMobile 
+                  ? 'inset-0 rounded-none border-0' 
+                  : 'max-h-[60vh] rounded-xl'
+              }`}
+              style={fullScreenMobile ? {
+                position: 'absolute',
+                top: '0',
+                left: '0',
+                right: '0',
+                bottom: '0',
+                width: '100%',
+                height: '100%',
+                zIndex: 10
+              } : {
                 top: `${variant === "header" 
                   ? (dropdownPosition?.top ?? 80)
                   : (homepagePosition?.top ?? 100)}px`,
@@ -782,9 +839,9 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
                   : 'none',
                 zIndex: 99999
               }}
-              initial={{ opacity: 0, y: -10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              initial={fullScreenMobile ? { opacity: 0, y: -10 } : { opacity: 0, y: -10 }}
+              animate={fullScreenMobile ? { opacity: 1, y: 0 } : { opacity: 1, y: 0 }}
+              exit={fullScreenMobile ? { opacity: 0, y: -10 } : { opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
               onMouseEnter={() => setIsMouseInResults(true)}

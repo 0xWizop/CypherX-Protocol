@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { FaWallet, FaDownload, FaEye, FaEyeSlash, FaArrowLeft, FaLock } from "react-icons/fa";
 import { FiSettings, FiExternalLink, FiX, FiCopy, FiCheck } from "react-icons/fi";
+import { SiEthereum } from "react-icons/si";
 import { Sparklines, SparklinesLine, SparklinesCurve } from "react-sparklines";
 import { ethers } from "ethers";
 
@@ -164,6 +165,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
   const [availableTokens, setAvailableTokens] = useState<any[]>([]);
   const [isLoadingTokens, setIsLoadingTokens] = useState(false);
   const [recentTokens, setRecentTokens] = useState<Array<{symbol: string; address: string; logo?: string; name?: string}>>([]);
+  const tokenSearchInputRef = useRef<HTMLInputElement>(null);
 
   const isClient = typeof window !== 'undefined';
 
@@ -198,8 +200,61 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
     };
   }, [isOpen, isMobile, isClient]);
 
-  // ETH token
-  const ETH_TOKEN = { symbol: 'ETH', address: '0x4200000000000000000000000000000000000006', name: 'Ethereum', logo: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png' };
+  // ETH token - using SiEthereum icon component
+  const ETH_TOKEN = { symbol: 'ETH', address: '0x4200000000000000000000000000000000000006', name: 'Ethereum', logo: 'ETH_ICON_COMPONENT', isWalletToken: false };
+
+  // Helper function to render token icon
+  const renderTokenIcon = useCallback((token: {symbol: string; address: string; logo?: string}, size: 'sm' | 'md' | 'lg' = 'md') => {
+    const sizeClasses = {
+      sm: 'w-5 h-5',
+      md: 'w-6 h-6',
+      lg: 'w-7 h-7'
+    };
+    const sizeClass = sizeClasses[size];
+    
+    // Check if it's ETH
+    if (token.symbol === 'ETH' || token.address.toLowerCase() === ETH_TOKEN.address.toLowerCase() || token.logo === 'ETH_ICON_COMPONENT') {
+      return (
+        <div className={`${sizeClass} rounded-full flex items-center justify-center flex-shrink-0 bg-blue-500/20`}>
+          <SiEthereum className={`${size === 'sm' ? 'w-3 h-3' : size === 'md' ? 'w-4 h-4' : 'w-5 h-5'} text-blue-400`} />
+        </div>
+      );
+    }
+    
+    // For other tokens, use image or fallback
+    if (token.logo && token.logo !== 'ETH_ICON_COMPONENT') {
+      return (
+        <div className="relative">
+          <img 
+            src={token.logo} 
+            alt={token.symbol} 
+            className={`${sizeClass} rounded-full flex-shrink-0`} 
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+              const fallback = e.currentTarget.nextElementSibling;
+              if (fallback) {
+                (fallback as HTMLElement).classList.remove('hidden');
+              }
+            }} 
+          />
+          <div className={`${sizeClass} bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 hidden`}>
+            <span className={`${size === 'sm' ? 'text-[10px]' : size === 'md' ? 'text-xs' : 'text-xs'} text-white font-bold`}>
+              {token.symbol.length <= 4 ? token.symbol : token.symbol.substring(0, 2).toUpperCase()}
+            </span>
+          </div>
+        </div>
+      );
+    }
+    
+    // Fallback
+    return (
+      <div className={`${sizeClass} bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0`}>
+        <span className={`${size === 'sm' ? 'text-[10px]' : size === 'md' ? 'text-xs' : 'text-xs'} text-white font-bold`}>
+          {token.symbol.length <= 4 ? token.symbol : token.symbol.substring(0, 2).toUpperCase()}
+        </span>
+      </div>
+    );
+  }, []);
 
   // Load recent tokens from localStorage
   useEffect(() => {
@@ -243,34 +298,6 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
     loadTokenLogos();
   }, []);
 
-  // Load available tokens (ETH + recent tokens)
-  const loadAvailableTokens = useCallback(async () => {
-    setIsLoadingTokens(true);
-    try {
-      // Start with ETH
-      const tokens = [ETH_TOKEN];
-      
-      // Add recent tokens (excluding ETH if it's already there)
-      recentTokens.forEach((token) => {
-        if (token.address.toLowerCase() !== ETH_TOKEN.address.toLowerCase() && 
-            !tokens.find(t => t.address.toLowerCase() === token.address.toLowerCase())) {
-          tokens.push({
-            symbol: token.symbol,
-            address: token.address,
-            name: token.name || token.symbol,
-            logo: token.logo || ''
-          });
-        }
-      });
-      
-      setAvailableTokens(tokens);
-    } catch (error) {
-      console.error('Error loading tokens:', error);
-    } finally {
-      setIsLoadingTokens(false);
-    }
-  }, [recentTokens]);
-
   // Get token logo from DexScreener
   const getTokenLogo = useCallback(async (tokenAddress: string): Promise<string | undefined> => {
     try {
@@ -288,7 +315,67 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
     return undefined;
   }, []);
 
-  // Search tokens
+  // Load available tokens (ETH + wallet tokens + recent tokens)
+  const loadAvailableTokens = useCallback(async () => {
+    setIsLoadingTokens(true);
+    try {
+      // Start with ETH
+      const tokens = [ETH_TOKEN];
+      
+      // Add wallet tokens (from tokenHoldings) with DexScreener data
+      if (tokenHoldings && tokenHoldings.length > 0) {
+        const walletTokenPromises = tokenHoldings
+          .filter(token => token.contractAddress && 
+            token.contractAddress.toLowerCase() !== ETH_TOKEN.address.toLowerCase())
+          .map(async (token) => {
+            const tokenAddress = token.contractAddress;
+            // Try to get logo from DexScreener
+            let logo = token.logo;
+            if (!logo) {
+              logo = await getTokenLogo(tokenAddress);
+            }
+            
+            return {
+              symbol: token.symbol || 'UNKNOWN',
+              address: tokenAddress,
+              name: token.name || token.symbol || 'Unknown Token',
+              logo: logo || '',
+              balance: token.tokenBalance || '0',
+              isWalletToken: true
+            };
+          });
+        
+        const walletTokens = await Promise.all(walletTokenPromises);
+        walletTokens.forEach((token) => {
+          if (!tokens.find(t => t.address.toLowerCase() === token.address.toLowerCase())) {
+            tokens.push(token);
+          }
+        });
+      }
+      
+      // Add recent tokens (excluding ETH and wallet tokens if they're already there)
+      recentTokens.forEach((token) => {
+        if (token.address.toLowerCase() !== ETH_TOKEN.address.toLowerCase() && 
+            !tokens.find(t => t.address.toLowerCase() === token.address.toLowerCase())) {
+          tokens.push({
+            symbol: token.symbol,
+            address: token.address,
+            name: token.name || token.symbol,
+            logo: token.logo || '',
+            isWalletToken: false
+          });
+        }
+      });
+      
+      setAvailableTokens(tokens);
+    } catch (error) {
+      console.error('Error loading tokens:', error);
+    } finally {
+      setIsLoadingTokens(false);
+    }
+  }, [recentTokens, tokenHoldings, getTokenLogo]);
+
+  // Search tokens (prioritizes wallet tokens)
   const searchTokens = useCallback(async (query: string) => {
     if (!query || query.length < 2) {
       setTokenSearchResults([]);
@@ -297,6 +384,43 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
 
     setIsSearchingTokens(true);
     try {
+      const queryLower = query.toLowerCase();
+      const results: Array<{symbol: string; address: string; name: string; logo?: string; isWalletToken?: boolean; balance?: string}> = [];
+      
+      // First, search wallet tokens (prioritize these)
+      if (tokenHoldings && tokenHoldings.length > 0) {
+        const walletMatches = tokenHoldings
+          .filter(token => {
+            const symbol = (token.symbol || '').toLowerCase();
+            const name = (token.name || '').toLowerCase();
+            const address = (token.contractAddress || '').toLowerCase();
+            return symbol.includes(queryLower) || 
+                   name.includes(queryLower) || 
+                   address.includes(queryLower);
+          })
+          .slice(0, 10); // Limit to top 10 wallet matches
+        
+        const walletTokenPromises = walletMatches.map(async (token) => {
+          const tokenAddress = token.contractAddress;
+          let logo = token.logo;
+          if (!logo) {
+            logo = await getTokenLogo(tokenAddress);
+          }
+          
+          return {
+            symbol: token.symbol || 'UNKNOWN',
+            address: tokenAddress,
+            name: token.name || token.symbol || 'Unknown Token',
+            logo: logo || '',
+            isWalletToken: true,
+            balance: token.tokenBalance || '0'
+          };
+        });
+        
+        const walletTokens = await Promise.all(walletTokenPromises);
+        results.push(...walletTokens);
+      }
+      
       // Search by address
       if (query.startsWith('0x') && query.length === 42) {
         try {
@@ -306,19 +430,22 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
           if (data.pairs && data.pairs.length > 0) {
             const pair = data.pairs[0];
             const logo = pair.baseToken?.logoURI || pair.quoteToken?.logoURI || undefined;
-            setTokenSearchResults([{
+            const tokenResult = {
               symbol: pair.baseToken?.symbol || 'UNKNOWN',
               address: query,
               name: pair.baseToken?.name || 'Unknown Token',
               logo: logo
-            }]);
-          } else {
-            setTokenSearchResults([]);
+            };
+            
+            // Only add if not already in results (from wallet tokens)
+            if (!results.find(r => r.address.toLowerCase() === query.toLowerCase())) {
+              results.push(tokenResult);
+            }
           }
         } catch (error) {
           console.error('Error searching token by address:', error);
-          setTokenSearchResults([]);
         }
+        setTokenSearchResults(results);
         setIsSearchingTokens(false);
         return;
       }
@@ -337,27 +464,33 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
         basePairs.forEach((pair: any) => {
           const tokenAddress = pair.baseToken?.address?.toLowerCase();
           if (tokenAddress && !uniqueTokens.has(tokenAddress)) {
-            const logo = pair.baseToken?.logoURI || pair.quoteToken?.logoURI || undefined;
-            uniqueTokens.set(tokenAddress, {
-              symbol: pair.baseToken?.symbol || 'UNKNOWN',
-              address: pair.baseToken?.address,
-              name: pair.baseToken?.name || pair.baseToken?.symbol || 'Unknown Token',
-              logo: logo
-            });
+            // Skip if already in wallet tokens
+            if (!results.find(r => r.address.toLowerCase() === tokenAddress)) {
+              const logo = pair.baseToken?.logoURI || pair.quoteToken?.logoURI || undefined;
+              uniqueTokens.set(tokenAddress, {
+                symbol: pair.baseToken?.symbol || 'UNKNOWN',
+                address: pair.baseToken?.address,
+                name: pair.baseToken?.name || pair.baseToken?.symbol || 'Unknown Token',
+                logo: logo,
+                isWalletToken: false
+              });
+            }
           }
         });
         
-        setTokenSearchResults(Array.from(uniqueTokens.values()).slice(0, 20));
-      } else {
-        setTokenSearchResults([]);
+        // Add DexScreener results (limit to 20 total, wallet tokens already included)
+        const dexResults = Array.from(uniqueTokens.values()).slice(0, 20 - results.length);
+        results.push(...dexResults);
       }
+      
+      setTokenSearchResults(results);
     } catch (error) {
       console.error('Error searching tokens:', error);
       setTokenSearchResults([]);
     } finally {
       setIsSearchingTokens(false);
     }
-  }, []);
+  }, [tokenHoldings, getTokenLogo]);
 
   // Handle token search input
   useEffect(() => {
@@ -379,6 +512,14 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
       setTokenSearchResults([]);
     }
   }, [showTokenSelector, loadAvailableTokens]);
+
+  // Reload available tokens when tokenHoldings changes
+  useEffect(() => {
+    if (showTokenSelector && tokenHoldings) {
+      loadAvailableTokens();
+    }
+  }, [tokenHoldings, showTokenSelector, loadAvailableTokens]);
+
 
   // Fetch user account information
   const fetchUserAccount = useCallback(async () => {
@@ -1312,6 +1453,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
       return;
     }
     setCurrentSection('buy');
+    setActiveBottomTab('home'); // Buy stays on home tab
   }, [walletData]);
 
 
@@ -1665,6 +1807,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
     setSendError("");
     setSendTxHash(null);
     setCurrentSection('send');
+    setActiveBottomTab('send');
   }, [walletData]);
 
   // Handle receive
@@ -1674,6 +1817,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
       return;
     }
     setCurrentSection('receive');
+    setActiveBottomTab('send'); // Receive is part of the send tab
   }, [walletData]);
 
   // Backup wallet
@@ -2159,7 +2303,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
 
             {/* Send/Receive Section */}
             {walletSystem === "self-custodial" && activeBottomTab === 'send' && !walletLoading && (
-              <div className="flex-1 flex flex-col overflow-hidden bg-[#0b1220]">
+              <div className="flex-1 flex flex-col overflow-hidden bg-[#0b1220] min-h-0 relative">
                 {currentSection === 'main' && (
                   <div className={`px-4 ${isMobile ? "py-3" : "py-4"} flex-1 flex flex-col`}>
                     <h3 className={`${isMobile ? "text-base" : "text-lg"} font-semibold text-gray-200 mb-4`}>Send / Receive</h3>
@@ -2207,13 +2351,14 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                     <div className="flex items-center space-x-3 mb-4">
                       <button
                         onClick={() => setCurrentSection('main')}
-                        className="p-2 text-gray-400 hover:text-gray-300 hover:bg-gray-800 rounded-lg transition-colors"
+                        className="p-2 text-gray-400 hover:text-gray-300 hover:bg-gray-800 rounded-lg transition-colors touch-manipulation"
+                        aria-label="Back"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                         </svg>
                       </button>
-                      <h3 className="text-lg font-semibold text-gray-200">Send</h3>
+                      <h3 className={`${isMobile ? "text-base" : "text-lg"} font-semibold text-gray-200`}>Send</h3>
                     </div>
 
                     <div className="space-y-4">
@@ -2224,21 +2369,13 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                           onClick={() => {
                             setSelectingTokenFor('send');
                             setShowTokenSelector(true);
+                            setTokenSearchQuery('');
+                            setTokenSearchResults([]);
                           }}
-                          className="w-full flex items-center justify-between gap-2 bg-[#15233d] border border-[#1f2a44] rounded-lg px-3 py-3 text-gray-200 hover:border-[#2563eb] transition-colors"
+                          className="w-full flex items-center justify-between gap-2 bg-[#15233d] border border-[#1f2a44] rounded-lg px-3 py-3 text-gray-200 hover:border-[#2563eb] transition-colors touch-manipulation"
                         >
                           <div className="flex items-center gap-2 flex-1 min-w-0">
-                            {sendToken.logo ? (
-                              <img src={sendToken.logo} alt={sendToken.symbol} className="w-5 h-5 rounded-full flex-shrink-0" onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                                e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                              }} />
-                            ) : null}
-                            <div className={`w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 ${sendToken.logo ? 'hidden' : ''}`}>
-                              <span className="text-[10px] text-white font-bold">
-                                {sendToken.symbol.length <= 4 ? sendToken.symbol : sendToken.symbol.substring(0, 2).toUpperCase()}
-                              </span>
-                            </div>
+                            {renderTokenIcon(sendToken, 'sm')}
                             <span className="text-left text-sm font-medium">{sendToken.symbol}</span>
                           </div>
                           <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2304,6 +2441,229 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                     </div>
                   </div>
                 )}
+
+                {/* Token Selector Dropdown - For Send Section */}
+                <AnimatePresence>
+                  {showTokenSelector && selectingTokenFor === 'send' && (
+                    <>
+                      {/* Backdrop */}
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 bg-black/40 z-40"
+                        onClick={() => setShowTokenSelector(false)}
+                      />
+                      {/* Dropdown */}
+                      <motion.div
+                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                        className="absolute inset-x-0 top-0 bottom-0 bg-[#0b1220] border-t border-slate-700/50 z-50 flex flex-col"
+                      >
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/50 bg-[#0b1220] flex-shrink-0">
+                          <h2 className="text-base font-semibold text-white">Select Token</h2>
+                          <button
+                            onClick={() => setShowTokenSelector(false)}
+                            className="p-1.5 text-gray-400 hover:text-white transition-colors rounded-lg"
+                          >
+                            <FiX className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Search Bar */}
+                        <div className="px-4 py-3 border-b border-slate-700/50 bg-[#0b1220] flex-shrink-0">
+                          <div className="relative">
+                            <input
+                              ref={tokenSearchInputRef}
+                              type="text"
+                              value={tokenSearchQuery}
+                              onChange={(e) => setTokenSearchQuery(e.target.value)}
+                              placeholder="Search by name, symbol, or address"
+                              className="w-full bg-slate-800/50 border border-slate-600/50 rounded-lg px-3 py-2 pl-9 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                              autoFocus
+                            />
+                            <svg className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                          </div>
+                        </div>
+
+                        {/* Token List */}
+                        <div className="flex-1 overflow-y-auto px-4 py-3">
+                          {isLoadingTokens ? (
+                            <div className="flex items-center justify-center py-8">
+                              <div className="w-6 h-6 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                            </div>
+                          ) : (
+                            <>
+                              {tokenSearchQuery && tokenSearchResults.length > 0 && (
+                                <div className="mb-3">
+                                  <div className="text-xs text-gray-400 mb-2 px-2">Search Results</div>
+                                  <div className="space-y-1">
+                                    {tokenSearchResults.map((token, idx) => {
+                                      const isSelected = sendToken.address.toLowerCase() === token.address.toLowerCase();
+                                      
+                                      return (
+                                        <button
+                                          key={`token-${token.address}-${idx}`}
+                                          onClick={() => {
+                                            handleTokenSelect(token);
+                                            setShowTokenSelector(false);
+                                          }}
+                                          disabled={isSelected}
+                                          className={`w-full flex items-center justify-between p-2.5 rounded-lg border transition-colors ${
+                                            isSelected 
+                                              ? 'bg-blue-500/20 border-blue-500/50 cursor-not-allowed' 
+                                              : 'bg-slate-800/50 hover:bg-slate-700/50 border-slate-700/50'
+                                          } group`}
+                                        >
+                                          <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                            {renderTokenIcon(token, 'lg')}
+                                            <div className="flex-1 min-w-0 text-left">
+                                              <div className="text-white text-sm font-medium truncate">{token.symbol}</div>
+                                              <div className="text-xs text-gray-400 truncate">{token.name || token.symbol}</div>
+                                            </div>
+                                          </div>
+                                          {isSelected ? (
+                                            <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                              <FiCheck className="w-2.5 h-2.5 text-white" />
+                                            </div>
+                                          ) : (
+                                            <svg className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                            </svg>
+                                          )}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              {tokenSearchQuery && !isSearchingTokens && tokenSearchResults.length === 0 && (
+                                <div className="text-center py-8">
+                                  <div className="text-gray-400 text-sm mb-1">No tokens found</div>
+                                  <div className="text-xs text-gray-500">Try searching by symbol, name, or contract address</div>
+                                </div>
+                              )}
+
+                              {!tokenSearchQuery && (
+                                <div>
+                                  {/* Wallet Tokens Section */}
+                                  {availableTokens.filter(t => t.isWalletToken).length > 0 && (
+                                    <div className="mb-4">
+                                      <div className="text-xs text-gray-400 mb-2 px-2 flex items-center gap-1.5">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                                        </svg>
+                                        <span>Your Wallet</span>
+                                      </div>
+                                      <div className="space-y-1">
+                                        {availableTokens
+                                          .filter(t => t.isWalletToken)
+                                          .map((token, idx) => {
+                                            const isSelected = sendToken.address.toLowerCase() === token.address.toLowerCase();
+                                            
+                                            return (
+                                              <button
+                                                key={`token-${token.address}-${idx}`}
+                                                onClick={() => {
+                                                  handleTokenSelect(token);
+                                                  setShowTokenSelector(false);
+                                                }}
+                                                disabled={isSelected}
+                                                className={`w-full flex items-center justify-between p-2.5 rounded-lg border transition-colors ${
+                                                  isSelected 
+                                                    ? 'bg-blue-500/20 border-blue-500/50 cursor-not-allowed' 
+                                                    : 'bg-slate-800/50 hover:bg-slate-700/50 border-slate-700/50'
+                                                } group`}
+                                              >
+                                                <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                                  {renderTokenIcon(token, 'lg')}
+                                                  <div className="flex-1 min-w-0 text-left">
+                                                    <div className="flex items-center gap-1.5">
+                                                      <span className="text-white text-sm font-medium truncate">{token.symbol}</span>
+                                                      <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/30 text-blue-300 rounded uppercase font-medium">Wallet</span>
+                                                    </div>
+                                                    <div className="text-xs text-gray-400 truncate">
+                                                      {token.name || token.symbol}
+                                                      {token.balance && ` • ${parseFloat(token.balance).toFixed(4)}`}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                                {isSelected ? (
+                                                  <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                                    <FiCheck className="w-2.5 h-2.5 text-white" />
+                                                  </div>
+                                                ) : (
+                                                  <svg className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                  </svg>
+                                                )}
+                                              </button>
+                                            );
+                                          })}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Recent Tokens Section */}
+                                  {availableTokens.filter(t => !t.isWalletToken).length > 0 && (
+                                    <div>
+                                      <div className="text-xs text-gray-400 mb-2 px-2">Recent Tokens</div>
+                                      <div className="space-y-1">
+                                        {availableTokens
+                                          .filter(t => !t.isWalletToken)
+                                          .map((token, idx) => {
+                                            const isSelected = sendToken.address.toLowerCase() === token.address.toLowerCase();
+                                            
+                                            return (
+                                              <button
+                                                key={`token-${token.address}-${idx}`}
+                                                onClick={() => {
+                                                  handleTokenSelect(token);
+                                                  setShowTokenSelector(false);
+                                                }}
+                                                disabled={isSelected}
+                                                className={`w-full flex items-center justify-between p-2.5 rounded-lg border transition-colors ${
+                                                  isSelected 
+                                                    ? 'bg-blue-500/20 border-blue-500/50 cursor-not-allowed' 
+                                                    : 'bg-slate-800/50 hover:bg-slate-700/50 border-slate-700/50'
+                                                } group`}
+                                              >
+                                                <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                                  {renderTokenIcon(token, 'lg')}
+                                                  <div className="flex-1 min-w-0 text-left">
+                                                    <div className="text-white text-sm font-medium truncate">{token.symbol}</div>
+                                                    <div className="text-xs text-gray-400 truncate">{token.name || token.symbol}</div>
+                                                  </div>
+                                                </div>
+                                                {isSelected ? (
+                                                  <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                                    <FiCheck className="w-2.5 h-2.5 text-white" />
+                                                  </div>
+                                                ) : (
+                                                  <svg className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                  </svg>
+                                                )}
+                                              </button>
+                                            );
+                                          })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
 
                 {currentSection === 'receive' && (
                   <div className={`px-4 ${isMobile ? "py-3 pb-20" : "py-4 pb-6"} flex-1 overflow-y-auto`}>
@@ -2435,17 +2795,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         }}
                         className="flex items-center gap-2 bg-slate-700/50 hover:bg-slate-700 rounded-xl px-3 py-2 border border-slate-600/50 transition-colors"
                       >
-                        {swapPayToken.logo ? (
-                          <img src={swapPayToken.logo} alt={swapPayToken.symbol} className="w-6 h-6 rounded-full flex-shrink-0" onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                          }} />
-                        ) : null}
-                        <div className={`w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 ${swapPayToken.logo ? 'hidden' : ''}`}>
-                          <span className="text-xs text-white font-bold">
-                            {swapPayToken.symbol.length <= 4 ? swapPayToken.symbol : swapPayToken.symbol.substring(0, 2).toUpperCase()}
-                          </span>
-                        </div>
+                        {renderTokenIcon(swapPayToken, 'md')}
                         <span className="text-sm text-white font-medium text-left">{swapPayToken.symbol}</span>
                         <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -2507,17 +2857,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         }}
                         className="flex items-center gap-2 bg-slate-700/50 hover:bg-slate-700 rounded-xl px-3 py-2 border border-slate-600/50 transition-colors"
                       >
-                        {swapReceiveToken.logo ? (
-                          <img src={swapReceiveToken.logo} alt={swapReceiveToken.symbol} className="w-6 h-6 rounded-full flex-shrink-0" onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                          }} />
-                        ) : null}
-                        <div className={`w-6 h-6 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 ${swapReceiveToken.logo ? 'hidden' : ''}`}>
-                          <span className="text-xs text-white font-bold">
-                            {swapReceiveToken.symbol.length <= 4 ? swapReceiveToken.symbol : swapReceiveToken.symbol.substring(0, 2).toUpperCase()}
-                          </span>
-                        </div>
+                        {renderTokenIcon(swapReceiveToken, 'md')}
                         <span className="text-sm text-white font-medium text-left">{swapReceiveToken.symbol}</span>
                         <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -2654,6 +2994,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                         <div className="px-4 py-3 border-b border-slate-700/50 bg-[#0b1220] flex-shrink-0">
                           <div className="relative">
                             <input
+                              ref={tokenSearchInputRef}
                               type="text"
                               value={tokenSearchQuery}
                               onChange={(e) => setTokenSearchQuery(e.target.value)}
@@ -2685,34 +3026,49 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                                 <div className="mb-3">
                                   <div className="text-xs text-gray-400 mb-2 px-2">Search Results</div>
                                   <div className="space-y-1">
-                                    {tokenSearchResults.map((token, idx) => (
-                                      <button
-                                        key={`search-${token.address}-${idx}`}
-                                        onClick={() => handleTokenSelect(token)}
-                                        className="w-full flex items-center justify-between p-2.5 bg-slate-800/50 hover:bg-slate-700/50 rounded-lg border border-slate-700/50 transition-colors group"
-                                      >
-                                        <div className="flex items-center space-x-2 flex-1 min-w-0">
-                                          {token.logo ? (
-                                            <img src={token.logo} alt={token.symbol} className="w-7 h-7 rounded-full flex-shrink-0" onError={(e) => {
-                                              e.currentTarget.style.display = 'none';
-                                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                            }} />
-                                          ) : null}
-                                          <div className={`w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 ${token.logo ? 'hidden' : ''}`}>
-                                            <span className="text-xs text-white font-bold">
-                                              {token.symbol.length <= 4 ? token.symbol : token.symbol.substring(0, 2).toUpperCase()}
-                                            </span>
+                                    {tokenSearchResults.map((token, idx) => {
+                                      const isWalletToken = token.isWalletToken || false;
+                                      const isSelected = (selectingTokenFor === 'pay' && swapPayToken.address.toLowerCase() === token.address.toLowerCase()) ||
+                                                        (selectingTokenFor === 'receive' && swapReceiveToken.address.toLowerCase() === token.address.toLowerCase()) ||
+                                                        (selectingTokenFor === 'send' && sendToken.address.toLowerCase() === token.address.toLowerCase());
+                                      
+                                      return (
+                                        <button
+                                          key={`search-${token.address}-${idx}`}
+                                          onClick={() => handleTokenSelect(token)}
+                                          className={`w-full flex items-center justify-between p-2.5 rounded-lg border transition-colors group ${
+                                            isWalletToken 
+                                              ? 'bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20' 
+                                              : 'bg-slate-800/50 hover:bg-slate-700/50 border-slate-700/50'
+                                          }`}
+                                        >
+                                          <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                            {renderTokenIcon(token, 'lg')}
+                                            <div className="flex-1 min-w-0 text-left">
+                                              <div className="flex items-center gap-1.5">
+                                                <span className="text-white text-sm font-medium truncate">{token.symbol}</span>
+                                                {isWalletToken && (
+                                                  <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/30 text-blue-300 rounded uppercase font-medium">Wallet</span>
+                                                )}
+                                              </div>
+                                              <div className="text-xs text-gray-400 truncate">
+                                                {token.name || token.symbol}
+                                                {isWalletToken && token.balance && ` • ${parseFloat(token.balance).toFixed(4)}`}
+                                              </div>
+                                            </div>
                                           </div>
-                                          <div className="flex-1 min-w-0 text-left">
-                                            <div className="text-white text-sm font-medium truncate">{token.symbol}</div>
-                                            <div className="text-xs text-gray-400 truncate">{token.name || token.symbol}</div>
-                                          </div>
-                                        </div>
-                                        <svg className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                        </svg>
-                                      </button>
-                                    ))}
+                                          {isSelected ? (
+                                            <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                              <FiCheck className="w-2.5 h-2.5 text-white" />
+                                            </div>
+                                          ) : (
+                                            <svg className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                            </svg>
+                                          )}
+                                        </button>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               )}
@@ -2725,61 +3081,116 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                                 </div>
                               )}
 
-                              {/* Recent Tokens (ETH + Recent) */}
+                              {/* Available Tokens (Wallet Tokens + Recent) */}
                               {!tokenSearchQuery && (
                                 <div>
-                                  <div className="text-xs text-gray-400 mb-2 px-2">Recent Tokens</div>
-                                  <div className="space-y-1">
-                                    {availableTokens.length === 0 ? (
-                                      <div className="text-center py-8 text-gray-400 text-sm">No recent tokens</div>
-                                    ) : (
-                                      availableTokens.map((token, idx) => {
-                                        const isSelected = (selectingTokenFor === 'pay' && swapPayToken.address.toLowerCase() === token.address.toLowerCase()) ||
-                                                          (selectingTokenFor === 'receive' && swapReceiveToken.address.toLowerCase() === token.address.toLowerCase()) ||
-                                                          (selectingTokenFor === 'send' && sendToken.address.toLowerCase() === token.address.toLowerCase());
-                                        
-                                        return (
-                                          <button
-                                            key={`token-${token.address}-${idx}`}
-                                            onClick={() => handleTokenSelect(token)}
-                                            disabled={isSelected}
-                                            className={`w-full flex items-center justify-between p-2.5 rounded-lg border transition-colors ${
-                                              isSelected 
-                                                ? 'bg-blue-500/20 border-blue-500/50 cursor-not-allowed' 
-                                                : 'bg-slate-800/50 hover:bg-slate-700/50 border-slate-700/50'
-                                            } group`}
-                                          >
-                                            <div className="flex items-center space-x-2 flex-1 min-w-0">
-                                              {token.logo ? (
-                                                <img src={token.logo} alt={token.symbol} className="w-7 h-7 rounded-full flex-shrink-0" onError={(e) => {
-                                                  e.currentTarget.style.display = 'none';
-                                                  e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                                }} />
-                                              ) : null}
-                                              <div className={`w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 ${token.logo ? 'hidden' : ''}`}>
-                                                <span className="text-xs text-white font-bold">
-                                                  {token.symbol.length <= 4 ? token.symbol : token.symbol.substring(0, 2).toUpperCase()}
-                                                </span>
-                                              </div>
-                                              <div className="flex-1 min-w-0 text-left">
-                                                <div className="text-white text-sm font-medium truncate">{token.symbol}</div>
-                                                <div className="text-xs text-gray-400 truncate">{token.name || token.symbol}</div>
-                                              </div>
-                                            </div>
-                                            {isSelected ? (
-                                              <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-                                                <FiCheck className="w-2.5 h-2.5 text-white" />
-                                              </div>
-                                            ) : (
-                                              <svg className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                              </svg>
-                                            )}
-                                          </button>
-                                        );
-                                      })
-                                    )}
+                                  {/* Wallet Tokens Section */}
+                                  {availableTokens.filter(t => t.isWalletToken).length > 0 && (
+                                <div className={`${isMobile ? "mb-3" : "mb-4"}`}>
+                                  <div className={`${isMobile ? "text-[10px] mb-1.5" : "text-xs mb-2"} text-gray-400 px-2 flex items-center gap-1.5`}>
+                                    <svg className={`${isMobile ? "w-2.5 h-2.5" : "w-3 h-3"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                                    </svg>
+                                    <span>Your Wallet</span>
                                   </div>
+                                  <div className={`${isMobile ? "space-y-0.5" : "space-y-1"}`}>
+                                        {availableTokens
+                                          .filter(t => t.isWalletToken)
+                                          .map((token, idx) => {
+                                            const isSelected = (selectingTokenFor === 'pay' && swapPayToken.address.toLowerCase() === token.address.toLowerCase()) ||
+                                                              (selectingTokenFor === 'receive' && swapReceiveToken.address.toLowerCase() === token.address.toLowerCase()) ||
+                                                              (selectingTokenFor === 'send' && sendToken.address.toLowerCase() === token.address.toLowerCase());
+                                            
+                                            return (
+                                              <button
+                                                key={`wallet-token-${token.address}-${idx}`}
+                                                onClick={() => handleTokenSelect(token)}
+                                                disabled={isSelected}
+                                                className={`w-full flex items-center justify-between p-2.5 rounded-lg border transition-colors ${
+                                                  isSelected 
+                                                    ? 'bg-blue-500/20 border-blue-500/50 cursor-not-allowed' 
+                                                    : 'bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30'
+                                                } group`}
+                                              >
+                                                <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                                  {renderTokenIcon(token, 'lg')}
+                                                  <div className="flex-1 min-w-0 text-left">
+                                                    <div className="flex items-center gap-1.5">
+                                                      <span className="text-white text-sm font-medium truncate">{token.symbol}</span>
+                                                      <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/30 text-blue-300 rounded uppercase font-medium">Wallet</span>
+                                                    </div>
+                                                    <div className="text-xs text-gray-400 truncate">
+                                                      {token.name || token.symbol}
+                                                      {token.balance && ` • ${parseFloat(token.balance).toFixed(4)}`}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                                {isSelected ? (
+                                                  <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                                    <FiCheck className="w-2.5 h-2.5 text-white" />
+                                                  </div>
+                                                ) : (
+                                                  <svg className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                  </svg>
+                                                )}
+                                              </button>
+                                            );
+                                          })}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Recent Tokens Section */}
+                                  {availableTokens.filter(t => !t.isWalletToken).length > 0 && (
+                                    <div>
+                                      <div className="text-xs text-gray-400 mb-2 px-2">Recent Tokens</div>
+                                      <div className="space-y-1">
+                                        {availableTokens
+                                          .filter(t => !t.isWalletToken)
+                                          .map((token, idx) => {
+                                            const isSelected = (selectingTokenFor === 'pay' && swapPayToken.address.toLowerCase() === token.address.toLowerCase()) ||
+                                                              (selectingTokenFor === 'receive' && swapReceiveToken.address.toLowerCase() === token.address.toLowerCase()) ||
+                                                              (selectingTokenFor === 'send' && sendToken.address.toLowerCase() === token.address.toLowerCase());
+                                            
+                                            return (
+                                              <button
+                                                key={`token-${token.address}-${idx}`}
+                                                onClick={() => handleTokenSelect(token)}
+                                                disabled={isSelected}
+                                                className={`w-full flex items-center justify-between p-2.5 rounded-lg border transition-colors ${
+                                                  isSelected 
+                                                    ? 'bg-blue-500/20 border-blue-500/50 cursor-not-allowed' 
+                                                    : 'bg-slate-800/50 hover:bg-slate-700/50 border-slate-700/50'
+                                                } group`}
+                                              >
+                                                <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                                  {renderTokenIcon(token, 'lg')}
+                                                  <div className="flex-1 min-w-0 text-left">
+                                                    <div className="text-white text-sm font-medium truncate">{token.symbol}</div>
+                                                    <div className="text-xs text-gray-400 truncate">{token.name || token.symbol}</div>
+                                                  </div>
+                                                </div>
+                                                {isSelected ? (
+                                                  <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                                    <FiCheck className="w-2.5 h-2.5 text-white" />
+                                                  </div>
+                                                ) : (
+                                                  <svg className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                  </svg>
+                                                )}
+                                              </button>
+                                            );
+                                          })}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* No Tokens Message */}
+                                  {availableTokens.length === 0 && (
+                                    <div className="text-center py-8 text-gray-400 text-sm">No tokens available</div>
+                                  )}
                                 </div>
                               )}
                             </>
@@ -2914,62 +3325,62 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
 
                   {/* Quick Actions */}
                   {walletData && (
-                    <div className={`px-4 ${isMobile ? "py-2" : "py-3"}`}>
+                    <div className={`px-4 ${isMobile ? "py-1.5" : "py-3"}`}>
                       <div className="flex items-center justify-between gap-3">
                               <button
                           onClick={handleBuySell}
                           className="flex flex-col items-center flex-1"
                         >
-                          <div className="w-12 h-12 bg-[#1d4ed8] rounded-full flex items-center justify-center mb-2 hover:bg-[#2563eb] transition-colors">
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <div className={`${isMobile ? "w-10 h-10 mb-1.5" : "w-12 h-12 mb-2"} bg-[#1d4ed8] rounded-full flex items-center justify-center hover:bg-[#2563eb] transition-colors`}>
+                            <svg className={`${isMobile ? "w-5 h-5" : "w-6 h-6"} text-white`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                             </svg>
                           </div>
-                          <span className="text-xs text-white">Buy</span>
+                          <span className={`${isMobile ? "text-[10px]" : "text-xs"} text-white`}>Buy</span>
                         </button>
                               <button
                           onClick={handleSwap}
                           className="flex flex-col items-center flex-1"
                         >
-                          <div className="w-12 h-12 bg-[#1d4ed8] rounded-full flex items-center justify-center mb-2 hover:bg-[#2563eb] transition-colors">
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <div className={`${isMobile ? "w-10 h-10 mb-1.5" : "w-12 h-12 mb-2"} bg-[#1d4ed8] rounded-full flex items-center justify-center hover:bg-[#2563eb] transition-colors`}>
+                            <svg className={`${isMobile ? "w-5 h-5" : "w-6 h-6"} text-white`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                             </svg>
                           </div>
-                          <span className="text-xs text-white">Swap</span>
+                          <span className={`${isMobile ? "text-[10px]" : "text-xs"} text-white`}>Swap</span>
                               </button>
                               <button
                           onClick={handleSend}
                           className="flex flex-col items-center flex-1"
                         >
-                          <div className="w-12 h-12 bg-[#1d4ed8] rounded-full flex items-center justify-center mb-2 hover:bg-[#2563eb] transition-colors">
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <div className={`${isMobile ? "w-10 h-10 mb-1.5" : "w-12 h-12 mb-2"} bg-[#1d4ed8] rounded-full flex items-center justify-center hover:bg-[#2563eb] transition-colors`}>
+                            <svg className={`${isMobile ? "w-5 h-5" : "w-6 h-6"} text-white`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
                             </svg>
                           </div>
-                          <span className="text-xs text-white">Send</span>
+                          <span className={`${isMobile ? "text-[10px]" : "text-xs"} text-white`}>Send</span>
                         </button>
                                  <button
                           onClick={handleReceive}
                           className="flex flex-col items-center flex-1"
                         >
-                          <div className="w-12 h-12 bg-[#1d4ed8] rounded-full flex items-center justify-center mb-2 hover:bg-[#2563eb] transition-colors">
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <div className={`${isMobile ? "w-10 h-10 mb-1.5" : "w-12 h-12 mb-2"} bg-[#1d4ed8] rounded-full flex items-center justify-center hover:bg-[#2563eb] transition-colors`}>
+                            <svg className={`${isMobile ? "w-5 h-5" : "w-6 h-6"} text-white`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                             </svg>
                           </div>
-                          <span className="text-xs text-white">Receive</span>
+                          <span className={`${isMobile ? "text-[10px]" : "text-xs"} text-white`}>Receive</span>
                                  </button>
                                </div>
                           </div>
                         )}
 
                   {/* Navigation Tabs */}
-                  <div className={`px-4 ${isMobile ? "py-2" : "py-3"} border-b border-slate-700/50 ${isMobile ? "rounded-none" : "rounded-t-lg"}`}>
+                  <div className={`px-4 ${isMobile ? "py-1.5" : "py-3"} border-b border-slate-700/50 ${isMobile ? "rounded-none" : "rounded-t-lg"}`}>
                     <div className="flex space-x-6">
                             <button
                         onClick={() => setActiveTab("overview")}
-                        className={`pb-2 text-sm border-b-2 transition-colors ${
+                        className={`${isMobile ? "pb-1.5 text-xs" : "pb-2 text-sm"} border-b-2 transition-colors ${
                           activeTab === "overview" 
                             ? "text-blue-400 border-blue-400" 
                             : "text-gray-400 border-transparent hover:text-gray-300"
@@ -2979,7 +3390,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                             </button>
                             <button
                         onClick={() => setActiveTab("history")}
-                        className={`pb-2 text-sm border-b-2 transition-colors ${
+                        className={`${isMobile ? "pb-1.5 text-xs" : "pb-2 text-sm"} border-b-2 transition-colors ${
                           activeTab === "history" 
                             ? "text-blue-400 border-blue-400" 
                             : "text-gray-400 border-transparent hover:text-gray-300"
@@ -2992,17 +3403,17 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
 
                   {/* Content Sections */}
                   {activeTab === "overview" && (
-                    <div className={`px-4 ${isMobile ? "py-3" : "py-4"} h-96 overflow-y-auto scrollbar-hide`}>
+                    <div className={`px-4 ${isMobile ? "py-2" : "py-4"} ${isMobile ? "min-h-[60vh]" : "h-96"} overflow-y-auto scrollbar-hide`}>
                       {/* Network Header */}
-                      <div className="flex items-center justify-between mb-4">
+                      <div className={`flex items-center justify-between ${isMobile ? "mb-3" : "mb-4"}`}>
                         <div className="flex items-center space-x-2">
-                          <span className="text-sm text-gray-300">Base Network</span>
-                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <span className={`${isMobile ? "text-xs" : "text-sm"} text-gray-300`}>Base Network</span>
+                          <svg className={`${isMobile ? "w-3 h-3" : "w-4 h-4"} text-gray-400`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                           </svg>
                         </div>
                         <button className="text-gray-400 hover:text-blue-400 transition-colors">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className={`${isMobile ? "w-3 h-3" : "w-4 h-4"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z" />
                           </svg>
                         </button>
@@ -3155,16 +3566,16 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                                   )}
                                 </div>
                       ) : (
-                        <div className="text-center py-12">
-                          <div className="w-20 h-20 bg-slate-700/30 rounded-lg flex items-center justify-center mx-auto mb-4 border border-slate-600/50">
-                            <svg className="w-12 h-12 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className={`text-center ${isMobile ? "py-6" : "py-12"}`}>
+                          <div className={`${isMobile ? "w-14 h-14 mb-3" : "w-20 h-20 mb-4"} bg-slate-700/30 rounded-lg flex items-center justify-center mx-auto border border-slate-600/50`}>
+                            <svg className={`${isMobile ? "w-8 h-8" : "w-12 h-12"} text-gray-500`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                             </svg>
                           </div>
-                          <p className={`${isMobile ? "text-base" : "text-sm"} font-medium text-gray-200 mb-2 px-2`}>
+                          <p className={`${isMobile ? "text-sm" : "text-sm"} font-medium text-gray-200 ${isMobile ? "mb-1.5" : "mb-2"} px-2`}>
                             No tokens found
                           </p>
-                          <p className={`${isMobile ? "text-sm" : "text-xs"} text-gray-400 px-2`}>
+                          <p className={`${isMobile ? "text-xs" : "text-xs"} text-gray-400 px-2`}>
                             Your tokens will appear here
                           </p>
                               </div>

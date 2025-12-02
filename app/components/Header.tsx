@@ -146,6 +146,7 @@ const Header: React.FC = () => {
   const { favorites, toggleFavorite } = useFavorites();
   const { watchlists, removeFromWatchlist } = useWatchlists();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
 
   const [points, setPoints] = useState<number | null>(null);
   const [tier, setTier] = useState<string>('normie');
@@ -535,113 +536,152 @@ const Header: React.FC = () => {
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.18, ease: "easeOut" }}
                   >
-                    <div className="h-full flex flex-col px-6 py-6">
-                      <div className="flex items-center justify-between mb-4 flex-shrink-0">
-                        <h3 className="text-white text-lg font-semibold tracking-wide uppercase">
-                          Menu
-                        </h3>
-                        <button
-                          onClick={() => setIsMenuOpen(false)}
-                          className="text-gray-400 hover:text-white transition-colors p-2"
-                          aria-label="Close menu"
-                        >
-                          <FiX className="w-6 h-6" />
-                        </button>
-                      </div>
-
-                      <div className="mb-4 flex-shrink-0">
-                        <GlobalSearch 
-                          placeholder="Search tokens, addresses, transactions..."
-                          variant="header"
-                        />
-                      </div>
-
-                      <div className="space-y-1 flex-1 overflow-y-auto min-h-0 mb-4">
-                        {[{
-                          href: "/discover",
-                          label: "Discover",
-                          delay: 0.05,
-                          comingSoon: false
-                        }, {
-                          href: "/radar",
-                          label: "Radar",
-                          delay: 0.075,
-                          comingSoon: false
-                        }, {
-                          href: "/dashboard",
-                          label: "Dashboard",
-                          delay: 0.1,
-                          comingSoon: false
-                        }, {
-                          href: "/predict",
-                          label: "Predict",
-                          delay: 0.125,
-                          comingSoon: true
-                        }, {
-                          href: "/rewards",
-                          label: "Rewards",
-                          delay: 0.15,
-                          comingSoon: false
-                        }, {
-                          href: "/explorer",
-                          label: "Explorer",
-                          delay: 0.2,
-                          comingSoon: false
-                        }, {
-                          href: "/docs",
-                          label: "Docs",
-                          icon: <FiBook className="w-5 h-5" />,
-                          delay: 0.25,
-                          comingSoon: false
-                        }].map(({ href, label, icon, delay, comingSoon }, index) => (
-                          <motion.div
-                            key={href}
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay }}
+                    {!showMobileSearch ? (
+                      <div className="h-full flex flex-col px-5 py-5">
+                        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+                          <h3 className="text-white text-lg font-semibold tracking-wide uppercase">
+                            Menu
+                          </h3>
+                          <button
+                            onClick={() => setIsMenuOpen(false)}
+                            className="text-gray-400 hover:text-white transition-colors p-2"
+                            aria-label="Close menu"
                           >
-                            {comingSoon ? (
-                              <div className="block px-4 py-4 text-gray-500 text-base font-normal tracking-wide cursor-not-allowed flex items-center gap-3 rounded-lg">
-                                <span className="flex-1">{label}</span>
-                                <span className="px-2 py-1 rounded-full bg-blue-900/60 text-blue-300 text-xs font-medium">Soon</span>
-                              </div>
-                            ) : (
-                              <Link
-                                href={href}
-                                className="block px-4 py-4 text-white text-base font-normal tracking-wide hover:text-blue-300 hover:bg-gray-800/30 transition-all rounded-lg flex items-center gap-3"
-                                prefetch={true}
-                                onClick={() => setIsMenuOpen(false)}
-                              >
-                                {icon && <span className="text-blue-400">{icon}</span>}
-                                <span className="flex-1">{label}</span>
-                              </Link>
-                            )}
-                            {index < 6 && <div className="h-px bg-gray-800/60 my-1" />}
-                          </motion.div>
-                        ))}
-                      </div>
+                            <FiX className="w-6 h-6" />
+                          </button>
+                        </div>
 
-                      <div className="grid grid-cols-2 gap-4 flex-shrink-0">
-                        <button
-                          onClick={() => {
-                            setIsMenuOpen(false);
-                            setShowWatchlistsModal(true);
-                          }}
-                          className="px-4 py-3 rounded-full bg-gray-900/50 text-white text-sm font-medium hover:bg-gray-900/80 transition-colors border border-blue-500/30"
-                        >
-                          Watchlists
-                        </button>
-                        <button
-                          onClick={() => {
-                            setIsMenuOpen(false);
-                            setShowSettingsModal(true);
-                          }}
-                          className="px-4 py-3 rounded-full bg-gray-900/50 text-white text-sm font-medium hover:bg-gray-900/80 transition-colors border border-blue-500/30"
-                        >
-                          Settings
-                        </button>
+                        <div className="mb-4 flex-shrink-0">
+                          <div 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowMobileSearch(true);
+                            }} 
+                            onFocus={(e) => {
+                              e.stopPropagation();
+                              setShowMobileSearch(true);
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <GlobalSearch 
+                              placeholder="Search tokens, addresses, transactions..."
+                              variant="header"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1 flex-1 overflow-y-auto min-h-0 mb-4">
+                          {[{
+                            href: "/discover",
+                            label: "Discover",
+                            delay: 0.05,
+                            comingSoon: false
+                          }, {
+                            href: "/radar",
+                            label: "Radar",
+                            delay: 0.075,
+                            comingSoon: false
+                          }, {
+                            href: "/dashboard",
+                            label: "Dashboard",
+                            delay: 0.1,
+                            comingSoon: false
+                          }, {
+                            href: "/predict",
+                            label: "Predict",
+                            delay: 0.125,
+                            comingSoon: true
+                          }, {
+                            href: "/rewards",
+                            label: "Rewards",
+                            delay: 0.15,
+                            comingSoon: false
+                          }, {
+                            href: "/explorer",
+                            label: "Explorer",
+                            delay: 0.2,
+                            comingSoon: false
+                          }, {
+                            href: "/docs",
+                            label: "Docs",
+                            icon: <FiBook className="w-5 h-5" />,
+                            delay: 0.25,
+                            comingSoon: false
+                          }].map(({ href, label, icon, delay, comingSoon }, index) => (
+                            <motion.div
+                              key={href}
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay }}
+                            >
+                              {comingSoon ? (
+                                <div className="block px-4 py-3 text-gray-500 text-sm font-normal tracking-wide cursor-not-allowed flex items-center gap-3 rounded-lg">
+                                  <span className="flex-1">{label}</span>
+                                  <span className="px-2 py-0.5 rounded-full bg-blue-900/60 text-blue-300 text-xs font-medium">Soon</span>
+                                </div>
+                              ) : (
+                                <Link
+                                  href={href}
+                                  className="block px-4 py-3 text-white text-sm font-normal tracking-wide hover:text-blue-300 hover:bg-gray-800/30 transition-all rounded-lg flex items-center gap-3"
+                                  prefetch={true}
+                                  onClick={() => setIsMenuOpen(false)}
+                                >
+                                  {icon && <span className="text-blue-400">{icon}</span>}
+                                  <span className="flex-1">{label}</span>
+                                </Link>
+                              )}
+                              {index < 6 && <div className="h-px bg-gray-800/60 my-1" />}
+                            </motion.div>
+                          ))}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 flex-shrink-0">
+                          <button
+                            onClick={() => {
+                              setIsMenuOpen(false);
+                              setShowWatchlistsModal(true);
+                            }}
+                            className="px-4 py-2.5 rounded-full bg-gray-900/50 text-white text-sm font-medium hover:bg-gray-900/80 transition-colors border border-blue-500/30"
+                          >
+                            Watchlists
+                          </button>
+                          <button
+                            onClick={() => {
+                              setIsMenuOpen(false);
+                              setShowSettingsModal(true);
+                            }}
+                            className="px-4 py-2.5 rounded-full bg-gray-900/50 text-white text-sm font-medium hover:bg-gray-900/80 transition-colors border border-blue-500/30"
+                          >
+                            Settings
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      /* Full Screen Token Search */
+                      <div className="h-full flex flex-col bg-gray-950 overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
+                          <h3 className="text-white text-base font-semibold">Search Tokens</h3>
+                          <button
+                            onClick={() => {
+                              setShowMobileSearch(false);
+                            }}
+                            className="text-gray-400 hover:text-white transition-colors p-1.5"
+                            aria-label="Back to menu"
+                          >
+                            <FiX className="w-5 h-5" />
+                          </button>
+                        </div>
+                        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+                          <div className="px-4 pt-3 pb-2 flex-shrink-0">
+                            <GlobalSearch 
+                              placeholder="Search tokens, addresses, transactions..."
+                              variant="header"
+                              fullScreenMobile={true}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </motion.div>
                 </>
               )}
