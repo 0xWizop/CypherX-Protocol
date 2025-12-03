@@ -1,5 +1,5 @@
-import { collection, getDocs, query, where, orderBy, limit } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { NextResponse } from 'next/server';
+import { adminDb } from "@/lib/firebase-admin";
 
 // Define proper types
 interface TokenData {
@@ -96,31 +96,44 @@ export async function GET(request: Request) {
     const sortBy = searchParams.get('sortBy') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
 
-    // Fetch tokens from Firebase 'tokens' collection
-    const tokensRef = collection(db, "tokens");
-    let tokensQuery = query(tokensRef);
-
-    // Apply search filter if provided
-    if (search) {
-      // For Firebase, we'll need to fetch all and filter client-side
-      // since Firebase doesn't support full-text search
-      tokensQuery = query(tokensRef);
-    } else {
-      // Apply source filter if specified
-      if (source && source !== 'all') {
-        tokensQuery = query(tokensRef, where("source", "==", source));
-      }
-      
-      // Apply sorting
-      if (sortBy === 'createdAt') {
-        tokensQuery = query(tokensQuery, orderBy("createdAt", sortOrder === 'desc' ? 'desc' : 'asc'));
-      }
-      
-      // Apply limit
-      tokensQuery = query(tokensQuery, limit(limitParam + offset));
+    // Fetch tokens from Firebase 'tokens' collection using Admin SDK
+    let db;
+    try {
+      db = adminDb();
+    } catch (error) {
+      console.error('Firebase Admin initialization failed:', error);
+      return NextResponse.json({ 
+        error: 'Database connection failed. Please check Firebase Admin configuration and IAM permissions.',
+        tokens: [],
+        total: 0
+      }, { status: 500 });
     }
+    
+    if (!db) {
+      return NextResponse.json({ 
+        error: 'Database connection failed',
+        tokens: [],
+        total: 0
+      }, { status: 500 });
+    }
+    
+    let tokensQuery = db.collection("tokens");
 
-    const snapshot = await getDocs(tokensQuery);
+    // Apply source filter if specified
+    if (source && source !== 'all') {
+      tokensQuery = tokensQuery.where("source", "==", source) as any;
+    }
+    
+    // Apply sorting
+    if (sortBy === 'createdAt') {
+      tokensQuery = tokensQuery.orderBy("createdAt", sortOrder === 'desc' ? 'desc' : 'asc') as any;
+    }
+    
+    // Apply limit (fetch more if we need to filter/search)
+    const fetchLimit = search ? 1000 : (limitParam + offset);
+    tokensQuery = tokensQuery.limit(fetchLimit) as any;
+
+    const snapshot = await tokensQuery.get();
     
     if (snapshot.empty) {
       return new Response(JSON.stringify({ 
@@ -136,6 +149,15 @@ export async function GET(request: Request) {
     // Map Firebase data to our format
     let tokens: TokenData[] = snapshot.docs.map((doc) => {
       const data = doc.data();
+      // Handle Firestore Timestamp conversion
+      const toDate = (val: any): Date => {
+        if (!val) return new Date();
+        if (val.toDate && typeof val.toDate === 'function') return val.toDate();
+        if (val instanceof Date) return val;
+        if (typeof val === 'string') return new Date(val);
+        return new Date();
+      };
+      
       return {
         id: doc.id,
         address: data.address || "",
@@ -146,7 +168,7 @@ export async function GET(request: Request) {
         uniqueHolders: data.uniqueHolders || 0,
         totalSupply: data.totalSupply || 0,
         creatorAddress: data.creatorAddress || "",
-        createdAt: data.createdAt?.toDate?.() || data.createdAt || new Date(),
+        createdAt: toDate(data.createdAt),
         mediaContent: data.mediaContent || "",
         source: data.source || "unknown",
         dexName: data.dexName || "unknown",
@@ -159,7 +181,7 @@ export async function GET(request: Request) {
         totalVolume: data.totalVolume || 0,
         marketCapDelta24h: data.marketCapDelta24h || 0,
         tokenUri: data.tokenUri || "",
-        lastUpdated: data.lastUpdated?.toDate?.() || data.lastUpdated || new Date(),
+        lastUpdated: toDate(data.lastUpdated),
       };
     });
 
@@ -224,7 +246,7 @@ export async function GET(request: Request) {
           );
           
           if (!res.ok) {
-            console.error(`DexScreener API fetch failed for chunk: ${joinedChunk}, status: ${res.status}`);
+            console.error(`Unable to fetch token data. Please try again later.`);
             continue;
           }
           
@@ -253,6 +275,7 @@ export async function GET(request: Request) {
           });
         } catch (error) {
           console.error("Error fetching DexScreener data:", error);
+          // Continue with tokens even if DexScreener fails
         }
       }
     }
@@ -290,7 +313,7 @@ export async function GET(request: Request) {
       tokens: tokensWithTags,
       total,
       offset,
-      limit,
+      limit: limitParam,
       source: source || 'all',
     }), {
       status: 200,
@@ -298,7 +321,7 @@ export async function GET(request: Request) {
     });
   } catch (error: unknown) {
     console.error("API Error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to fetch tokens";
+    const errorMessage = "Unable to fetch token data. Please try again later.";
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { "Content-Type": "application/json" },

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Header from "../components/Header";
 import ReferralModal from "../components/ReferralModal";
@@ -20,10 +20,10 @@ import { SiEthereum } from "react-icons/si";
 // Referral Volume Tiers - more referral volume = lower fees
 const REFERRAL_VOLUME_TIERS = [
   { name: "Starter", minVolume: 0, feeDiscount: 0, color: "text-gray-400" },
-  { name: "Bronze", minVolume: 1000, feeDiscount: 5, color: "text-amber-600" },
-  { name: "Silver", minVolume: 5000, feeDiscount: 10, color: "text-gray-300" },
-  { name: "Gold", minVolume: 25000, feeDiscount: 15, color: "text-yellow-400" },
-  { name: "Diamond", minVolume: 100000, feeDiscount: 20, color: "text-cyan-400" },
+  { name: "Bronze", minVolume: 1000, feeDiscount: 5, color: "text-gray-300" },
+  { name: "Silver", minVolume: 5000, feeDiscount: 10, color: "text-gray-200" },
+  { name: "Gold", minVolume: 25000, feeDiscount: 15, color: "text-white" },
+  { name: "Diamond", minVolume: 100000, feeDiscount: 20, color: "text-blue-400" },
 ];
 
 // Mock data - will be replaced with real data
@@ -184,6 +184,18 @@ export default function RewardsPage() {
   const baseCashback = 5;
   const totalCashback = baseCashback + currentVolumeTier.feeDiscount;
 
+  // Show loading skeleton within the UI instead of full-screen loading
+  const isLoading = loading && !rewards;
+
+  // Show error as toast notification instead of inline banner (prevents layout issues)
+  const prevErrorRef = React.useRef<string | null>(null);
+  useEffect(() => {
+    if (error && error !== prevErrorRef.current) {
+      prevErrorRef.current = error;
+      showToast(`Error: ${error}`, 'error');
+    }
+  }, [error]);
+
   if (!user) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-950 text-gray-200">
@@ -194,9 +206,6 @@ export default function RewardsPage() {
       </div>
     );
   }
-
-  // Show loading skeleton within the UI instead of full-screen loading
-  const isLoading = loading && !rewards;
 
   return (
     <div className="min-h-full bg-gray-950 text-gray-200 flex flex-col">
@@ -213,26 +222,16 @@ export default function RewardsPage() {
               </p>
             )}
           </div>
-        </div>
-
-        {/* Error Banner */}
+          {/* Error retry button in header if error exists */}
         {error && (
-          <motion.div {...fadeInUp(0.05)} className="mb-3 p-3 bg-red-500/20 border border-red-500/30 rounded-lg flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
-                <span className="text-red-400 font-medium text-sm">Error Loading Rewards</span>
-              </div>
               <button 
                 onClick={refreshAll}
-                className="text-red-400 hover:text-red-300 text-xs underline"
+              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-300 hover:text-white text-xs font-medium transition-all duration-200"
               >
-                Try Again
+              Retry
               </button>
+          )}
             </div>
-            <p className="text-red-300 text-xs mt-1">{error}</p>
-          </motion.div>
-        )}
 
         {/* Main Content */}
         <div className="flex-1 min-h-0 space-y-3">
@@ -241,8 +240,8 @@ export default function RewardsPage() {
             {/* ETH Earned */}
             <motion.div {...fadeInUp(0.1)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-2.5 sm:p-3">
               <p className="text-[9px] sm:text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">ETH Earned</p>
-              <p className="text-base sm:text-lg font-semibold text-green-400 flex items-center gap-1.5">
-                <SiEthereum className="w-3 h-3 sm:w-4 sm:h-4" />
+              <p className="text-base sm:text-lg font-semibold text-white flex items-center gap-1.5">
+                <SiEthereum className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
                 <span>{isLoading ? "..." : userData.ethRewards?.toFixed(4) || "0.0000"}</span>
               </p>
             </motion.div>
@@ -263,11 +262,11 @@ export default function RewardsPage() {
 
             {/* Your Fee Discount */}
             <motion.div {...fadeInUp(0.25)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-2.5 sm:p-3">
-              <p className="text-[9px] sm:text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Your Cashback</p>
-              <p className={`text-base sm:text-lg font-semibold ${currentVolumeTier.feeDiscount > 0 ? 'text-green-400' : 'text-white'}`}>
-                {totalCashback}%
+              <p className="text-[9px] sm:text-[10px] text-emerald-400 uppercase tracking-wider mb-0.5">Your Cashback</p>
+              <p className="text-base sm:text-lg font-semibold text-white">
+                <span className="text-emerald-400">{totalCashback}%</span>
                 {currentVolumeTier.feeDiscount > 0 && (
-                  <span className="text-[10px] text-green-400/70 ml-1">(+{currentVolumeTier.feeDiscount}%)</span>
+                  <span className="text-[10px] text-emerald-300 ml-1">(+{currentVolumeTier.feeDiscount}%)</span>
                 )}
               </p>
             </motion.div>
@@ -281,7 +280,7 @@ export default function RewardsPage() {
                 <h3 className="text-sm font-medium text-white">
                   Referral Volume Perks
                 </h3>
-                <span className={`text-xs font-medium px-2 py-0.5 rounded ${currentVolumeTier.color} bg-gray-800`}>
+                <span className="text-xs font-medium px-2 py-0.5 rounded text-blue-300 bg-blue-500/10 border border-blue-500/30">
                   {currentVolumeTier.name}
                 </span>
               </div>
@@ -289,18 +288,18 @@ export default function RewardsPage() {
               {nextVolumeTier && (
                 <div className="mb-3">
                   <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-gray-400">Progress to {nextVolumeTier.name}</span>
-                    <span className="text-blue-400 font-medium">
+                    <span className="text-blue-400">Progress to {nextVolumeTier.name}</span>
+                    <span className="text-blue-300 font-medium">
                       ${referralVolume.toLocaleString()} / ${nextVolumeTier.minVolume.toLocaleString()}
                     </span>
                   </div>
                   <div className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden">
                     <div 
-                      className="bg-gradient-to-r from-blue-500 to-blue-400 h-1.5 rounded-full transition-all duration-500"
+                      className="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
                       style={{ width: `${volumeProgress}%` }}
                     ></div>
                   </div>
-                  <p className="text-[10px] text-gray-500 mt-1">
+                  <p className="text-[10px] text-blue-400/70 mt-1">
                     +{nextVolumeTier.feeDiscount - currentVolumeTier.feeDiscount}% more cashback at next tier
                   </p>
                 </div>
@@ -312,7 +311,7 @@ export default function RewardsPage() {
                     key={tier.name}
                     className={`flex-1 min-w-[60px] p-1.5 sm:p-2 rounded-md text-center ${
                       referralVolume >= tier.minVolume 
-                        ? 'bg-blue-500/20 border border-blue-500/30' 
+                        ? 'bg-blue-500/10 border border-blue-500/40' 
                         : 'bg-gray-800/50 border border-gray-700/30'
                     }`}
                   >
@@ -327,11 +326,11 @@ export default function RewardsPage() {
             <motion.div {...fadeInUp(0.35)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3 sm:p-4">
               <h3 className="text-sm font-medium text-white mb-3">Claim Rewards</h3>
               <div className="space-y-3">
-                <div className="text-center p-3 bg-gray-800 rounded-lg">
-                  <p className="text-xs text-gray-400 mb-1">Available to Claim</p>
-                  <p className="text-xl font-semibold text-green-400 flex items-center justify-center gap-2">
-                    <SiEthereum className="w-5 h-5" />
-                    <span>+{(userData.ethRewards || 0).toFixed(4)}</span>
+                <div className="text-center p-3 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-lg border border-emerald-500/20">
+                  <p className="text-xs text-emerald-400 mb-1">Available to Claim</p>
+                  <p className="text-xl font-semibold text-white flex items-center justify-center gap-2">
+                    <SiEthereum className="w-5 h-5 text-emerald-400" />
+                    <span className="text-emerald-300">{(userData.ethRewards || 0).toFixed(4)}</span>
                   </p>
                 </div>
                 <button 
@@ -347,7 +346,7 @@ export default function RewardsPage() {
                   }}
                   className={`w-full py-2.5 transition-all duration-300 rounded-lg text-sm font-medium ${
                     userData.ethRewards > 0
-                      ? 'bg-green-500 hover:bg-green-600 text-white'
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/20'
                       : 'bg-gray-800 border border-gray-700 text-gray-400 cursor-not-allowed'
                   }`}
                   disabled={userData.ethRewards <= 0}
@@ -368,14 +367,14 @@ export default function RewardsPage() {
                 </div>
                 {userData.referredBy && (
                   <p className="text-xs text-gray-400 mt-1">
-                    Using Referral Code: <span className="text-blue-400">'{userData.referredBy}'</span>
+                    Using Referral Code: <span className="text-gray-300">'{userData.referredBy}'</span>
                   </p>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setShowReferralModal(true)}
-                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-md transition-all duration-200 flex items-center space-x-2"
+                  className="px-3 py-2 bg-gray-800 hover:bg-blue-500/20 border border-gray-700 hover:border-blue-500/40 text-white hover:text-blue-300 text-xs font-medium rounded-md transition-all duration-200 flex items-center space-x-2"
                 >
                   <FaUserFriends className="w-3 h-3" />
                   <span>View Referrals</span>
@@ -385,7 +384,7 @@ export default function RewardsPage() {
                     navigator.clipboard.writeText(userData.referralCode);
                     showToast('Referral code copied to clipboard!', 'success');
                   }}
-                  className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium rounded-md transition-all duration-200 flex items-center space-x-2"
+                  className="px-3 py-2 bg-gray-800 hover:bg-blue-500/20 border border-gray-700 hover:border-blue-500/40 text-white hover:text-blue-300 text-xs font-medium rounded-md transition-all duration-200 flex items-center space-x-2"
                 >
                   <FaShare className="w-3 h-3" />
                   <span>Copy Code</span>
@@ -393,7 +392,7 @@ export default function RewardsPage() {
                 {!userData.referralCodeEdited && (
                   <button
                     onClick={() => setShowEditReferralModal(true)}
-                    className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium rounded-md transition-all duration-200 flex items-center space-x-2"
+                    className="px-3 py-2 bg-gray-800 hover:bg-blue-500/20 border border-gray-700 hover:border-blue-500/40 text-white hover:text-blue-300 text-xs font-medium rounded-md transition-all duration-200 flex items-center space-x-2"
                   >
                     <FaEdit className="w-3 h-3" />
                     <span>Edit Code</span>
@@ -404,14 +403,14 @@ export default function RewardsPage() {
             
             {/* Referral Stats */}
             <div className="grid grid-cols-2 gap-3 mb-3">
-              <div className="bg-gray-700/30 rounded-lg p-3 text-center border border-gray-600/30">
-                <p className="text-xs text-gray-400 mb-0.5">Total Referrals</p>
-                <p className="text-base font-semibold text-white">{userData.referrals || 0}</p>
+              <div className="bg-blue-500/5 rounded-lg p-3 text-center border border-blue-500/20">
+                <p className="text-xs text-blue-400 mb-0.5">Total Referrals</p>
+                <p className="text-base font-semibold text-blue-300">{userData.referrals || 0}</p>
               </div>
-              <div className="bg-gray-700/30 rounded-lg p-3 text-center border border-gray-600/30">
-                <p className="text-xs text-gray-400 mb-0.5">Earnings from Referrals</p>
-                <p className="text-base font-semibold text-green-400 flex items-center justify-center gap-1.5">
-                  <SiEthereum className="w-4 h-4" />
+              <div className="bg-blue-500/5 rounded-lg p-3 text-center border border-blue-500/20">
+                <p className="text-xs text-blue-400 mb-0.5">Earnings from Referrals</p>
+                <p className="text-base font-semibold text-blue-300 flex items-center justify-center gap-1.5">
+                  <SiEthereum className="w-4 h-4 text-blue-400" />
                   <span>{((userData.ethRewards || 0) * 0.3).toFixed(4)}</span>
                 </p>
               </div>
@@ -430,7 +429,7 @@ export default function RewardsPage() {
                           setSelectedRefereeId(referral.refereeId);
                           setShowRefereeStatsModal(true);
                         }}
-                        className="p-2.5 bg-gray-800 rounded-lg border border-gray-700/50 hover:border-gray-600 cursor-pointer transition-all duration-200"
+                        className="p-2.5 bg-gray-800 rounded-lg border border-gray-700/50 hover:border-blue-500/40 hover:bg-blue-500/5 cursor-pointer transition-all duration-200"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-2 flex-1">
@@ -494,15 +493,15 @@ export default function RewardsPage() {
               <h4 className="text-xs font-medium text-white mb-2">How Referrals Work</h4>
               <div className="space-y-1.5 sm:space-y-0 sm:grid sm:grid-cols-3 sm:gap-2 text-xs text-gray-400">
                 <div className="flex items-center space-x-2">
-                  <div className="w-1.5 h-1.5 bg-green-400 rounded-full flex-shrink-0"></div>
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
                   <span>Earn {baseCashback}% cashback on fees</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <div className="w-1.5 h-1.5 bg-purple-400 rounded-full flex-shrink-0"></div>
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
                   <span>Get 30% of referee's fee</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <div className="w-1.5 h-1.5 bg-blue-400 rounded-full flex-shrink-0"></div>
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
                   <span>More volume = higher cashback</span>
                 </div>
               </div>
@@ -552,7 +551,7 @@ export default function RewardsPage() {
             <div className="p-4 space-y-4">
               <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
                 <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Current Code</p>
-                <p className="text-xl font-mono font-semibold text-blue-400">{userData.referralCode}</p>
+                <p className="text-xl font-mono font-semibold text-white">{userData.referralCode}</p>
               </div>
               
               <div>
@@ -613,7 +612,7 @@ export default function RewardsPage() {
                     setEditError(result.error || 'Failed to update referral code');
                   }
                 }}
-                className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                className="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white text-sm font-medium rounded-lg transition-colors"
               >
                 Update Code
               </button>

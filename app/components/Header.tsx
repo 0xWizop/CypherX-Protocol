@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -9,6 +9,7 @@ import { db, storage } from "@/lib/firebase";
 import { useAuth, useLoginModal, useWalletSystem } from "@/app/providers";
 import { useFavorites } from "@/app/hooks/useFavorites";
 import { useWatchlists } from "@/app/hooks/useWatchlists";
+import { useQuickBuyConfig } from "@/app/hooks/useQuickBuyConfig";
 
 import WalletDropdown from "./WalletDropdown";
 import WalletDisplay from "./WalletDisplay";
@@ -17,20 +18,21 @@ import GlobalSearch from "./GlobalSearch";
 import UserProfileDropdown from "./UserProfileDropdown";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { FiMenu, FiX, FiStar, FiTrash2, FiUser, FiSettings, FiCheck, FiAlertCircle, FiBook } from "react-icons/fi";
+import { FiMenu, FiX, FiStar, FiTrash2, FiUser, FiSettings, FiCheck, FiAlertCircle, FiBook, FiSearch } from "react-icons/fi";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 
-const MobileChainBadge: React.FC = () => (
-  <div className="lg:hidden flex items-center justify-center w-8 h-8 rounded-lg border border-gray-700/60 bg-gray-900/40">
-    <Image
-      src="https://i.imgur.com/k4HafXg.png"
-      alt="Base Chain"
-      width={24}
-      height={24}
-      className="w-4 h-4"
-    />
-  </div>
+// Mobile Search Button Component
+const MobileSearchButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
+  <motion.button
+    onClick={onClick}
+    className="lg:hidden flex items-center justify-center w-8 h-8 rounded-lg border border-gray-700/60 bg-gray-900/40 text-gray-300 hover:text-white hover:border-gray-500 transition-all duration-200"
+    whileHover={{ scale: 1.05 }}
+    whileTap={{ scale: 0.95 }}
+    aria-label="Search"
+  >
+    <FiSearch className="w-4 h-4" />
+  </motion.button>
 );
 
 // Favorite Token Item Component
@@ -142,11 +144,14 @@ const FavoriteTokenItem = ({ poolAddress, onRemove }: { poolAddress: string; onR
 
 const Header: React.FC = () => {
   const pathname = usePathname();
+  const router = useRouter();
   const { user } = useAuth();
   const { favorites, toggleFavorite } = useFavorites();
   const { watchlists, removeFromWatchlist } = useWatchlists();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [showFullPageSearch, setShowFullPageSearch] = useState(false);
+  const [recentTokens, setRecentTokens] = useState<Array<{symbol: string; address: string; logo?: string; name?: string; poolAddress?: string}>>([]);
+  const [hasActiveSearch, setHasActiveSearch] = useState(false);
 
   const [points, setPoints] = useState<number | null>(null);
   const [tier, setTier] = useState<string>('normie');
@@ -157,6 +162,20 @@ const Header: React.FC = () => {
   const [expandedFavorites, setExpandedFavorites] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const { setShowLoginModal, setRedirectTo } = useLoginModal();
+
+  // Load recent tokens from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && showFullPageSearch) {
+      const stored = localStorage.getItem('cypherx_recent_tokens');
+      if (stored) {
+        try {
+          setRecentTokens(JSON.parse(stored));
+        } catch (e) {
+          console.error('Error loading recent tokens:', e);
+        }
+      }
+    }
+  }, [showFullPageSearch]);
 
 
   const navLinks: Array<{ href: string; label: string; isActive: (path: string) => boolean; comingSoon?: boolean }> = [
@@ -378,13 +397,13 @@ const Header: React.FC = () => {
                     />
                     <div className="hidden lg:flex items-center space-x-2">
                       <Image
-                        src="https://i.imgur.com/d2OCO6H.png"
+                        src="https://i.imgur.com/b9l8Ndl.png"
                         alt="CypherX"
-                        width={32}
-                        height={32}
-                        className="w-8 h-8"
+                        width={160}
+                        height={40}
+                        className="h-9 w-auto"
                       />
-                      <span className="text-lg text-white font-semibold" style={{ fontFamily: "'Poppins', sans-serif", letterSpacing: '0.02em' }}>
+                      <span className="text-lg text-blue-400 font-semibold tracking-tight" style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", letterSpacing: '0.05em' }}>
                         CYPHERX
                       </span>
                     </div>
@@ -470,7 +489,7 @@ const Header: React.FC = () => {
 
                 {/* Mobile Quick Actions */}
                 <div className="flex items-center space-x-2 lg:hidden">
-                  <MobileChainBadge />
+                  <MobileSearchButton onClick={() => setShowFullPageSearch(true)} />
                   <motion.button
                     onClick={() => setShowSettingsModal(true)}
                     className="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-700/60 bg-gray-900/40 text-gray-300 hover:text-white hover:border-gray-500 transition-all duration-200"
@@ -536,41 +555,25 @@ const Header: React.FC = () => {
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.18, ease: "easeOut" }}
                   >
-                    {!showMobileSearch ? (
-                      <div className="h-full flex flex-col px-5 py-5">
-                        <div className="flex items-center justify-between mb-4 flex-shrink-0">
-                          <h3 className="text-white text-lg font-semibold tracking-wide uppercase">
-                            Menu
-                          </h3>
-                          <button
-                            onClick={() => setIsMenuOpen(false)}
-                            className="text-gray-400 hover:text-white transition-colors p-2"
-                            aria-label="Close menu"
-                          >
-                            <FiX className="w-6 h-6" />
-                          </button>
-                        </div>
+                    <div className="h-full flex flex-col px-5 py-5">
+                      <div className="flex items-center justify-between mb-4 flex-shrink-0">
+                        <Image
+                          src="https://i.imgur.com/b9l8Ndl.png"
+                          alt="CypherX"
+                          width={160}
+                          height={40}
+                          className="h-9 w-auto"
+                        />
+                        <button
+                          onClick={() => setIsMenuOpen(false)}
+                          className="text-gray-400 hover:text-white transition-colors p-2"
+                          aria-label="Close menu"
+                        >
+                          <FiX className="w-6 h-6" />
+                        </button>
+                      </div>
 
-                        <div className="mb-4 flex-shrink-0">
-                          <div 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowMobileSearch(true);
-                            }} 
-                            onFocus={(e) => {
-                              e.stopPropagation();
-                              setShowMobileSearch(true);
-                            }}
-                            className="cursor-pointer"
-                          >
-                            <GlobalSearch 
-                              placeholder="Search tokens, addresses, transactions..."
-                              variant="header"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-1 flex-1 overflow-y-auto min-h-0 mb-4">
+                      <div className="space-y-1 flex-1 overflow-y-auto min-h-0 mb-4">
                           {[{
                             href: "/discover",
                             label: "Discover",
@@ -615,8 +618,8 @@ const Header: React.FC = () => {
                               transition={{ delay }}
                             >
                               {comingSoon ? (
-                                <div className="block px-4 py-3 text-gray-500 text-sm font-normal tracking-wide cursor-not-allowed flex items-center gap-3 rounded-lg">
-                                  <span className="flex-1">{label}</span>
+                                <div className="block px-4 py-3 text-gray-500 text-sm font-normal tracking-wide cursor-not-allowed flex items-center gap-2 rounded-lg">
+                                  <span>{label}</span>
                                   <span className="px-2 py-0.5 rounded-full bg-blue-900/60 text-blue-300 text-xs font-medium">Soon</span>
                                 </div>
                               ) : (
@@ -656,32 +659,6 @@ const Header: React.FC = () => {
                           </button>
                         </div>
                       </div>
-                    ) : (
-                      /* Full Screen Token Search */
-                      <div className="h-full flex flex-col bg-gray-950 overflow-hidden">
-                        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
-                          <h3 className="text-white text-base font-semibold">Search Tokens</h3>
-                          <button
-                            onClick={() => {
-                              setShowMobileSearch(false);
-                            }}
-                            className="text-gray-400 hover:text-white transition-colors p-1.5"
-                            aria-label="Back to menu"
-                          >
-                            <FiX className="w-5 h-5" />
-                          </button>
-                        </div>
-                        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-                          <div className="px-4 pt-3 pb-2 flex-shrink-0">
-                            <GlobalSearch 
-                              placeholder="Search tokens, addresses, transactions..."
-                              variant="header"
-                              fullScreenMobile={true}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </motion.div>
                 </>
               )}
@@ -864,6 +841,124 @@ const Header: React.FC = () => {
       , document.body
       )}
 
+      {/* Full Page Search Overlay for Mobile */}
+      {showFullPageSearch && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[10002] bg-gray-950 lg:hidden flex flex-col"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
+              <h3 className="text-white text-base font-semibold">Search</h3>
+              <button
+                onClick={() => setShowFullPageSearch(false)}
+                className="text-gray-400 hover:text-white transition-colors p-1.5"
+                aria-label="Close search"
+              >
+                <FiX className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Search Content */}
+            <div className="flex-1 flex flex-col min-h-0 relative" style={{ overflow: 'visible' }}>
+              <div className="px-4 pt-3 pb-2 flex-shrink-0 relative z-10 bg-gray-950">
+                <GlobalSearch 
+                  placeholder="Search tokens, addresses, transactions..."
+                  variant="header"
+                  fullScreenMobile={true}
+                  onSearchStateChange={setHasActiveSearch}
+                />
+              </div>
+              
+              {/* Separator and Recent Tokens - only show when no active search */}
+              {!hasActiveSearch && (
+                <div id="recent-tokens-section" className="flex-1 overflow-y-auto min-h-0 relative z-0">
+                <div className="w-full py-2 flex-shrink-0">
+                  <div className="border-t border-gray-800"></div>
+                </div>
+                <div className="px-4 pb-4">
+                {recentTokens.length > 0 ? (
+                  <>
+                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+                      Recent Tokens
+                    </h4>
+                    <div className="space-y-1">
+                      {recentTokens.map((token, index) => (
+                        <motion.button
+                          key={`${token.address}-${index}`}
+                          initial={{ opacity: 0, x: -8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.03 }}
+                          onClick={() => {
+                            const targetPath = token.poolAddress 
+                              ? `/discover/${token.poolAddress}/chart`
+                              : `/discover/${token.address}/chart`;
+                            router.push(targetPath);
+                            setShowFullPageSearch(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-800/50 transition-colors text-left group"
+                        >
+                          {/* Token Icon */}
+                          <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                            {token.logo ? (
+                              <img 
+                                src={token.logo} 
+                                alt={token.symbol || 'Token'} 
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  const fallback = e.currentTarget.nextElementSibling;
+                                  if (fallback) {
+                                    (fallback as HTMLElement).classList.remove('hidden');
+                                  }
+                                }}
+                              />
+                            ) : null}
+                            <div className={`w-full h-full bg-blue-500/20 flex items-center justify-center ${token.logo ? 'hidden' : ''}`}>
+                              <span className="text-xs text-blue-400 font-semibold">
+                                {(token.symbol || token.name || 'T').slice(0, 1).toUpperCase()}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {/* Token Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white text-sm font-medium truncate">
+                              {token.name || token.symbol || 'Unknown Token'}
+                            </div>
+                            <div className="text-gray-400 text-xs truncate">
+                              {token.symbol && token.name && token.symbol !== token.name ? token.symbol : token.address.slice(0, 6) + '...' + token.address.slice(-4)}
+                            </div>
+                          </div>
+                          
+                          {/* Arrow Icon */}
+                          <div className="text-gray-500 group-hover:text-gray-300 transition-colors flex-shrink-0">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </div>
+                        </motion.button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center h-full">
+                    <p className="text-gray-500 text-sm">No recent tokens</p>
+                  </div>
+                )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      , document.body
+      )}
+
     </>
   );
 };
@@ -873,6 +968,7 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
   const { user } = useAuth();
   const { selfCustodialWallet } = useWalletSystem();
   const walletAddress = selfCustodialWallet?.address;
+  const { config: quickBuyConfig, saveConfig: saveQuickBuyConfig, loading: quickBuyConfigLoading } = useQuickBuyConfig();
   const [profilePicture, setProfilePicture] = useState<string>("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -894,8 +990,26 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
   } as const;
   const [notifications, setNotifications] = useState(() => ({ ...DEFAULT_NOTIFICATIONS }));
   const [privacy, setPrivacy] = useState(() => ({ ...DEFAULT_PRIVACY }));
+  
+  // Quick Buy Configuration State
+  const [quickBuyAmounts, setQuickBuyAmounts] = useState<number[]>([0.01, 0.025, 0.05, 0.1]);
+  const [defaultSlippage, setDefaultSlippage] = useState<number>(1);
+  const [autoApprove, setAutoApprove] = useState<boolean>(false);
+  const [preferredDex, setPreferredDex] = useState<string | null>(null);
+  const [savingQuickBuy, setSavingQuickBuy] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+
+  // Load quick buy config when it's available
+  useEffect(() => {
+    if (!quickBuyConfigLoading && quickBuyConfig) {
+      setQuickBuyAmounts(quickBuyConfig.amounts || [0.01, 0.025, 0.05, 0.1]);
+      setDefaultSlippage(quickBuyConfig.defaultSlippage || 1);
+      setAutoApprove(quickBuyConfig.autoApprove || false);
+      setPreferredDex(quickBuyConfig.preferredDex || null);
+    }
+  }, [quickBuyConfig, quickBuyConfigLoading]);
 
   // Fetch user profile data
   useEffect(() => {
@@ -1027,7 +1141,6 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
         notifications,
         privacy,
         updatedAt: new Date(),
-        // Quick buy config will be saved separately via useQuickBuyConfig hook
       }, { merge: true });
       
       setSettingsStatus('success');
@@ -1046,6 +1159,65 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
       }, 5000);
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  const handleSaveQuickBuyConfig = async () => {
+    setSavingQuickBuy(true);
+    try {
+      const success = await saveQuickBuyConfig({
+        amounts: quickBuyAmounts,
+        defaultSlippage,
+        autoApprove,
+        preferredDex,
+      });
+      
+      if (success) {
+        setSettingsStatus('success');
+        setSettingsMessage('Quick buy preferences saved!');
+        setTimeout(() => {
+          setSettingsStatus('idle');
+          setSettingsMessage('');
+        }, 3000);
+      } else {
+        setSettingsStatus('error');
+        setSettingsMessage('Failed to save quick buy preferences');
+        setTimeout(() => {
+          setSettingsStatus('idle');
+          setSettingsMessage('');
+        }, 5000);
+      }
+    } catch (error) {
+      console.error('Error saving quick buy config:', error);
+      setSettingsStatus('error');
+      setSettingsMessage('Failed to save quick buy preferences');
+      setTimeout(() => {
+        setSettingsStatus('idle');
+        setSettingsMessage('');
+      }, 5000);
+    } finally {
+      setSavingQuickBuy(false);
+    }
+  };
+
+  const handleAddAmount = () => {
+    if (quickBuyAmounts.length < 6) {
+      setQuickBuyAmounts([...quickBuyAmounts, 0.1]);
+    }
+  };
+
+  const handleRemoveAmount = (index: number) => {
+    if (quickBuyAmounts.length > 1) {
+      setQuickBuyAmounts(quickBuyAmounts.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleUpdateAmount = (index: number, value: string) => {
+    const numValue = parseFloat(value) || 0;
+    if (numValue >= 0) {
+      const newAmounts = [...quickBuyAmounts];
+      newAmounts[index] = numValue;
+      setQuickBuyAmounts(newAmounts);
     }
   };
 
@@ -1258,6 +1430,136 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                     </label>
                   );
                 })}
+              </div>
+            </div>
+
+            {/* Quick Buy Configuration Section */}
+            <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <div>
+                  <h4 className="text-white font-semibold text-base sm:text-lg">Quick Buy Configuration</h4>
+                  <p className="text-gray-400 text-xs sm:text-sm mt-1">Customize your quick buy button amounts and preferences</p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                {/* Quick Buy Amounts */}
+                <div>
+                  <label className="block text-gray-300 text-xs sm:text-sm font-medium mb-2">
+                    Quick Buy Amounts (ETH)
+                  </label>
+                  <div className="space-y-2">
+                    {quickBuyAmounts.map((amount, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          step="0.001"
+                          min="0"
+                          value={amount}
+                          onChange={(e) => handleUpdateAmount(index, e.target.value)}
+                          className="flex-1 px-3 py-2 bg-gray-950 border border-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/50 text-sm transition"
+                          placeholder="0.01"
+                        />
+                        {quickBuyAmounts.length > 1 && (
+                          <button
+                            onClick={() => handleRemoveAmount(index)}
+                            className="px-3 py-2 bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition-colors text-sm"
+                          >
+                            <FiX className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {quickBuyAmounts.length < 6 && (
+                      <button
+                        onClick={handleAddAmount}
+                        className="w-full px-3 py-2 bg-gray-900 border border-gray-800 text-gray-300 hover:border-gray-600 hover:text-white transition-colors text-sm flex items-center justify-center gap-2"
+                      >
+                        <span>+ Add Amount</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Default Slippage */}
+                <div>
+                  <label className="block text-gray-300 text-xs sm:text-sm font-medium mb-2">
+                    Default Slippage (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    max="50"
+                    value={defaultSlippage}
+                    onChange={(e) => setDefaultSlippage(parseFloat(e.target.value) || 1)}
+                    className="w-full px-3 py-2 bg-gray-950 border border-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/50 text-sm transition"
+                    placeholder="1"
+                  />
+                  <p className="text-[11px] sm:text-xs text-gray-500 mt-1">
+                    Maximum price movement you're willing to accept (1-50%)
+                  </p>
+                </div>
+
+                {/* Auto Approve */}
+                <label className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer">
+                  <div>
+                    <span className="text-gray-200 text-sm font-medium">Auto Approve Tokens</span>
+                    <p className="text-[11px] sm:text-xs text-gray-500 mt-1">
+                      Automatically approve token spending for faster trades
+                    </p>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={autoApprove}
+                      onChange={(e) => setAutoApprove(e.target.checked)}
+                      className="sr-only"
+                    />
+                    <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
+                      autoApprove ? 'bg-blue-500' : 'bg-gray-700'
+                    }`}>
+                      <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                        autoApprove ? 'translate-x-5' : 'translate-x-0'
+                      }`}></div>
+                    </div>
+                  </div>
+                </label>
+
+                {/* Preferred DEX */}
+                <div>
+                  <label className="block text-gray-300 text-xs sm:text-sm font-medium mb-2">
+                    Preferred DEX (Optional)
+                  </label>
+                  <select
+                    value={preferredDex || ''}
+                    onChange={(e) => setPreferredDex(e.target.value || null)}
+                    className="w-full px-3 py-2 bg-gray-950 border border-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/50 text-sm transition"
+                  >
+                    <option value="">Auto (Best Price)</option>
+                    <option value="uniswap">Uniswap</option>
+                    <option value="sushiswap">SushiSwap</option>
+                    <option value="0x">0x Protocol</option>
+                  </select>
+                  <p className="text-[11px] sm:text-xs text-gray-500 mt-1">
+                    Prefer a specific DEX for swaps (defaults to best price)
+                  </p>
+                </div>
+
+                {/* Save Quick Buy Config Button */}
+                <button
+                  onClick={handleSaveQuickBuyConfig}
+                  disabled={savingQuickBuy || quickBuyConfigLoading}
+                  className="w-full px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                >
+                  {savingQuickBuy ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Save Quick Buy Preferences</span>
+                  )}
+                </button>
               </div>
             </div>
 

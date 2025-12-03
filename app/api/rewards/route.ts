@@ -4,25 +4,58 @@ import { adminDb, auth } from '@/lib/firebase-admin';
 // Get user rewards data
 export async function GET(request: any) {
   try {
+    let db;
+    try {
+      db = adminDb();
+    } catch (error) {
+      console.error('Firebase Admin initialization failed:', error);
+      return NextResponse.json({ 
+        error: 'Database connection failed. Please check Firebase Admin configuration and IAM permissions.' 
+      }, { status: 500 });
+    }
+    
+    if (!db) {
+      return NextResponse.json({ 
+        error: 'Database connection failed' 
+      }, { status: 500 });
+    }
+    
+    let userId: string | undefined;
+
+    // Try Firebase auth token first
     const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split('Bearer ')[1];
+      try {
+        const decodedToken = await auth().verifyIdToken(token);
+        userId = decodedToken.uid;
+      } catch (error) {
+        console.error('Token verification failed:', error);
+        // Fall through to wallet address lookup
+      }
     }
 
-    const token = authHeader.split('Bearer ')[1];
-    
-    // Verify Firebase ID token
-    let userId: string;
-    try {
-      const decodedToken = await auth().verifyIdToken(token);
-      userId = decodedToken.uid;
-    } catch (error) {
-      console.error('Token verification failed:', error);
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    // Fallback: Look up user by wallet address
+    if (!userId) {
+      const { searchParams } = new URL(request.url);
+      const walletAddress = searchParams.get('walletAddress');
+      
+      if (!walletAddress) {
+        return NextResponse.json({ error: 'Unauthorized: No token or wallet address provided' }, { status: 401 });
+      }
+
+      // Find user by wallet address
+      const userQuery = db.collection('users').where('walletAddress', '==', walletAddress.toLowerCase()).limit(1);
+      const userSnapshot = await userQuery.get();
+      
+      if (userSnapshot.empty) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+      
+      userId = userSnapshot.docs[0].id;
     }
 
     // Get user data from Firestore
-    const db = adminDb();
     const userDoc = await db.collection('users').doc(userId).get();
     if (!userDoc.exists) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -99,24 +132,57 @@ export async function GET(request: any) {
 // Update user rewards (called after successful swaps)
 export async function POST(request: any) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const token = authHeader.split('Bearer ')[1];
-    
-    // Verify Firebase ID token
-    let userId: string;
+    let db;
     try {
-      const decodedToken = await auth().verifyIdToken(token);
-      userId = decodedToken.uid;
+      db = adminDb();
     } catch (error) {
-      console.error('Token verification failed:', error);
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+      console.error('Firebase Admin initialization failed:', error);
+      return NextResponse.json({ 
+        error: 'Database connection failed. Please check Firebase Admin configuration and IAM permissions.' 
+      }, { status: 500 });
+    }
+    
+    if (!db) {
+      return NextResponse.json({ 
+        error: 'Database connection failed' 
+      }, { status: 500 });
+    }
+    
+    let userId: string | undefined;
+
+    // Try Firebase auth token first
+    const authHeader = request.headers.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split('Bearer ')[1];
+      try {
+        const decodedToken = await auth().verifyIdToken(token);
+        userId = decodedToken.uid;
+      } catch (error) {
+        console.error('Token verification failed:', error);
+        // Fall through to wallet address lookup
+      }
     }
 
     const body = await request.json();
+
+    // Fallback: Look up user by wallet address
+    if (!userId) {
+      const walletAddress = body.walletAddress;
+      
+      if (!walletAddress) {
+        return NextResponse.json({ error: 'Unauthorized: No token or wallet address provided' }, { status: 401 });
+      }
+
+      // Find user by wallet address
+      const userQuery = db.collection('users').where('walletAddress', '==', walletAddress.toLowerCase()).limit(1);
+      const userSnapshot = await userQuery.get();
+      
+      if (userSnapshot.empty) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+      
+      userId = userSnapshot.docs[0].id;
+    }
     const { swapAmount, swapValue, tokenAddress, referralCode, action, newReferralCode } = body;
 
 
@@ -129,9 +195,6 @@ export async function POST(request: any) {
     // Calculate platform fee (0.75%)
     // Note: 0.15% goes to 0x protocol, remaining 0.60% available for cashback/referrals
     const platformFee = swapValue * 0.0075;
-    
-    // Get user's current tier
-    const db = adminDb();
     
     // Handle referral code editing
     if (action === 'editReferralCode') {

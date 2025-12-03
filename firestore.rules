@@ -91,8 +91,8 @@ service cloud.firestore {
 
     // Collection: Individual Index Collections (CDEX, VDEX, BDEX, AIDEX)
     match /{index}/{token} {
-      allow read: if index in ['CDEX', 'VDEX', 'BDEX', 'AIDEX'];
-      allow create, update: if (isAdmin() || isModerator()) && validateIndexToken() && index in ['CDEX', 'VDEX', 'BDEX', 'AIDEX'];
+      allow read: if true; // Allow public read for indexed tokens
+      allow create, update: if (isAdmin() || isModerator() || request.auth == null) && validateIndexToken() && index in ['CDEX', 'VDEX', 'BDEX', 'AIDEX'];
       allow delete: if isAdmin() && index in ['CDEX', 'VDEX', 'BDEX', 'AIDEX'];
 
       function validateIndexToken() {
@@ -1072,10 +1072,42 @@ service cloud.firestore {
       }
     }
 
+    // Collection: rewards
+    match /rewards/{userId} {
+      allow read: if isAuthenticated() && (isOwnUser(userId) || isAdmin()) || request.auth == null;
+      allow create: if (isAuthenticated() && request.auth.uid == userId) || request.auth == null;
+      allow update: if (isAuthenticated() && (isOwnUser(userId) || isAdmin())) || request.auth == null;
+      allow delete: if isAdmin();
+    }
+
+    // Collection: referrals
+    match /referrals/{referralId} {
+      allow read: if isAuthenticated() || request.auth == null;
+      allow create: if isAuthenticated() || request.auth == null;
+      allow update: if isAuthenticated() || isAdmin() || request.auth == null;
+      allow delete: if isAdmin();
+    }
+
+    // Collection: referralCodes
+    match /referralCodes/{codeId} {
+      allow read: if true; // Allow public read for code validation
+      allow create: if isAuthenticated() || request.auth == null; // Allow server-side creation
+      allow update: if isAuthenticated() || isAdmin() || request.auth == null;
+      allow delete: if isAdmin();
+    }
+
+    // Collection: swapTransactions (top-level, not under users)
+    match /swapTransactions/{transactionId} {
+      allow read: if isAuthenticated() || request.auth == null;
+      allow create: if isAuthenticated() || request.auth == null; // Allow server-side creation
+      allow update: if isAuthenticated() || isAdmin() || request.auth == null;
+      allow delete: if isAdmin();
+    }
+
     match /wallet_transactions/{transactionId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && validateWalletTransaction();
-      allow update: if isAuthenticated() && validateWalletTransaction();
+      allow read: if isAuthenticated() || request.auth == null; // Allow server-side reads for API routes
+      allow create: if (isAuthenticated() && validateWalletTransaction()) || request.auth == null;
+      allow update: if (isAuthenticated() && validateWalletTransaction()) || request.auth == null;
       allow delete: if isAdmin();
 
       function validateWalletTransaction() {

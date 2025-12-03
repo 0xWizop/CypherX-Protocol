@@ -6,6 +6,32 @@ import path from "path";
 
 const DB_FILE = path.join(process.cwd(), "data/zora-tokens.json");
 
+// Simple in-memory cache for DexScreener API responses (5 minute TTL)
+const dexscreenerCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCachedDexScreenerData(chunkKey: string): any[] | null {
+  const cached = dexscreenerCache.get(chunkKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+  return null;
+}
+
+function setCachedDexScreenerData(chunkKey: string, data: any[]) {
+  dexscreenerCache.set(chunkKey, { data, timestamp: Date.now() });
+  
+  // Clean up old cache entries periodically (keep cache size reasonable)
+  if (dexscreenerCache.size > 100) {
+    const now = Date.now();
+    for (const [key, value] of dexscreenerCache.entries()) {
+      if (now - value.timestamp > CACHE_TTL) {
+        dexscreenerCache.delete(key);
+      }
+    }
+  }
+}
+
 // Define proper types
 interface TokenData {
   id?: string;
@@ -324,63 +350,158 @@ export async function GET(request: Request) {
       const validScreenerTokens = screenerTokens.filter((token) => /^0x[a-fA-F0-9]{40}$/.test(token.address));
       
       if (validScreenerTokens.length > 0) {
+        // Helper function to add delay
+        const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+        
+        // Helper function to fetch with retry and exponential backoff
+        async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response | null> {
+          for (let i = 0; i < maxRetries; i++) {
+            try {
+              const res = await fetch(url, {
+                headers: { 
+                  Accept: "application/json",
+                  'User-Agent': 'CypherX/1.0',
+                },
+              });
+              
+              if (res.ok) {
+                return res;
+              }
+              
+              // If rate limited (429), wait longer with exponential backoff
+              if (res.status === 429) {
+                const waitTime = Math.pow(2, i) * 2000; // 2s, 4s, 8s
+                console.log(`⚠️ Rate limited (429), waiting ${waitTime}ms before retry ${i + 1}/${maxRetries}`);
+                await delay(waitTime);
+                continue;
+              }
+              
+              // For other errors, log and return null
+              if (res.status >= 400) {
+                console.error(`API error: ${res.status} for ${url}`);
+                return null;
+              }
+              
+              return res;
+            } catch (error) {
+              if (i === maxRetries - 1) {
+                console.error(`Error fetching data after ${maxRetries} retries:`, error);
+                return null;
+              }
+              const waitTime = Math.pow(2, i) * 1000;
+              console.log(`Fetch failed, retrying in ${waitTime}ms (attempt ${i + 1}/${maxRetries})`);
+              await delay(waitTime);
+            }
+          }
+          return null;
+        }
+        
         // Chunk tokens for DexScreener API (max 10 per request)
         const tokenChunks: string[][] = [];
         for (let i = 0; i < validScreenerTokens.length; i += 10) {
           tokenChunks.push(validScreenerTokens.slice(i, i + 10).map((t) => t.address));
         }
 
-        // Fetch from DexScreener
-        for (const chunk of tokenChunks) {
+        // Fetch from DexScreener with rate limiting (300ms delay between requests) and caching
+        for (let i = 0; i < tokenChunks.length; i++) {
+          const chunk = tokenChunks[i];
           const joinedChunk = chunk.join(",");
+          const cacheKey = `base_${joinedChunk}`;
+          
+          // Check cache first
+          const cachedData = getCachedDexScreenerData(cacheKey);
+          if (cachedData) {
+            console.log(`📦 Using cached DexScreener data for chunk ${i + 1}/${tokenChunks.length}`);
+            // Process cached data
+            if (Array.isArray(cachedData)) {
+              cachedData.forEach((pair) => {
+                if (pair && pair.baseToken && pair.baseToken.address) {
+                  const tokenIndex = validScreenerTokens.findIndex(
+                    (t) => t.address.toLowerCase() === pair.baseToken?.address.toLowerCase()
+                  );
+                  
+                  if (tokenIndex !== -1) {
+                    const token = validScreenerTokens[tokenIndex];
+                    const currentLiq = parseFloat(String(token.liquidity?.usd || '0')) || 0;
+                    const newLiq = parseFloat(String(pair.liquidity?.usd || '0')) || 0;
+
+                    if (newLiq >= currentLiq) {
+                      token.pairAddress = pair.poolAddress || token.pairAddress || "";
+                      token.priceUsd = pair.priceUsd || "0";
+                      token.priceChange = pair.priceChange || { m5: 0, h1: 0, h6: 0, h24: 0 };
+                      token.volume = pair.volume || { h1: 0, h24: 0 };
+                      token.liquidity = pair.liquidity || { usd: 0 };
+                      token.marketCap = pair.marketCap || token.marketCap || 0;
+                      token.info = pair.info ? { imageUrl: pair.info.imageUrl } : undefined;
+                      token.txns = pair.txns || { h1: { buys: 0, sells: 0 }, h6: { buys: 0, sells: 0 }, h24: { buys: 0, sells: 0 } };
+                      token.dexId = pair.dexId || token.dexId || "unknown";
+                      token.dexName = pair.dexId || token.dexName || "Unknown DEX";
+                      if (pair.volume && pair.volume.h24) {
+                        token.volume24h = pair.volume.h24;
+                      }
+                    }
+                  }
+                }
+              });
+            }
+            continue; // Skip API call if we have cached data
+          }
+          
+          // Add delay between requests to avoid rate limiting (except for first request)
+          if (i > 0) {
+            await delay(300); // 300ms delay between chunks
+          }
+          
           try {
-            const res = await fetch(
-              `https://api.dexscreener.com/tokens/v1/base/${encodeURIComponent(joinedChunk)}`,
-              {
-                headers: { Accept: "application/json" },
-              }
+            const res = await fetchWithRetry(
+              `https://api.dexscreener.com/tokens/v1/base/${encodeURIComponent(joinedChunk)}`
             );
             
-            if (!res.ok) {
-              console.error(`DexScreener API fetch failed for chunk: ${joinedChunk}, status: ${res.status}`);
+            if (!res || !res.ok) {
+              console.error(`API fetch failed for chunk ${i + 1}/${tokenChunks.length}`);
               continue;
             }
             
             const data: any[] = await res.json();
             
+            // Cache the response
+            setCachedDexScreenerData(cacheKey, data);
+            
             // Enhance tokens with DexScreener data, keeping highest-liquidity pair per token
-            data.forEach((pair) => {
-              if (pair && pair.baseToken && pair.baseToken.address) {
-                const tokenIndex = validScreenerTokens.findIndex(
-                  (t) => t.address.toLowerCase() === pair.baseToken?.address.toLowerCase()
-                );
-                
-                if (tokenIndex !== -1) {
-                  const token = validScreenerTokens[tokenIndex];
-                  const currentLiq = parseFloat(String(token.liquidity?.usd || '0')) || 0;
-                  const newLiq = parseFloat(String(pair.liquidity?.usd || '0')) || 0;
+            if (Array.isArray(data)) {
+              data.forEach((pair) => {
+                if (pair && pair.baseToken && pair.baseToken.address) {
+                  const tokenIndex = validScreenerTokens.findIndex(
+                    (t) => t.address.toLowerCase() === pair.baseToken?.address.toLowerCase()
+                  );
+                  
+                  if (tokenIndex !== -1) {
+                    const token = validScreenerTokens[tokenIndex];
+                    const currentLiq = parseFloat(String(token.liquidity?.usd || '0')) || 0;
+                    const newLiq = parseFloat(String(pair.liquidity?.usd || '0')) || 0;
 
-                  // Only replace if this pair has higher liquidity
-                  if (newLiq >= currentLiq) {
-                    token.pairAddress = pair.poolAddress || token.pairAddress || "";
-                    token.priceUsd = pair.priceUsd || "0";
-                    token.priceChange = pair.priceChange || { m5: 0, h1: 0, h6: 0, h24: 0 };
-                    token.volume = pair.volume || { h1: 0, h24: 0 };
-                    token.liquidity = pair.liquidity || { usd: 0 };
-                    token.marketCap = pair.marketCap || token.marketCap || 0;
-                    token.info = pair.info ? { imageUrl: pair.info.imageUrl } : undefined;
-                    token.txns = pair.txns || { h1: { buys: 0, sells: 0 }, h6: { buys: 0, sells: 0 }, h24: { buys: 0, sells: 0 } };
-                    token.dexId = pair.dexId || token.dexId || "unknown";
-                    token.dexName = pair.dexId || token.dexName || "Unknown DEX";
-                    if (pair.volume && pair.volume.h24) {
-                      token.volume24h = pair.volume.h24;
+                    // Only replace if this pair has higher liquidity
+                    if (newLiq >= currentLiq) {
+                      token.pairAddress = pair.poolAddress || token.pairAddress || "";
+                      token.priceUsd = pair.priceUsd || "0";
+                      token.priceChange = pair.priceChange || { m5: 0, h1: 0, h6: 0, h24: 0 };
+                      token.volume = pair.volume || { h1: 0, h24: 0 };
+                      token.liquidity = pair.liquidity || { usd: 0 };
+                      token.marketCap = pair.marketCap || token.marketCap || 0;
+                      token.info = pair.info ? { imageUrl: pair.info.imageUrl } : undefined;
+                      token.txns = pair.txns || { h1: { buys: 0, sells: 0 }, h6: { buys: 0, sells: 0 }, h24: { buys: 0, sells: 0 } };
+                      token.dexId = pair.dexId || token.dexId || "unknown";
+                      token.dexName = pair.dexId || token.dexName || "Unknown DEX";
+                      if (pair.volume && pair.volume.h24) {
+                        token.volume24h = pair.volume.h24;
+                      }
                     }
                   }
                 }
-              }
-            });
+              });
+            }
           } catch (error) {
-            console.error("Error fetching DexScreener data:", error);
+            console.error(`Error processing chunk ${i + 1}/${tokenChunks.length}:`, error);
           }
         }
         
@@ -615,9 +736,8 @@ export async function GET(request: Request) {
     });
   } catch (error: unknown) {
     console.error("❌ API Error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to fetch tokens";
     return new Response(JSON.stringify({ 
-      error: errorMessage,
+      error: "Unable to fetch token data. Please try again later.",
       tokens: sampleTokens.map(token => ({ 
         ...token, 
         tags: ['SAMPLE', 'NEW', 'VOLUME'] // Add some default tags for sample tokens

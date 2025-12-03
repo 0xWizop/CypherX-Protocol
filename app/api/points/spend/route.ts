@@ -165,8 +165,9 @@ function getAlphaBoostMultiplier(tier: string): number {
   switch (tier) {
     case 'normie': return 1.5;
     case 'degen': return 2.0;
-    case 'whale': return 2.5;
-    case 'legend': return 3.0;
+    case 'alpha': return 2.5;
+    case 'mogul': return 3.0;
+    case 'titan': return 3.5;
     default: return 1.5;
   }
 }

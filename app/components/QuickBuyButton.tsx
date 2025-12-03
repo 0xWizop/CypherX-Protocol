@@ -18,6 +18,7 @@ interface QuickBuyButtonProps {
   onSuccess?: (txHash: string) => void;
   className?: string;
   disabled?: boolean;
+  slippage?: number; // Slippage percentage (default: 1)
 }
 
 /**
@@ -32,6 +33,7 @@ export default function QuickBuyButton({
   onSuccess,
   className = "",
   disabled = false,
+  slippage = 1,
 }: QuickBuyButtonProps) {
   const router = useRouter();
   const [isExecuting, setIsExecuting] = useState(false);
@@ -59,7 +61,7 @@ export default function QuickBuyButton({
           sellToken: 'ETH',
           buyToken: token.address,
           sellAmount: (amount * 1e18).toString(), // Convert to wei
-          slippagePercentage: 1, // 1% slippage for quick buys
+          slippagePercentage: slippage, // Use configured slippage
         }),
       });
 
@@ -81,7 +83,7 @@ export default function QuickBuyButton({
           inputToken: 'ETH',
           outputToken: token.symbol,
           amountIn: amount.toString(),
-          slippage: 1,
+          slippage: slippage,
           walletAddress,
           tokenAddress: token.address,
         }),
@@ -104,7 +106,7 @@ export default function QuickBuyButton({
           outputToken: token.symbol,
           inputAmount: amount.toString(),
           outputAmount: buyAmount,
-          slippage: 1,
+          slippage: slippage,
           walletAddress,
           privateKey,
           tokenAddress: token.address,
@@ -136,7 +138,7 @@ export default function QuickBuyButton({
     } finally {
       setIsExecuting(false);
     }
-  }, [token, amount, walletAddress, privateKey, onSuccess, router, disabled, isExecuting]);
+  }, [token, amount, walletAddress, privateKey, onSuccess, router, disabled, isExecuting, slippage]);
 
   return (
     <button
@@ -169,6 +171,7 @@ interface QuickBuyButtonsProps {
   onSuccess?: (txHash: string) => void;
   className?: string;
   disabled?: boolean;
+  slippage?: number;
 }
 
 export function QuickBuyButtons({
@@ -179,6 +182,7 @@ export function QuickBuyButtons({
   onSuccess,
   className = "",
   disabled = false,
+  slippage = 1,
 }: QuickBuyButtonsProps) {
   // Use provided amounts or default values
   const finalAmounts = amounts || [0.01, 0.025, 0.05, 0.1];
@@ -194,6 +198,7 @@ export function QuickBuyButtons({
           privateKey={privateKey}
           onSuccess={onSuccess}
           disabled={disabled}
+          slippage={slippage}
         />
       ))}
     </div>

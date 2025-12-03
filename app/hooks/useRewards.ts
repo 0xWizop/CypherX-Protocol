@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../providers';
+import { useAuth, useWalletSystem } from '../providers';
 
 interface Quest {
   id: number;
@@ -44,6 +44,8 @@ interface ClaimHistory {
 
 export const useRewards = () => {
   const { user } = useAuth();
+  const { selfCustodialWallet } = useWalletSystem();
+  const walletAddress = selfCustodialWallet?.address;
   const [rewards, setRewards] = useState<UserRewards | null>(null);
   const [referralData, setReferralData] = useState<ReferralData | null>(null);
   const [claimHistory, setClaimHistory] = useState<ClaimHistory | null>(null);
@@ -52,19 +54,32 @@ export const useRewards = () => {
 
   // Fetch user rewards data
   const fetchRewards = useCallback(async () => {
-    if (!user) return;
+    if (!user && !walletAddress) return;
 
     try {
       setLoading(true);
       setError(null);
 
-      const token = await user.getIdToken();
-      const response = await fetch('/api/rewards', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      let headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      // Try to get Firebase token, but don't fail if it doesn't work
+      try {
+        if (user) {
+          const token = await user.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+      } catch (err) {
+        console.warn('Could not get Firebase token, using wallet address fallback');
+      }
+
+      // Add wallet address as query parameter for fallback
+      const url = walletAddress 
+        ? `/api/rewards?walletAddress=${encodeURIComponent(walletAddress)}`
+        : '/api/rewards';
+
+      const response = await fetch(url, { headers });
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -122,19 +137,32 @@ export const useRewards = () => {
 
   // Fetch referral data
   const fetchReferralData = useCallback(async () => {
-    if (!user) return;
+    if (!user && !walletAddress) return;
 
     try {
       setLoading(true);
       setError(null);
 
-      const token = await user.getIdToken();
-      const response = await fetch('/api/rewards/referral', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      let headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      // Try to get Firebase token, but don't fail if it doesn't work
+      try {
+        if (user) {
+          const token = await user.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+      } catch (err) {
+        console.warn('Could not get Firebase token, using wallet address fallback');
+      }
+
+      // Add wallet address as query parameter for fallback
+      const url = walletAddress 
+        ? `/api/rewards/referral?walletAddress=${encodeURIComponent(walletAddress)}`
+        : '/api/rewards/referral';
+
+      const response = await fetch(url, { headers });
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -162,19 +190,32 @@ export const useRewards = () => {
 
   // Fetch claim history
   const fetchClaimHistory = useCallback(async () => {
-    if (!user) return;
+    if (!user && !walletAddress) return;
 
     try {
       setLoading(true);
       setError(null);
 
-      const token = await user.getIdToken();
-      const response = await fetch('/api/rewards/claim', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      let headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      // Try to get Firebase token, but don't fail if it doesn't work
+      try {
+        if (user) {
+          const token = await user.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+      } catch (err) {
+        console.warn('Could not get Firebase token, using wallet address fallback');
+      }
+
+      // Add wallet address as query parameter for fallback
+      const url = walletAddress 
+        ? `/api/rewards/claim?walletAddress=${encodeURIComponent(walletAddress)}`
+        : '/api/rewards/claim';
+
+      const response = await fetch(url, { headers });
 
       if (!response.ok) {
         throw new Error('Failed to fetch claim history');
@@ -192,20 +233,30 @@ export const useRewards = () => {
 
   // Process referral code
   const processReferral = useCallback(async (referralCode: string) => {
-    if (!user) return { success: false, error: 'User not authenticated' };
+    if (!user && !walletAddress) return { success: false, error: 'User not authenticated' };
 
     try {
       setLoading(true);
       setError(null);
 
-      const token = await user.getIdToken();
+      let headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      // Try to get Firebase token, but don't fail if it doesn't work
+      try {
+        if (user) {
+          const token = await user.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+      } catch (err) {
+        console.warn('Could not get Firebase token, using wallet address fallback');
+      }
+
       const response = await fetch('/api/rewards/referral', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ referralCode }),
+        headers,
+        body: JSON.stringify({ referralCode, walletAddress }),
       });
 
       const data = await response.json();
@@ -231,19 +282,30 @@ export const useRewards = () => {
 
   // Claim rewards
   const claimRewards = useCallback(async () => {
-    if (!user) return { success: false, error: 'User not authenticated' };
+    if (!user && !walletAddress) return { success: false, error: 'User not authenticated' };
 
     try {
       setLoading(true);
       setError(null);
 
-      const token = await user.getIdToken();
+      let headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      // Try to get Firebase token, but don't fail if it doesn't work
+      try {
+        if (user) {
+          const token = await user.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+      } catch (err) {
+        console.warn('Could not get Firebase token, using wallet address fallback');
+      }
+
       const response = await fetch('/api/rewards/claim', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
+        body: JSON.stringify({ walletAddress }),
       });
 
       const data = await response.json();
@@ -274,20 +336,30 @@ export const useRewards = () => {
     tokenAddress: string;
     referralCode?: string;
   }) => {
-    if (!user) return { success: false, error: 'User not authenticated' };
+    if (!user && !walletAddress) return { success: false, error: 'User not authenticated' };
 
     try {
       setLoading(true);
       setError(null);
 
-      const token = await user.getIdToken();
+      let headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      // Try to get Firebase token, but don't fail if it doesn't work
+      try {
+        if (user) {
+          const token = await user.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+      } catch (err) {
+        console.warn('Could not get Firebase token, using wallet address fallback');
+      }
+
       const response = await fetch('/api/rewards', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(swapData),
+        headers,
+        body: JSON.stringify({ ...swapData, walletAddress }),
       });
 
       const data = await response.json();
@@ -312,22 +384,33 @@ export const useRewards = () => {
 
   // Edit referral code (one-time only)
   const editReferralCode = useCallback(async (newReferralCode: string) => {
-    if (!user) return { success: false, error: 'User not authenticated' };
+    if (!user && !walletAddress) return { success: false, error: 'User not authenticated' };
 
     try {
       setLoading(true);
       setError(null);
 
-      const token = await user.getIdToken();
+      let headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      // Try to get Firebase token, but don't fail if it doesn't work
+      try {
+        if (user) {
+          const token = await user.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+      } catch (err) {
+        console.warn('Could not get Firebase token, using wallet address fallback');
+      }
+
       const response = await fetch('/api/rewards', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           action: 'editReferralCode',
-          newReferralCode
+          newReferralCode,
+          walletAddress
         }),
       });
 
@@ -353,12 +436,12 @@ export const useRewards = () => {
 
   // Initialize data on mount
   useEffect(() => {
-    if (user) {
+    if (user || walletAddress) {
       fetchRewards();
       fetchReferralData();
       fetchClaimHistory();
     }
-  }, [user, fetchRewards, fetchReferralData, fetchClaimHistory]);
+  }, [user, walletAddress, fetchRewards, fetchReferralData, fetchClaimHistory]);
 
   return {
     rewards,

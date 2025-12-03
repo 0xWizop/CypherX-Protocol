@@ -63,9 +63,9 @@ export async function GET() {
     });
 
     if (!dexResponse.ok) {
-      console.error('DexScreener API failed:', dexResponse.status);
+      console.error('API failed:', dexResponse.status);
       return NextResponse.json(
-        { error: 'Failed to fetch data from DexScreener' },
+        { error: 'Unable to fetch token data. Please try again later.' },
         { status: 500 }
       );
     }

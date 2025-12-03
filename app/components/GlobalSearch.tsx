@@ -109,13 +109,15 @@ interface GlobalSearchProps {
   className?: string;
   variant?: "header" | "homepage";
   fullScreenMobile?: boolean;
+  onSearchStateChange?: (hasActiveSearch: boolean) => void;
 }
 
 const GlobalSearch: React.FC<GlobalSearchProps> = ({ 
   placeholder = "Search for tokens, symbols, addresses, transactions, blocks...",
   className = "",
   variant = "header",
-  fullScreenMobile = false
+  fullScreenMobile = false,
+  onSearchStateChange
 }) => {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -134,9 +136,18 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const [isMouseInResults, setIsMouseInResults] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
   const [homepagePosition, setHomepagePosition] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  // Notify parent when search state changes
+  useEffect(() => {
+    if (onSearchStateChange) {
+      const hasActiveSearch = showResults && (query.length >= 2 || isLoading);
+      onSearchStateChange(hasActiveSearch);
+    }
+  }, [showResults, query, isLoading, onSearchStateChange]);
 
   // Debounced search function
   const debouncedSearch = useRef(
@@ -236,9 +247,8 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
       const setDefaultPosition = () => {
         const header = document.querySelector('header');
         const headerBottom = header ? header.getBoundingClientRect().bottom : 80;
-        const maxWidth = 580;
         const minMargin = 16;
-        const width = Math.min(maxWidth, window.innerWidth - minMargin * 2);
+        const width = window.innerWidth - minMargin * 2;
         const left = minMargin;
         
         setDropdownPosition({
@@ -252,52 +262,65 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
       setDefaultPosition();
       
       const updatePosition = () => {
-        // Try multiple ways to get the search container element
-        let element: HTMLElement | null = null;
+        // Get the actual input element for precise alignment
+        const inputElement = inputRef.current;
         
-        if (searchRef.current) {
-          element = searchRef.current;
-        } else if (inputRef.current) {
-          element = inputRef.current.closest('div') as HTMLElement;
-        } else {
-          // Try to find by class or data attribute as last resort
-          const searchContainer = document.querySelector('[data-search-container]') as HTMLElement;
-          if (searchContainer) {
-            element = searchContainer;
+        // Find the wallet display element
+        const walletDisplay = document.querySelector('[data-wallet-display]') as HTMLElement;
+        
+        if (!inputElement) {
+          // If input not found, try to use search container as fallback
+          const searchContainer = searchRef.current || document.querySelector('[data-search-container]') as HTMLElement;
+          if (!searchContainer) {
+            return;
           }
-        }
-        
-        if (!element) {
-          // If element not found, keep default position
+          const searchRect = searchContainer.getBoundingClientRect();
+          const header = document.querySelector('header');
+          const headerBottom = header ? header.getBoundingClientRect().bottom : searchRect.bottom;
+          
+          let width: number;
+          if (walletDisplay) {
+            const walletRect = walletDisplay.getBoundingClientRect();
+            width = walletRect.right - searchRect.left;
+        } else {
+            width = window.innerWidth - searchRect.left - 16;
+          }
+          
+          setDropdownPosition({
+            top: headerBottom + 8,
+            left: searchRect.left,
+            width: Math.max(400, Math.min(width, window.innerWidth - searchRect.left - 8))
+          });
           return;
         }
         
-        const rect = element.getBoundingClientRect();
+        const inputRect = inputElement.getBoundingClientRect();
         // Find the header element to get its bottom position (after separator)
         const header = document.querySelector('header');
-        const headerBottom = header ? header.getBoundingClientRect().bottom : rect.bottom;
+        const headerBottom = header ? header.getBoundingClientRect().bottom : inputRect.bottom;
         
-        // Calculate width - ensure it doesn't overflow viewport
-        const maxWidth = 580;
-        const minMargin = 16; // Minimum margin from viewport edges
-        const rightMargin = 24; // Extra margin on the right side
-        const availableWidth = window.innerWidth - minMargin - rightMargin;
-        const width = Math.min(maxWidth, availableWidth);
+        // Calculate left position - align exactly with search input's left edge
+        const left = inputRect.left;
         
-        // Calculate left position - align with search input's left edge, but ensure it doesn't overflow
-        let left = rect.left;
-        // If dropdown would overflow right edge, shift it left
-        if (left + width > window.innerWidth - rightMargin) {
-          left = window.innerWidth - width - rightMargin;
+        // Calculate width - from search input left edge to wallet display right edge
+        let width: number;
+        if (walletDisplay) {
+          const walletRect = walletDisplay.getBoundingClientRect();
+          // Width spans exactly from input left to wallet right (no padding)
+          width = walletRect.right - inputRect.left;
+        } else {
+          // Fallback: use available width from input to viewport edge
+          const rightMargin = 16;
+          width = window.innerWidth - left - rightMargin;
         }
-        // Ensure minimum margin from left edge
-        left = Math.max(minMargin, left);
         
-        // Ensure it doesn't overflow on the right side
-        const rightEdge = left + width;
-        if (rightEdge > window.innerWidth - rightMargin) {
-          left = window.innerWidth - width - rightMargin;
-        }
+        // Ensure minimum width
+        const minWidth = 500;
+        width = Math.max(minWidth, width);
+        
+        // Ensure it doesn't overflow viewport (with small margin for safety)
+        const maxWidth = window.innerWidth - left - 8; // 8px margin on right for safety
+        width = Math.min(width, maxWidth);
         
         setDropdownPosition({
           top: headerBottom + 8, // 8px gap below header separator
@@ -377,15 +400,25 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
   // Click outside to close
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      
+      // Check if click is inside search container (input) or dropdown
+      const isInSearchContainer = searchRef.current?.contains(target);
+      const isInDropdown = dropdownRef.current?.contains(target);
+      const isInInput = inputRef.current?.contains(target);
+      
+      // Only close if clicking completely outside the search component
+      if (!isInSearchContainer && !isInDropdown && !isInInput) {
         setShowResults(false);
         setSelectedIndex(-1);
       }
     };
 
+    if (showResults) {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    }
+  }, [showResults]);
 
   // Handle mouse enter/leave for results container
   useEffect(() => {
@@ -528,9 +561,11 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
     <>
       {/* Loading State */}
       {isLoading && (
-        <div className="p-4 text-center text-gray-400">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-400 mx-auto mb-2"></div>
-          Searching...
+        <div className={`${fullScreenMobile ? 'flex-1 flex items-center justify-center' : 'p-4 text-center'} text-gray-400`}>
+          <div className="flex flex-col items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-700 border-t-blue-400 mb-3"></div>
+            <p className="text-sm">Searching...</p>
+          </div>
         </div>
       )}
 
@@ -550,19 +585,19 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
 
       {/* Results Summary */}
       {!isLoading && !error && totalResults > 0 && (
-        <div className={`${fullScreenMobile ? 'px-4 py-2' : 'px-4 py-2'} bg-gray-950 border-b border-gray-800/30 sticky top-0 z-20 flex-shrink-0`}>
-          <div className={`${fullScreenMobile ? 'text-[11px]' : 'text-xs'} text-gray-400`}>
+        <div className={`${fullScreenMobile ? 'w-full py-3' : 'px-4 py-2'} bg-gray-950 border-b border-gray-800/30 sticky top-0 z-20 flex-shrink-0`}>
+          <div className={`${fullScreenMobile ? 'text-[11px] px-4' : 'text-xs'} text-gray-400`}>
             Found {totalResults} token{totalResults !== 1 ? 's' : ''} for "{query}"
           </div>
         </div>
       )}
 
-      {/* Results Container */}
+      {/* Results Container - Always show when searching */}
       <div 
         ref={resultsRef}
-        className={`overflow-y-auto scrollbar-hide transition-all duration-200 ${
+        className={`${fullScreenMobile ? 'flex-1 min-h-0 overflow-y-auto w-full border-t border-gray-800/30' : 'overflow-y-auto scrollbar-hide'} transition-all duration-200 ${
           fullScreenMobile 
-            ? "flex-1 min-h-0 px-4 pb-4" 
+            ? "pb-4 pt-3" 
             : variant === "homepage" 
               ? "h-[250px] pr-2" 
               : "max-h-[400px] pr-6"
@@ -575,11 +610,11 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
       >
         {/* Results */}
         {!isLoading && !error && totalResults > 0 && (
-          <div className="pt-0 pb-2">
+          <div className="pt-0 pb-2 w-full">
            {/* Tokens */}
            {results.tokens.length > 0 && (
-             <div className="mb-0">
-               <div>
+             <div className="mb-0 w-full">
+               <div className="w-full">
                  {results.tokens.map((token, index) => {
                    const globalIndex = index;
                    const isSelected = selectedIndex === globalIndex;
@@ -590,9 +625,10 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
                        initial={{ opacity: 0, x: -20 }}
                        animate={{ opacity: 1, x: 0 }}
                        transition={{ delay: index * 0.05 }}
-                       className={`${fullScreenMobile ? 'p-2.5' : 'p-3'} hover:bg-gray-800/50 cursor-pointer border-b border-gray-800/30 last:border-b-0 transition-all duration-200 ${
+                      className={`${fullScreenMobile ? 'p-2.5 w-full' : 'p-3 w-full'} hover:bg-gray-800/50 cursor-pointer border-b border-gray-800/30 last:border-b-0 transition-all duration-200 ${
                          isSelected ? "bg-gray-800/50" : "bg-gray-950"
                        }`}
+                      style={{ width: '100%' }}
                        onClick={() => handleResultClick({ type: "token", result: token })}
                      >
                        <div className={`flex items-center ${fullScreenMobile ? 'gap-2.5' : 'space-x-3'}`}>
@@ -678,14 +714,6 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
                                        {token.dexId}
                                      </span>
                                    )}
-                                   {token.metrics && token.metrics.buyRatio24h > 0 && (
-                                     <span className={`text-xs px-2 py-1 rounded-md font-medium ${
-                                       token.metrics.buyRatio24h > 0.6 ? 'bg-green-500/20 text-green-400' : 
-                                       token.metrics.buyRatio24h > 0.4 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'
-                                     }`}>
-                                       Buy: {(token.metrics.buyRatio24h * 100).toFixed(0)}%
-                                     </span>
-                                   )}
                                    {token.metrics && token.metrics.volumeChange24h !== 0 && (
                                      <span className={`text-xs px-2 py-1 rounded-md font-medium ${
                                        token.metrics.volumeChange24h > 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'
@@ -728,7 +756,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
   );
 
   return (
-    <div ref={searchRef} data-search-container className={`${fullScreenMobile ? 'relative h-full flex flex-col' : 'relative'} ${className} ${variant === "homepage" ? "z-[9999999]" : ""}`}>
+    <div ref={searchRef} data-search-container className={`${fullScreenMobile ? 'relative flex flex-col flex-1 min-h-0' : 'relative'} ${className} ${variant === "homepage" ? "z-[9999999]" : ""}`}>
       {/* Search Input */}
       <div className={`relative group ${variant === "header" ? "mr-2" : ""}`}>
         <input
@@ -747,13 +775,19 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
             }
           }}
           onBlur={(e) => {
-            // Don't close if in full-screen mobile mode or clicking into results
+            // Don't close if in full-screen mobile mode
             if (fullScreenMobile) {
               return;
             }
-            // Don't close if clicking into results
-            if (!isMouseInResults && !resultsRef.current?.contains(e.relatedTarget as Node)) {
+            // Don't close if clicking into dropdown or search container
+            const relatedTarget = e.relatedTarget as Node;
+            const isClickingIntoDropdown = dropdownRef.current?.contains(relatedTarget);
+            const isClickingIntoSearch = searchRef.current?.contains(relatedTarget);
+            
+            // Only close if clicking completely outside the search component
+            if (!isClickingIntoDropdown && !isClickingIntoSearch && !isMouseInResults) {
               setTimeout(() => {
+                // Double check that mouse is not in results before closing
                 if (!isMouseInResults && !fullScreenMobile) {
                   setShowResults(false);
                 }
@@ -766,9 +800,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
               e.stopPropagation();
             }
           }}
-          className={`w-full pl-10 pr-10 py-1.5 text-sm text-gray-100 ${variant === "header" ? "bg-[#111827]" : "bg-gray-950"} border border-gray-600 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-gray-500 transition-all duration-300 placeholder-gray-400 shadow-lg group-hover:border-gray-500 ${
-            variant === "header" ? "max-w-[580px]" : ""
-          }`}
+          className={`w-full pl-10 pr-10 py-1.5 text-sm text-gray-100 ${variant === "header" ? "bg-[#111827]" : "bg-gray-950"} border border-gray-600 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-gray-500 transition-all duration-300 placeholder-gray-400 shadow-lg group-hover:border-gray-500`}
         />
         
         {/* Search Icon */}
@@ -804,27 +836,48 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
       </div>
 
       {/* Search Results Dropdown */}
-      {typeof document !== 'undefined' && createPortal(
+      {fullScreenMobile ? (
+        // Inline results for full-screen mobile mode - positioned directly below search input
         <AnimatePresence>
-          {showResults && (query.length >= 2 || totalResults > 0) && (
+          {showResults && (query.length >= 2 || isLoading) && (
             <motion.div
-              ref={resultsRef}
+              ref={dropdownRef}
               key="search-dropdown"
-              className={`${fullScreenMobile ? 'absolute' : 'fixed'} bg-gray-950 border border-gray-800/30 shadow-2xl overflow-hidden flex flex-col ${
-                fullScreenMobile 
-                  ? 'inset-0 rounded-none border-0' 
-                  : 'max-h-[60vh] rounded-xl'
-              }`}
-              style={fullScreenMobile ? {
+              className="absolute top-full left-0 right-0 bg-gray-950 flex flex-col w-full"
+              style={{
                 position: 'absolute',
-                top: '0',
+                top: '100%',
                 left: '0',
                 right: '0',
-                bottom: '0',
                 width: '100%',
-                height: '100%',
-                zIndex: 10
-              } : {
+                maxHeight: 'calc(100vh - 180px)',
+                height: 'auto',
+                zIndex: 100,
+                marginTop: '1rem',
+                overflow: 'visible'
+              }}
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              onMouseEnter={() => setIsMouseInResults(true)}
+              onMouseLeave={() => setIsMouseInResults(false)}
+            >
+              {renderResults()}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      ) : (
+        // Portal results for desktop mode
+        typeof document !== 'undefined' && createPortal(
+          <AnimatePresence>
+            {showResults && (query.length >= 2 || totalResults > 0) && (
+              <motion.div
+                ref={dropdownRef}
+                key="search-dropdown"
+                className="fixed bg-gray-950 border border-gray-800/30 shadow-2xl overflow-hidden flex flex-col max-h-[60vh] rounded-xl"
+                style={{
                 top: `${variant === "header" 
                   ? (dropdownPosition?.top ?? 80)
                   : (homepagePosition?.top ?? 100)}px`,
@@ -832,16 +885,16 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
                   ? (dropdownPosition?.left ?? 16)
                   : (homepagePosition?.left ?? 16)}px`,
                 width: variant === "header"
-                  ? `${Math.min(dropdownPosition?.width ?? 580, window.innerWidth - (dropdownPosition?.left ?? 16) - 24)}px`
+                    ? (dropdownPosition?.width ? `${dropdownPosition.width}px` : '580px')
                   : (homepagePosition?.width ? `${homepagePosition.width}px` : (searchRef.current ? `${searchRef.current.getBoundingClientRect().width}px` : '100%')),
                 maxWidth: variant === "header" 
-                  ? `${Math.min(dropdownPosition?.width ?? 580, window.innerWidth - (dropdownPosition?.left ?? 16) - 24)}px`
+                    ? (dropdownPosition?.width ? `${dropdownPosition.width}px` : '580px')
                   : 'none',
                 zIndex: 99999
               }}
-              initial={fullScreenMobile ? { opacity: 0, y: -10 } : { opacity: 0, y: -10 }}
-              animate={fullScreenMobile ? { opacity: 1, y: 0 } : { opacity: 1, y: 0 }}
-              exit={fullScreenMobile ? { opacity: 0, y: -10 } : { opacity: 0, y: -10 }}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
               onMouseEnter={() => setIsMouseInResults(true)}
@@ -852,6 +905,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
           )}
         </AnimatePresence>,
         document.body
+        )
       )}
     </div>
   );

@@ -1207,7 +1207,7 @@ export default function TokenScreener() {
           setTokens(allResults);
         }
       } catch (err) {
-        setError("Failed to load tokens from DexScreener API");
+        setError("Unable to load tokens. Please try again later.");
         console.error(err);
         setTokens([]);
               } finally {

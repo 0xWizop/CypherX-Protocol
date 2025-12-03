@@ -6,10 +6,10 @@ import { signOut, type Auth } from "firebase/auth";
 import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { auth as firebaseAuth, db, storage } from "@/lib/firebase";
-import { useAuth, useWalletSystem } from "@/app/providers";
+import { useAuth, useWalletSystem, useLoginModal } from "@/app/providers";
 import { useUserSettings } from "@/app/hooks/useUserSettings";
 import { motion, AnimatePresence } from "framer-motion";
-import { FiUser, FiInfo, FiX, FiCheck, FiAlertCircle } from "react-icons/fi";
+import { FiUser, FiX, FiCheck, FiAlertCircle } from "react-icons/fi";
 
 import Link from "next/link";
 import Image from "next/image";
@@ -41,6 +41,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
   const router = useRouter();
   const { user } = useAuth();
   const { selfCustodialWallet } = useWalletSystem();
+  const { setShowLoginModal, setRedirectTo } = useLoginModal();
   const { 
     updateAlias, 
     loading: settingsLoading 
@@ -49,9 +50,6 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [points, setPoints] = useState<number | null>(null);
   const [tier, setTier] = useState<string>('normie');
-  const [progress, setProgress] = useState<number>(0);
-  const [nextTier, setNextTier] = useState<string | null>(null);
-  const [pointsToNextTier, setPointsToNextTier] = useState<number>(0);
 
   const [showTierModal, setShowTierModal] = useState(false);
   const [showPointsHistory, setShowPointsHistory] = useState(false);
@@ -148,9 +146,6 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
           const statsData = await statsResponse.json();
           setPoints(statsData.points || 0);
           setTier(statsData.tier || 'normie');
-          setProgress(statsData.progress || 0);
-          setNextTier(statsData.nextTier);
-          setPointsToNextTier(statsData.pointsToNextTier || 0);
         } else {
           // Fallback to old method
           const userDocRef = doc(db, "users", user.uid);
@@ -437,93 +432,53 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
 
   const renderProfileContent = () => (
     <>
-      {/* Header with gradient background */}
-      <div className="bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 p-4 relative overflow-hidden">
-        <div className="absolute inset-0 bg-black/20"></div>
-        <div className="relative z-10">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-2.5">
-              <div className="w-10 h-10 rounded-full bg-blue-400/20 backdrop-blur-sm flex items-center justify-center overflow-hidden">
+      {/* Header */}
+      <div className="relative flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-800 bg-gray-950 flex-shrink-0">
+        <div className="flex items-center space-x-3">
+          <div className="relative">
+            <div className="w-12 h-12 rounded-full bg-gray-900 border border-gray-800 flex items-center justify-center overflow-hidden">
                 {profilePicture ? (
                   <Image
                     src={profilePicture}
                     alt="Profile"
-                    width={40}
-                    height={40}
+                  width={48}
+                  height={48}
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <FiUser className="w-5 h-5 text-blue-400" />
+                <FiUser className="w-6 h-6 text-gray-400" />
                 )}
               </div>
-              <div>
-                <h3 className="text-white font-semibold text-base">
-                  {user ? 'My Profile' : 'Welcome'}
-                </h3>
-                <p className="text-white/80 text-xs capitalize">
-                  {tier} • {points !== null ? `${points.toLocaleString()} pts` : "—"}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
+            {user && (
               <div 
-                className="w-3 h-3 rounded-full shadow-lg"
+                className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-gray-950"
                 style={{ backgroundColor: getTierColor(tier) }}
               ></div>
+            )}
             </div>
+          <div>
+            <h3 className="text-white font-semibold text-base">
+              {user ? (displayName || 'My Profile') : 'Welcome'}
+            </h3>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-gray-400 text-xs capitalize">{tier}</span>
           </div>
-
-          {/* Progress to next tier */}
-          {nextTier && (
-            <div className="bg-white/10 backdrop-blur-sm p-3">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-white/90 text-xs font-medium">Progress to {nextTier}</span>
-                <span className="text-white/90 text-xs font-semibold">{progress}%</span>
               </div>
-              <div className="w-full bg-white/20 rounded-full h-1.5 overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${progress}%` }}
-                  transition={{ duration: 0.8, ease: "easeOut" }}
-                  className="bg-white h-1.5 rounded-full shadow-sm"
-                ></motion.div>
               </div>
-              <p className="text-white/70 text-xs mt-1.5">
-                {pointsToNextTier} points to next tier
-              </p>
-            </div>
-          )}
+        {/* Close button for mobile */}
+            <button
+          onClick={() => setShowAccountModal(false)}
+          className="sm:hidden w-8 h-8 flex items-center justify-center rounded-lg bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 text-gray-400 hover:text-white transition-all duration-200"
+          aria-label="Close"
+            >
+          <FiX className="w-5 h-5" />
+            </button>
         </div>
-      </div>
 
       {/* Content */}
-      <div className="p-4 pt-8 space-y-4">
-        {/* Quick Stats */}
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-400">Points</span>
-          <div className="flex items-center gap-1.5">
-            <span className="text-white font-medium">{points !== null ? points.toLocaleString() : "—"}</span>
-            <button
-              onClick={() => setShowTierModal(true)}
-              className="p-0.5 hover:bg-blue-500/20 rounded transition-colors"
-              title="View Tier Progression"
-            >
-              <FiInfo className="w-3 h-3 text-blue-400" />
-            </button>
-          </div>
-        </div>
-
+      <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
         {/* Navigation Links */}
-        <div className="space-y-1 pt-2">
-          <button
-            onClick={() => {
-              setShowPointsHistory(true);
-              setShowAccountModal(false);
-            }}
-            className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-900 transition-all duration-200"
-          >
-            <span className="font-medium text-sm">Points History</span>
-          </button>
+        <div className="space-y-1">
 
           {walletAddress && (
             <button
@@ -531,7 +486,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                 setShowPnLCalendar(true);
                 setShowAccountModal(false);
               }}
-              className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-900 transition-all duration-200"
+              className="flex items-center w-full p-3 text-gray-300 hover:text-white hover:bg-gray-900/50 rounded-lg transition-all duration-200 border border-transparent hover:border-gray-800"
             >
               <span className="font-medium text-sm">P&L Calendar</span>
             </button>
@@ -543,7 +498,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                 setShowAuthorDashboardModal(true);
                 setShowAccountModal(false);
               }}
-              className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-900 transition-all duration-200"
+              className="flex items-center w-full p-3 text-gray-300 hover:text-white hover:bg-gray-900/50 rounded-lg transition-all duration-200 border border-transparent hover:border-gray-800"
             >
               <span className="font-medium text-sm">Author Dashboard</span>
             </button>
@@ -551,7 +506,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
 
           <button
             onClick={() => setShowAliasModal(true)}
-            className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-900 transition-all duration-200"
+            className="flex items-center w-full p-3 text-gray-300 hover:text-white hover:bg-gray-900/50 rounded-lg transition-all duration-200 border border-transparent hover:border-gray-800"
           >
             <span className="font-medium text-sm">Set Alias</span>
           </button>
@@ -561,14 +516,14 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
               setShowAccountSettingsModal(true);
               setShowAccountModal(false);
             }}
-            className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-900 transition-all duration-200"
+            className="flex items-center w-full p-3 text-gray-300 hover:text-white hover:bg-gray-900/50 rounded-lg transition-all duration-200 border border-transparent hover:border-gray-800"
           >
             <span className="font-medium text-sm">Account Settings</span>
           </button>
 
           <Link
             href="/rewards"
-            className="flex items-center w-full p-2 text-gray-300 hover:text-white hover:bg-gray-900 transition-all duration-200"
+            className="flex items-center w-full p-3 text-gray-300 hover:text-white hover:bg-gray-900/50 rounded-lg transition-all duration-200 border border-transparent hover:border-gray-800"
             onClick={() => setShowAccountModal(false)}
           >
             <span className="font-medium text-sm">Rewards & Referrals</span>
@@ -576,24 +531,27 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
         </div>
 
         {/* Logout Section */}
-        <div className="pt-3 border-t border-gray-800">
+        <div className="pt-2 border-t border-gray-800">
           {user ? (
             <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
               onClick={handleSignOut}
-              className="flex items-center w-full p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-200"
+              className="flex items-center w-full p-3 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-all duration-200 border border-transparent hover:border-red-500/20"
             >
               <span className="font-medium text-sm">Sign Out</span>
             </motion.button>
           ) : (
-            <Link
-              href="/login"
-              className="flex items-center w-full p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-all duration-200"
-              onClick={() => setShowAccountModal(false)}
+            <button
+              onClick={() => {
+                setRedirectTo(window.location.pathname);
+                setShowLoginModal(true);
+                setShowAccountModal(false);
+              }}
+              className="flex items-center w-full p-3 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-lg transition-all duration-200 border border-transparent hover:border-blue-500/20"
             >
               <span className="font-medium text-sm">Sign In</span>
-            </Link>
+            </button>
           )}
         </div>
       </div>
@@ -660,18 +618,18 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                   onClick={() => setShowAccountModal(false)}
                 />
                 <motion.div
-                  className="fixed inset-0 z-[9999] sm:flex sm:items-center sm:justify-center sm:p-4"
+                  className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                 >
                   <motion.div
                     ref={modalRef}
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 16 }}
+                    initial={{ opacity: 0, y: 16, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 16, scale: 0.95 }}
                     transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="w-full h-full sm:h-auto sm:max-w-sm sm:border sm:border-gray-800 bg-gray-950 shadow-2xl overflow-hidden"
+                    className="w-full max-w-sm h-auto max-h-[90vh] border border-gray-800 bg-gray-950 shadow-2xl overflow-hidden rounded-xl flex flex-col"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {renderProfileContent()}

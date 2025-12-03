@@ -842,16 +842,6 @@ service cloud.firestore {
 
     }
 
-    // Collection: whaleTransactions
-    match /whaleTransactions/{transactionId} {
-      allow read: if true;
-      allow create, update: if (request.auth == null || isAdmin()) && validateWhaleTransaction();
-      allow delete: if request.auth == null || isAdmin();
-
-      function validateWhaleTransaction() {
-        let data = request.resource.data;
-        return isValidString(data.tokenSymbol, 1, 10) &&
-          isValidString(data.tokenName, 1, 50) &&
           isValidAddress(data.tokenAddress) &&
           data.amountToken is number &&
           data.amountToken > 0 &&

@@ -116,6 +116,7 @@ const WalletDisplay: React.FC<WalletDisplayProps> = ({
     return (
       <button
         onClick={onToggleDropdown}
+        data-wallet-display
         className="h-8 px-3 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-500 transition-colors duration-200 flex items-center justify-center"
       >
         Connect
@@ -132,6 +133,7 @@ const WalletDisplay: React.FC<WalletDisplayProps> = ({
   return (
     <button
       onClick={onToggleDropdown}
+      data-wallet-display
       className="flex items-center justify-center h-8 px-2.5 sm:px-3 sm:py-1.5 sm:space-x-2 rounded-lg sm:rounded-xl bg-[#111827] border border-gray-700/60 sm:border-gray-600 hover:bg-[#1f2937] hover:border-gray-500 transition-all duration-200"
     >
       {/* Wallet Icon - Hidden on Mobile */}

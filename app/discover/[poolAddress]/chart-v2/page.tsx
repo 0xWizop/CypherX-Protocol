@@ -2165,11 +2165,15 @@ export default function ChartV2Page() {
                       </span>
                     </div>
                     {showTopVolume && (
-                      <div className="absolute mt-3 right-4 z-30 w-[720px] bg-gray-950 border border-gray-800 shadow-2xl rounded-md" style={{ maxWidth: 'calc(100vw - 24px)' }}>
-                        <div className="px-3 py-2 text-xs text-gray-400 border-b border-gray-800">Top 10 by 24h Volume</div>
-                        <div className="max-h-[70vh] overflow-hidden">
+                      <div className="absolute top-full mt-2 left-0 z-30 w-[600px] sm:w-[720px] bg-gray-900 border border-gray-800 shadow-2xl rounded-lg" style={{ 
+                        maxWidth: 'min(720px, calc(100vw - 32px))',
+                        left: '0',
+                        right: 'auto'
+                      }}>
+                        <div className="px-4 py-2.5 text-xs text-gray-400 border-b border-gray-800 bg-gray-900/50">Top 10 by 24h Volume</div>
+                        <div className="max-h-[70vh] overflow-y-auto">
                           <table className="w-full text-xs">
-                            <thead className="sticky top-0 bg-gray-950 border-b border-gray-800 text-gray-400">
+                            <thead className="sticky top-0 bg-gray-900 border-b border-gray-800 text-gray-400 z-10">
                               <tr>
                                 <th className="px-3 py-2 text-left font-normal">Symbol</th>
                                 <th className="px-3 py-2 text-right font-normal">Last</th>
@@ -2193,7 +2197,7 @@ export default function ChartV2Page() {
                                   return (
                                     <tr
                                       key={`${p.baseAddress}-${p.poolAddress}`}
-                                      className="hover:bg-gray-800/30 cursor-pointer"
+                                      className="hover:bg-gray-800/50 cursor-pointer transition-colors"
                                       onClick={() => {
                                         setShowTopVolume(false);
                                         if (p.poolAddress) {
@@ -2203,7 +2207,7 @@ export default function ChartV2Page() {
                                     >
                                       <td className="px-3 py-2">
                                         <div className="flex items-center gap-2">
-                                          <div className="w-5 h-5 bg-gray-800 text-[10px] text-gray-300 flex items-center justify-center overflow-hidden">
+                                          <div className="w-5 h-5 bg-gray-800 text-[10px] text-gray-300 flex items-center justify-center overflow-hidden rounded">
                                             {p.imageUrl ? (
                                               <img src={p.imageUrl} alt={p.baseSymbol || 'T'} className="w-full h-full object-cover" />
                                             ) : (

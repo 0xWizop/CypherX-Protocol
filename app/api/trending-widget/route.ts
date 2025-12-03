@@ -254,7 +254,7 @@ export async function GET() {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('Error in trending API route:', msg);
     return NextResponse.json(
-      { error: 'Failed to fetch trending tokens', details: msg },
+      { error: 'Unable to fetch trending tokens. Please try again later.' },
       { status: 500 }
     );
   }

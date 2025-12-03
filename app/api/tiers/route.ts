@@ -26,14 +26,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const db = adminDb();
+    let db;
+    try {
+      db = adminDb();
+    } catch (error) {
+      console.error('Firebase Admin initialization failed:', error);
+      return NextResponse.json({ 
+        error: 'Database connection failed. Please check Firebase Admin configuration and IAM permissions.' 
+      }, { status: 500 });
+    }
+    
     if (!db) {
       return NextResponse.json({ error: 'Database connection failed' }, { status: 500 });
     }
 
     switch (action) {
       case 'get_tier':
-        const userQuery = db.collection('users').where('walletAddress', '==', walletAddress);
+        const userQuery = db.collection('users').where('walletAddress', '==', walletAddress.toLowerCase());
         const userSnapshot = await userQuery.get();
         
         if (userSnapshot.empty) {
@@ -87,7 +96,7 @@ export async function POST(request: Request) {
         });
 
       case 'update_tier':
-        const userQuery2 = db.collection('users').where('walletAddress', '==', walletAddress);
+        const userQuery2 = db.collection('users').where('walletAddress', '==', walletAddress.toLowerCase());
         const userSnapshot2 = await userQuery2.get();
         
         if (userSnapshot2.empty) {
@@ -152,12 +161,15 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Wallet address required' }, { status: 400 });
     }
 
-    const db = adminDb();
-    if (!db) {
+    let db;
+    try {
+      db = adminDb();
+    } catch (error) {
+      console.error('Database connection failed:', error);
       return NextResponse.json({ error: 'Database connection failed' }, { status: 500 });
     }
 
-    const userQuery = db.collection('users').where('walletAddress', '==', walletAddress);
+    const userQuery = db.collection('users').where('walletAddress', '==', walletAddress.toLowerCase());
     const userSnapshot = await userQuery.get();
     
     if (userSnapshot.empty) {

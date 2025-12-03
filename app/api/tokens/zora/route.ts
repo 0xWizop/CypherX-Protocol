@@ -303,7 +303,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch Zora coins',
+        error: 'Unable to fetch token data. Please try again later.',
         tokens: [],
       },
       { status: 500 }

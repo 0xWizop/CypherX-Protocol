@@ -407,7 +407,7 @@ export default function RadarPage() {
         const tokensWithTags = (data.tokens || []).map((token: any) => {
           const processedToken = {
             ...token,
-            volume24h: token.volume24h || token.volume?.h24 || 0,
+            volume24h: token.volume24h || (token.volume && typeof token.volume === 'object' && 'h24' in token.volume ? (token.volume as any).h24 : 0) || 0,
             marketCap: token.marketCap || 0,
             priceChange: token.priceChange || {
               m5: 0,
@@ -434,6 +434,38 @@ export default function RadarPage() {
         });
         
         setNewPairsTokens(tokensWithTags);
+        
+        // Check for graduation: tokens that meet thresholds should be added to Firebase
+        const tokensToGraduate = tokensWithTags.filter((token: any) => {
+          const marketCap = typeof token.marketCap === 'string' ? parseFloat(token.marketCap) : (token.marketCap || 0);
+          const volume24h = typeof token.volume24h === 'string' ? parseFloat(token.volume24h) : (token.volume24h || 0);
+          const volumeFromNested = (token.volume && typeof token.volume === 'object' && 'h24' in token.volume) ? (typeof (token.volume as any).h24 === 'string' ? parseFloat((token.volume as any).h24) : (token.volume as any).h24 || 0) : 0;
+          const finalVolume = volume24h || volumeFromNested;
+          
+          // Graduation criteria: >50k market cap AND >10k volume
+          return marketCap > 50000 && finalVolume > 10000;
+        });
+        
+        // Graduate tokens to Firebase
+        if (tokensToGraduate.length > 0) {
+          try {
+            const graduateResponse = await fetch('/api/tokens/save', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                tokens: tokensToGraduate,
+                source: 'radar-graduation'
+              })
+            });
+            
+            if (graduateResponse.ok) {
+              const result = await graduateResponse.json();
+              console.log(`🎓 Graduated ${tokensToGraduate.length} tokens to Firebase:`, result);
+            }
+          } catch (error) {
+            console.warn('⚠️ Failed to graduate tokens:', error);
+          }
+        }
       } catch (error) {
         console.error("❌ Fetch new pairs error:", error);
         if (!_silent) setError("Failed to fetch new pairs.");
@@ -456,7 +488,7 @@ export default function RadarPage() {
         const tokensWithTags = (data.tokens || []).map((token: any) => {
           const processedToken = {
             ...token,
-            volume24h: token.volume24h || token.volume?.h24 || 0,
+            volume24h: token.volume24h || (token.volume && typeof token.volume === 'object' && 'h24' in token.volume ? (token.volume as any).h24 : 0) || 0,
             marketCap: token.marketCap || 0,
             priceChange: token.priceChange || {
               m5: 0,
@@ -492,13 +524,13 @@ export default function RadarPage() {
     fetchNewPairs();
     fetchScreenerTokens();
     
-    // Real-time polling every 12 seconds
+    // Real-time polling every 30 seconds (reduced from 12s to avoid rate limiting)
     const pollInterval = setInterval(() => {
       fetchNewPairs(true);
       fetchScreenerTokens(true);
-    }, 12 * 1000);
+    }, 30 * 1000);
     
-    // Background sync every 2 minutes
+    // Background sync every 5 minutes (reduced frequency to avoid rate limiting)
     const syncInterval = setInterval(async () => {
       try {
         await fetch('/api/tokens/sync', { method: 'GET' });
@@ -508,7 +540,7 @@ export default function RadarPage() {
       } catch (error) {
         console.warn('⚠️ Background sync failed:', error);
       }
-    }, 2 * 60 * 1000);
+    }, 5 * 60 * 1000);
     
     return () => {
       isMounted = false;
@@ -518,8 +550,30 @@ export default function RadarPage() {
   }, []);
 
   // Filter new pairs tokens (no threshold filtering - show all)
+  // Also filter out tokens without volume after 24 hours
   const filteredNewPairs = newPairsTokens
     .filter((token) => {
+      // Filter out tokens that don't have volume after 2 hours
+      if (token.createdAt) {
+        try {
+          const created = new Date(token.createdAt);
+          const now = new Date();
+          const hoursSinceCreation = (now.getTime() - created.getTime()) / (1000 * 60 * 60);
+          
+          const volume24h = typeof token.volume24h === 'string' ? parseFloat(token.volume24h) : (token.volume24h || 0);
+          const volumeFromNested = (token.volume && typeof token.volume === 'object' && 'h24' in token.volume) ? (typeof (token.volume as any).h24 === 'string' ? parseFloat((token.volume as any).h24) : (token.volume as any).h24 || 0) : 0;
+          const finalVolume = volume24h || volumeFromNested;
+          
+          // If token is older than 2 hours and has no volume, hide it
+          if (hoursSinceCreation > 2 && finalVolume === 0) {
+            return false;
+          }
+        } catch (dateError) {
+          // If we can't parse the date, keep the token
+          console.warn("Invalid createdAt date for token:", token.address, token.createdAt);
+        }
+      }
+      
       if (showWatchlistOnly && !isInAnyWatchlist(token.address)) {
         return false;
       }
@@ -595,63 +649,94 @@ export default function RadarPage() {
 
   // Helper function to check if token is SURGING
   const isSurgingToken = (token: any) => {
+    // Volume threshold: Must have at least $5K in 24h volume
+    const volume24h = typeof token.volume24h === 'string' ? parseFloat(token.volume24h) : (token.volume24h || 0);
+    const volumeFromNested = (token.volume && typeof token.volume === 'object' && 'h24' in token.volume) ? (typeof (token.volume as any).h24 === 'string' ? parseFloat((token.volume as any).h24) : (token.volume as any).h24 || 0) : 0;
+    const finalVolume = volume24h || volumeFromNested;
+    
+    // Minimum volume requirement - filter out trash
+    if (finalVolume < 5000) {
+      return false;
+    }
+    
     // Must have SURGING tag from API
     if (token.tags?.includes("SURGING")) return true;
     
-    // OR must meet surging criteria (very relaxed):
-    // 1. Positive price movement (any positive gain) OR high volume
+    // OR must meet surging criteria:
+    // 1. Positive price movement (any positive gain)
     const priceChange24h = token.priceChange?.h24 || token.priceChange24h || 0;
     const priceChange6h = token.priceChange?.h6 || 0;
     const priceChange1h = token.priceChange?.h1 || 0;
-    const hasPositiveGain = priceChange24h > 0 || priceChange6h > 0 || priceChange1h > 0;
     
-    // 2. Some volume (at least $1K in 24h) - very low threshold
-    const volume24h = typeof token.volume24h === 'string' ? parseFloat(token.volume24h) : (token.volume24h || 0);
-    const hasVolume = volume24h >= 1000;
+    // 2. High volume (at least $10K in 24h) OR significant price movement with volume
+    const hasHighVolume = finalVolume >= 10000;
+    const hasSignificantGain = (priceChange24h > 10 || priceChange6h > 15 || priceChange1h > 20);
     
-    // 3. Recent activity (created within last 90 days) OR has tags indicating activity
-    const isRecent = token.createdAt ? 
-      ((Date.now() - new Date(token.createdAt).getTime()) / (1000 * 60 * 60 * 24)) < 90 :
-      true; // If no createdAt, assume recent
-    
-    // Show if: (has positive gain AND volume) OR (high volume alone) OR (has activity tags)
+    // 3. Has activity tags indicating real momentum
     const hasActivityTags = token.tags?.some((tag: string) => 
       ['SPIKE', 'VOLUME', 'RUNNER', 'TRENDING', 'GAINER'].includes(tag)
     );
     
-    return (hasPositiveGain && hasVolume) || (volume24h >= 10000) || hasActivityTags || isRecent;
+    // Show if: (significant gain with volume) OR (high volume) OR (has activity tags)
+    return (hasSignificantGain && finalVolume >= 5000) || hasHighVolume || hasActivityTags;
   };
 
   // Helper function to check if token is a GAINER
   const isGainerToken = (token: any) => {
+    // Volume threshold: Must have at least $5K in 24h volume
+    const volume24h = typeof token.volume24h === 'string' ? parseFloat(token.volume24h) : (token.volume24h || 0);
+    const volumeFromNested = (token.volume && typeof token.volume === 'object' && 'h24' in token.volume) ? (typeof (token.volume as any).h24 === 'string' ? parseFloat((token.volume as any).h24) : (token.volume as any).h24 || 0) : 0;
+    const finalVolume = volume24h || volumeFromNested;
+    
+    // Minimum volume requirement - filter out trash
+    if (finalVolume < 5000) {
+      return false;
+    }
+    
     // Check all available price change timeframes
     const priceChange24h = token.priceChange?.h24 || token.priceChange24h || 0;
     const priceChange6h = token.priceChange?.h6 || 0;
     const priceChange1h = token.priceChange?.h1 || 0;
     const priceChange5m = token.priceChange?.m5 || 0;
     
-    // If any timeframe shows positive gain, it's a gainer
-    if (priceChange24h > 0 || priceChange6h > 0 || priceChange1h > 0 || priceChange5m > 0) {
+    // Must have meaningful positive gain (at least 5% in any timeframe)
+    const hasMeaningfulGain = priceChange24h > 5 || priceChange6h > 7 || priceChange1h > 10 || priceChange5m > 15;
+    
+    if (hasMeaningfulGain) {
       return true;
     }
     
-    // Also check market cap delta if available
+    // Also check market cap delta if available (must be significant)
     const marketCapDelta = typeof token.marketCapDelta24h === 'string' ? 
       parseFloat(token.marketCapDelta24h) : (token.marketCapDelta24h || 0);
-    if (marketCapDelta > 0) return true;
+    if (marketCapDelta > 10) return true;
     
-    // If no price data, check if it has GAINER tag
-    if (token.tags?.includes("GAINER")) return true;
+    // If it has GAINER tag and meets volume threshold
+    if (token.tags?.includes("GAINER") && finalVolume >= 5000) {
+      return true;
+    }
     
-    // Default: show tokens with volume (they're likely active)
-    const volume24h = typeof token.volume24h === 'string' ? parseFloat(token.volume24h) : (token.volume24h || 0);
-    return volume24h > 0;
+    // High volume tokens (>= $20K) are considered gainers even with smaller gains
+    if (finalVolume >= 20000 && (priceChange24h > 0 || priceChange6h > 0 || priceChange1h > 0)) {
+      return true;
+    }
+    
+    return false;
   };
 
   // Categorize tokens for 3-column layout
   // NEW PAIRS: ALL tokens from APIs/SDKs (filteredNewPairs) - NO FILTERING, show all
   // These should NEVER appear in surging or gainers
+  // Filter out tokens that have graduated (are now in Firebase) to avoid duplicates
+  const screenerAddresses = new Set(screenerTokens.map(t => t.address?.toLowerCase()).filter(Boolean));
   let newTokens = filteredNewPairs
+    .filter(token => {
+      // Exclude tokens that have already graduated to Firebase
+      if (token.address && screenerAddresses.has(token.address.toLowerCase())) {
+        return false;
+      }
+      return true;
+    })
     .sort((a, b) => {
       const aDate = new Date(a.createdAt || 0).getTime();
       const bDate = new Date(b.createdAt || 0).getTime();
@@ -660,10 +745,15 @@ export default function RadarPage() {
 
   // SURGING: ONLY tokens from screener (Firebase tokens collection) with significant momentum
   // These are tokens that are already in /discover page (meet 50k MC, 10k volume thresholds)
+  // EXPLICITLY exclude any tokens from newPairsTokens to ensure separation
+  const newPairsAddresses = new Set(newPairsTokens.map(t => t.address?.toLowerCase()).filter(Boolean));
   let surgingTokens = filteredScreenerTokens
     .filter(token => {
+      // Explicitly exclude tokens from new pairs
+      if (token.address && newPairsAddresses.has(token.address.toLowerCase())) {
+        return false;
+      }
       // Screener tokens come from /api/tokens which only returns tokens from Firebase tokens collection
-      // No need to filter by source - filteredScreenerTokens already only contains screener tokens
       return isSurgingToken(token);
     })
     .sort((a, b) => {
@@ -675,8 +765,13 @@ export default function RadarPage() {
 
   // TOP GAINERS: ONLY tokens from screener (Firebase tokens collection) with positive price increases
   // These are tokens that are already in /discover page (meet 50k MC, 10k volume thresholds)
+  // EXPLICITLY exclude any tokens from newPairsTokens to ensure separation
   let gainerTokens = filteredScreenerTokens
     .filter(token => {
+      // Explicitly exclude tokens from new pairs
+      if (token.address && newPairsAddresses.has(token.address.toLowerCase())) {
+        return false;
+      }
       // Only use screener tokens - exclude any tokens that might be from new pairs sources
       // Screener tokens come from /api/tokens which only returns tokens from Firebase tokens collection
       return isGainerToken(token);
@@ -752,8 +847,8 @@ export default function RadarPage() {
       }
     }
     // Also check nested volume structure
-    if (!volume24h && token.volume?.h24) {
-      volume24h = typeof token.volume.h24 === 'string' ? parseFloat(token.volume.h24) : (token.volume.h24 || 0);
+    if (!volume24h && token.volume && typeof token.volume === 'object' && 'h24' in token.volume) {
+      volume24h = typeof (token.volume as any).h24 === 'string' ? parseFloat((token.volume as any).h24) : ((token.volume as any).h24 || 0);
     }
     
     const priceUsd = token.priceUsd || '0';

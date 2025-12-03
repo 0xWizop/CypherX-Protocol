@@ -661,11 +661,6 @@ export default function Page() {
                       <p className="text-[10px] sm:text-xs text-gray-400">Market Data</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
-                    <Link href="/discover" className="text-blue-400 hover:text-blue-300 text-xs sm:text-sm font-medium">
-                      More integrations →
-                    </Link>
-                  </div>
                 </div>
               </div>
             </motion.div>
