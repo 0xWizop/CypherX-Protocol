@@ -487,3 +487,33 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   z-index: 0;
 }
 
+/* Infinite scroll carousel animation */
+@keyframes scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-infinite-scroll {
+  animation: scroll 30s linear infinite;
+}
+
+.animate-infinite-scroll:hover {
+  animation-play-state: paused;
+}
+
+/* Hexagon fade animation */
+@keyframes hexFade {
+  0%, 100% {
+    opacity: 0.05;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 0.15;
+    transform: scale(1.05);
+  }
+}
+

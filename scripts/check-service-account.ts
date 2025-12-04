@@ -43,3 +43,4 @@ if (fs.existsSync(serviceAccountPath)) {
 
 console.log('\n✅ Check complete!');
 
+

@@ -112,7 +112,7 @@ export async function GET() {
     // Test 5: Auth Access
     diagnostics.tests.auth = { status: 'testing' };
     try {
-      const authInstance = auth();
+      auth(); // Test auth initialization
       diagnostics.tests.auth = {
         status: 'success',
         message: 'Auth instance accessible'

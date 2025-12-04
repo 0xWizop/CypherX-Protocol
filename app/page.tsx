@@ -109,7 +109,49 @@ export default function Page() {
         <div className="border-b border-gray-800/30"></div>
 
         <main className="flex-1 text-gray-200 relative overflow-x-hidden" style={{ overflowY: 'visible' }}>
-          <div className="fixed inset-0 bg-[#070c14] -z-10"></div>
+          {/* Hexagon Background */}
+          <div className="fixed inset-0 bg-[#070c14] -z-10">
+            {/* Hexagon grid pattern */}
+            <div 
+              className="absolute inset-0 opacity-[0.04]"
+              style={{
+                backgroundImage: `
+                  repeating-linear-gradient(0deg, transparent, transparent 69px, rgba(59, 130, 246, 0.15) 69px, rgba(59, 130, 246, 0.15) 70px),
+                  repeating-linear-gradient(60deg, transparent, transparent 69px, rgba(59, 130, 246, 0.15) 69px, rgba(59, 130, 246, 0.15) 70px),
+                  repeating-linear-gradient(120deg, transparent, transparent 69px, rgba(59, 130, 246, 0.15) 69px, rgba(59, 130, 246, 0.15) 70px)
+                `,
+                backgroundSize: '120px 104px',
+              }}
+            />
+            
+            {/* Individual hexagons with subtle fade animation */}
+            {Array.from({ length: 40 }).map((_, i) => {
+              const row = Math.floor(i / 8);
+              const col = i % 8;
+              const left = 8 + col * 12.5;
+              const top = 8 + row * 10;
+              const delay = i * 0.2;
+              const duration = 6 + (i % 4) * 2;
+              
+              return (
+                <div
+                  key={i}
+                  className="absolute pointer-events-none"
+                  style={{
+                    left: `${left}%`,
+                    top: `${top}%`,
+                    width: '60px',
+                    height: '60px',
+                    clipPath: 'polygon(30% 0%, 70% 0%, 100% 50%, 70% 100%, 30% 100%, 0% 50%)',
+                    background: 'rgba(59, 130, 246, 0.05)',
+                    border: '1px solid rgba(59, 130, 246, 0.1)',
+                    animation: `hexFade ${duration}s ease-in-out infinite`,
+                    animationDelay: `${delay}s`,
+                  }}
+                />
+              );
+            })}
+          </div>
 
           {/* Background lines that flow through the entire page */}
           <div className="fixed inset-0 pointer-events-none overflow-visible z-0">
@@ -241,6 +283,56 @@ export default function Page() {
                   <div className="text-xs sm:text-sm text-gray-400 uppercase tracking-wider font-light">UPTIME</div>
                 </motion.div>
               </motion.div>
+            </div>
+          </motion.div>
+
+          {/* Powered By Industry Leaders Section - Moved under hero */}
+          <motion.div className="py-8 sm:py-12" {...fadeInUp(0.1)}>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="mb-6 sm:mb-8 text-center">
+                <span className="text-gray-400 uppercase tracking-wider text-[10px] sm:text-xs block mb-3 sm:mb-4">POWERED BY INDUSTRY LEADERS</span>
+              </div>
+              {/* Infinite Scroll Carousel */}
+              <div className="overflow-hidden relative">
+                <div className="flex gap-3 sm:gap-4 animate-infinite-scroll">
+                  {/* First set */}
+                  {[
+                    { name: "0x Protocol", description: "DEX Aggregation", image: "https://i.imgur.com/9Y7BIHa.png" },
+                    { name: "Coinbase", description: "Base Infrastructure", image: "https://i.imgur.com/RWgPgY1.png" },
+                    { name: "Alchemy", description: "Node Services", image: "https://i.imgur.com/coHc8sq.png" },
+                    { name: "CoinGecko", description: "Price Intelligence", image: "https://i.imgur.com/UgezDbe.png" },
+                    { name: "Dexscreener", description: "Market Data", image: "https://i.imgur.com/LweKEMF.png" },
+                  ].map((partner, index) => (
+                    <div key={`first-${index}`} className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300 shrink-0 min-w-[200px] sm:min-w-[240px]">
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center shrink-0">
+                        <img src={partner.image} alt={partner.name} className="h-8 sm:h-10 object-contain" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-white text-xs sm:text-sm font-semibold">{partner.name}</p>
+                        <p className="text-[10px] sm:text-xs text-gray-400">{partner.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {/* Duplicate set for seamless loop */}
+                  {[
+                    { name: "0x Protocol", description: "DEX Aggregation", image: "https://i.imgur.com/9Y7BIHa.png" },
+                    { name: "Coinbase", description: "Base Infrastructure", image: "https://i.imgur.com/RWgPgY1.png" },
+                    { name: "Alchemy", description: "Node Services", image: "https://i.imgur.com/coHc8sq.png" },
+                    { name: "CoinGecko", description: "Price Intelligence", image: "https://i.imgur.com/UgezDbe.png" },
+                    { name: "Dexscreener", description: "Market Data", image: "https://i.imgur.com/LweKEMF.png" },
+                  ].map((partner, index) => (
+                    <div key={`second-${index}`} className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300 shrink-0 min-w-[200px] sm:min-w-[240px]">
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center shrink-0">
+                        <img src={partner.image} alt={partner.name} className="h-8 sm:h-10 object-contain" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-white text-xs sm:text-sm font-semibold">{partner.name}</p>
+                        <p className="text-[10px] sm:text-xs text-gray-400">{partner.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </motion.div>
 
@@ -606,64 +698,6 @@ export default function Page() {
               </div>
           </motion.div>
 
-            {/* Separator line between Rewards and Powered By */}
-            <div className="border-b border-gray-800/30 mb-12 sm:mb-16"></div>
-
-            {/* Powered By Industry Leaders Section */}
-            <motion.div className="mb-12 sm:mb-16" {...fadeInUp(0.2)}>
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="mb-6 sm:mb-8 text-center">
-                  <span className="text-gray-400 uppercase tracking-wider text-[10px] sm:text-xs block mb-3 sm:mb-4">POWERED BY INDUSTRY LEADERS</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
-                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center shrink-0">
-                      <img src="https://i.imgur.com/9Y7BIHa.png" alt="0x Protocol" className="h-8 sm:h-10 object-contain" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-white text-xs sm:text-sm font-semibold">0x Protocol</p>
-                      <p className="text-[10px] sm:text-xs text-gray-400">DEX Aggregation</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center shrink-0">
-                      <img src="https://i.imgur.com/RWgPgY1.png" alt="Coinbase" className="h-8 sm:h-10 object-contain" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-white text-xs sm:text-sm font-semibold">Coinbase</p>
-                      <p className="text-[10px] sm:text-xs text-gray-400">Base Infrastructure</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center shrink-0">
-                      <img src="https://i.imgur.com/coHc8sq.png" alt="Alchemy" className="h-8 sm:h-10 object-contain" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-white text-xs sm:text-sm font-semibold">Alchemy</p>
-                      <p className="text-[10px] sm:text-xs text-gray-400">Node Services</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center shrink-0">
-                      <img src="https://i.imgur.com/UgezDbe.png" alt="CoinGecko" className="h-8 sm:h-10 object-contain" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-white text-xs sm:text-sm font-semibold">CoinGecko</p>
-                      <p className="text-[10px] sm:text-xs text-gray-400">Price Intelligence</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center shrink-0">
-                      <img src="https://i.imgur.com/LweKEMF.png" alt="Dexscreener" className="h-8 sm:h-10 object-contain" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-white text-xs sm:text-sm font-semibold">Dexscreener</p>
-                      <p className="text-[10px] sm:text-xs text-gray-400">Market Data</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
         </div>
       </main>
 

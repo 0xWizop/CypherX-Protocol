@@ -10,9 +10,11 @@ import dayjs from "dayjs";
 import { motion, AnimatePresence } from "framer-motion";
 import { ethers } from "ethers";
 import { OverviewIcon, PerformanceIcon, SwapArrowsIcon, TradesIcon } from "../../../components/icons";
-import { FiX, FiCheck, FiChevronDown, FiCopy } from "react-icons/fi";
+import { FiX, FiCheck, FiChevronDown, FiCopy, FiStar, FiBell } from "react-icons/fi";
 import OrderManagement from "../../../components/OrderManagement";
 import { useWalletSystem } from "@/app/providers";
+import { useWatchlists } from "@/app/hooks/useWatchlists";
+import { usePriceAlerts } from "@/app/hooks/usePriceAlerts";
 
 // Extend Window interface for ethereum provider
 declare global {
@@ -64,6 +66,8 @@ export default function ChartV2Page() {
   const poolAddress = params?.poolAddress as string | undefined;
   const router = useRouter();
   const { selfCustodialWallet } = useWalletSystem();
+  const { watchlists, addToWatchlist, removeFromWatchlist, getWatchlistsForToken, isInWatchlist } = useWatchlists();
+  const { createAlert, hasActiveAlert } = usePriceAlerts();
 
   const [loading, setLoading] = useState(true);
   const [, setError] = useState<string | null>(null);
@@ -153,6 +157,12 @@ export default function ChartV2Page() {
   
   // Order modal ref
   const orderManagementRef = useRef<{ openModal: (type: "LIMIT_BUY" | "LIMIT_SELL" | "STOP_LOSS", amount?: string) => void }>(null);
+
+  // Watchlist and Alert modals
+  const [showWatchlistModal, setShowWatchlistModal] = useState(false);
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertThreshold, setAlertThreshold] = useState("");
+  const [alertDirection, setAlertDirection] = useState<"above" | "below">("above");
 
   // Top volume dropdown state
   const [showTopVolume, setShowTopVolume] = useState(false);
@@ -2163,6 +2173,41 @@ export default function ChartV2Page() {
                       <span className="text-[10px] sm:text-xs text-blue-300 bg-blue-500/15 border border-blue-500/30 rounded-md px-2 py-[2px] leading-none">
                         Spot
                       </span>
+                      {/* Watchlist Button */}
+                      {poolAddress && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (watchlists.length === 0) {
+                              setShowWatchlistModal(true);
+                            } else {
+                              const tokenWatchlists = getWatchlistsForToken(poolAddress);
+                              if (tokenWatchlists.length > 0) {
+                                // Remove from first watchlist
+                                removeFromWatchlist(tokenWatchlists[0].id, poolAddress);
+                              } else {
+                                // Add to first watchlist
+                                addToWatchlist(watchlists[0].id, poolAddress);
+                              }
+                            }
+                          }}
+                          className="p-1.5 hover:bg-gray-800 rounded-lg transition-colors"
+                          title={poolAddress && getWatchlistsForToken(poolAddress).length > 0 ? "Remove from watchlist" : "Add to watchlist"}
+                        >
+                          <FiStar className={`w-4 h-4 ${poolAddress && getWatchlistsForToken(poolAddress).length > 0 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-400'}`} />
+                        </button>
+                      )}
+                      {/* Alert Button */}
+                      {poolAddress && pair?.baseToken?.address && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAlertModal(true)}
+                          className="p-1.5 hover:bg-gray-800 rounded-lg transition-colors"
+                          title="Set price alert"
+                        >
+                          <FiBell className={`w-4 h-4 ${poolAddress && hasActiveAlert(pair.baseToken.address) ? 'text-blue-400' : 'text-gray-400'}`} />
+                        </button>
+                      )}
                     </div>
                     {showTopVolume && (
                       <div className="absolute top-full mt-2 left-0 z-30 w-[600px] sm:w-[720px] bg-gray-900 border border-gray-800 shadow-2xl rounded-lg" style={{ 
@@ -2283,7 +2328,7 @@ export default function ChartV2Page() {
           {/* Chart */}
           <div className={`flex-1 min-h-0 flex flex-col ${isMobile && activeMobileTab === 'overview' ? 'overflow-hidden h-full' : ''}`}>
             {/* Controls */}
-            <div className={`${isMobile ? 'px-2 py-1' : 'px-4 py-[5.5px]'} bg-gray-950 border-b border-gray-900/70 flex-shrink-0`}>
+            <div className={`${isMobile ? 'px-2 py-1' : 'px-4 py-[5.75px]'} bg-gray-950 border-b border-gray-900/70 flex-shrink-0`}>
               <div className={`flex items-center ${isMobile ? 'gap-1.5 flex-wrap' : 'gap-2 justify-between'}`}>
                 {/* Left side: Timeframe and Indicators */}
                 <div className={`flex items-center ${isMobile ? 'gap-1.5 flex-1 min-w-0' : 'gap-1.5'}`}>
@@ -2294,7 +2339,7 @@ export default function ChartV2Page() {
                         setShowTimeframeDropdown(!showTimeframeDropdown);
                         setShowIndicatorsDropdown(false);
                       }}
-                      className={`flex items-center gap-1 ${isMobile ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-xs'} font-medium rounded-lg bg-gray-800/60 hover:bg-gray-800 text-gray-200 hover:text-white transition-all border border-transparent hover:border-gray-700`}
+                      className={`flex items-center gap-1 ${isMobile ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-sm'} rounded-lg text-gray-300 hover:text-white transition-colors`}
                     >
                       <span>{timeframe.toUpperCase()}</span>
                       <FiChevronDown className={`${isMobile ? 'w-3 h-3' : 'w-3.5 h-3.5'} transition-transform duration-200 ${showTimeframeDropdown ? 'rotate-180' : ''}`} style={{ minWidth: isMobile ? '12px' : '14px', minHeight: isMobile ? '12px' : '14px' }} />
@@ -2330,7 +2375,7 @@ export default function ChartV2Page() {
                     )}
                   </div>
                   
-                  {/* Indicators dropdown (without "Indicators" text) */}
+                  {/* Indicators dropdown with active indicator label */}
                   <div className="relative flex-shrink-0">
                     <button
                       ref={indicatorsButtonRef}
@@ -2338,9 +2383,19 @@ export default function ChartV2Page() {
                         setShowIndicatorsDropdown(!showIndicatorsDropdown);
                         setShowTimeframeDropdown(false);
                       }}
-                      className={`flex items-center justify-center ${isMobile ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-xs'} font-medium rounded-lg bg-gray-800/60 hover:bg-gray-800 text-gray-200 hover:text-white transition-all border border-transparent hover:border-gray-700`}
+                      className={`flex items-center gap-1 ${isMobile ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-sm'} rounded-lg text-gray-300 hover:text-white transition-colors`}
                       style={!isMobile && indicatorsButtonWidth ? { width: `${indicatorsButtonWidth}px` } : undefined}
                     >
+                      <span>
+                        {(() => {
+                          const activeIndicators = [];
+                          if (showVWAP) activeIndicators.push('VWAP');
+                          if (showMovingAverage) activeIndicators.push('SMA');
+                          if (showEMA) activeIndicators.push('EMA');
+                          if (showRSI) activeIndicators.push('RSI');
+                          return activeIndicators.length > 0 ? activeIndicators.join(', ') : 'Indicators';
+                        })()}
+                      </span>
                       <FiChevronDown className={`${isMobile ? 'w-3 h-3' : 'w-3.5 h-3.5'} transition-transform duration-200 ${showIndicatorsDropdown ? 'rotate-180' : ''}`} style={{ minWidth: isMobile ? '12px' : '14px', minHeight: isMobile ? '12px' : '14px' }} />
                     </button>
                     {showIndicatorsDropdown && (
@@ -2476,46 +2531,47 @@ export default function ChartV2Page() {
                 
                 {/* Right side controls */}
                 <div className={`flex items-center ${isMobile ? 'gap-1 flex-shrink-0' : 'gap-1.5 flex-shrink-0'}`}>
-                  <div className="flex items-center gap-0.5 bg-gray-800/60 rounded-lg p-0.5 border border-gray-700/50">
+                  <div className="flex items-center gap-0.5">
                     <button
                       onClick={() => setYAxisMode("price")}
-                      className={`${isMobile ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-xs'} font-medium rounded-md transition-all ${
+                      className={`${isMobile ? 'px-1.5 py-0.5 text-[10px]' : 'px-2.5 py-1 text-sm'} rounded-lg transition-colors ${
                         yAxisMode === "price"
-                          ? "bg-blue-500 text-white shadow-sm"
-                          : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+                          ? "text-blue-400"
+                          : "text-gray-400 hover:text-white"
                       }`}
                     >
                       Price
                     </button>
+                    <span className="text-gray-600 text-sm">/</span>
                     <button
                       onClick={() => setYAxisMode("marketCap")}
-                      className={`${isMobile ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-xs'} font-medium rounded-md transition-all ${
+                      className={`${isMobile ? 'px-1.5 py-0.5 text-[10px]' : 'px-2.5 py-1 text-sm'} rounded-lg transition-colors ${
                         yAxisMode === "marketCap"
-                          ? "bg-blue-500 text-white shadow-sm"
-                          : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+                          ? "text-blue-400"
+                          : "text-gray-400 hover:text-white"
                       }`}
                     >
                       MCap
                     </button>
                   </div>
-                  <div className="flex items-center gap-0.5 bg-gray-800/60 rounded-lg p-0.5 border border-gray-700/50">
+                  <div className="flex items-center gap-0.5">
                     <button
                       onClick={() => chartRef.current?.zoomIn()}
-                      className={`${isMobile ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-xs'} font-medium rounded-md text-gray-300 hover:text-white hover:bg-gray-700/50 transition-all`}
+                      className={`${isMobile ? 'px-1.5 py-0.5 text-[10px]' : 'px-2.5 py-1 text-sm'} rounded-lg text-gray-400 hover:text-white transition-colors`}
                       aria-label="Zoom in"
                     >
                       +
                     </button>
                     <button
                       onClick={() => chartRef.current?.zoomOut()}
-                      className={`${isMobile ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-xs'} font-medium rounded-md text-gray-300 hover:text-white hover:bg-gray-700/50 transition-all`}
+                      className={`${isMobile ? 'px-1.5 py-0.5 text-[10px]' : 'px-2.5 py-1 text-sm'} rounded-lg text-gray-400 hover:text-white transition-colors`}
                       aria-label="Zoom out"
                     >
                       −
                     </button>
                     <button
                       onClick={() => chartRef.current?.fit()}
-                      className={`${isMobile ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-xs'} font-medium rounded-md text-gray-300 hover:text-white hover:bg-gray-700/50 transition-all`}
+                      className={`${isMobile ? 'px-1.5 py-0.5 text-[10px]' : 'px-2.5 py-1 text-sm'} rounded-lg text-gray-400 hover:text-white transition-colors`}
                     >
                       ↻
                     </button>
@@ -2854,47 +2910,32 @@ export default function ChartV2Page() {
                   )}
                   {augmentedTransactions.slice(0, 50).map((tx) => {
                     const isNewTrade = newTradeHashes.has(tx.hash);
-                    const intensity = Math.min(1, tx.usd / 10000); // Intensity based on USD value
                     return (
                       <motion.tr 
                         key={`trade-${tx.hash}-${tx.timestamp}-${tx.tokenAmount}`} 
                         className="border-b border-gray-800/40 hover:bg-gray-900/30 transition-colors relative group"
                         initial={isNewTrade ? { 
                           backgroundColor: tx.isBuy 
-                            ? 'rgba(34, 197, 94, 0.3)' 
-                            : 'rgba(244, 63, 94, 0.3)',
-                          scale: 1.02
+                            ? 'rgba(34, 197, 94, 0.2)' 
+                            : 'rgba(239, 68, 68, 0.2)',
+                          scale: 1.01
                         } : false}
                         animate={isNewTrade ? {
                           backgroundColor: 'transparent',
                           scale: 1
                         } : {}}
-                        transition={{ duration: 1.5, ease: "easeOut" }}
+                        transition={{ duration: 1.2, ease: "easeOut" }}
                       >
-                        {/* USD Value with enhanced animated bar and intensity-based colors */}
+                        {/* USD Value with clean color bar - only size varies */}
                         <td className="px-3 py-2.5 relative" style={{ overflow: tx.fill === 100 ? 'visible' : 'hidden' }}>
                           <motion.div 
                             aria-hidden 
-                            className="absolute left-0 top-0 bottom-0"
+                            className={`absolute left-0 top-0 bottom-0 ${tx.isBuy ? 'bg-green-500/20' : 'bg-red-500/20'}`}
                             style={{ 
-                              background: tx.isBuy 
-                                ? `linear-gradient(90deg, 
-                                    rgba(34, 197, 94, ${0.3 + intensity * 0.3}) 0%, 
-                                    rgba(34, 197, 94, ${0.15 + intensity * 0.15}) 50%,
-                                    rgba(34, 197, 94, ${0.1 + intensity * 0.1}) 100%)` 
-                                : `linear-gradient(90deg, 
-                                    rgba(244, 63, 94, ${0.3 + intensity * 0.3}) 0%, 
-                                    rgba(244, 63, 94, ${0.15 + intensity * 0.15}) 50%,
-                                    rgba(244, 63, 94, ${0.1 + intensity * 0.1}) 100%)`,
                               zIndex: 0,
                               width: tx.fill === 100 
                                 ? 'calc(260px)' 
                                 : `${tx.fill}%`,
-                              boxShadow: intensity > 0.5 
-                                ? tx.isBuy 
-                                  ? `0 0 ${intensity * 8}px rgba(34, 197, 94, ${intensity * 0.4})`
-                                  : `0 0 ${intensity * 8}px rgba(244, 63, 94, ${intensity * 0.4})`
-                                : 'none'
                             }}
                             initial={{ width: 0, opacity: 0 }}
                             animate={{ 
@@ -2911,12 +2952,7 @@ export default function ChartV2Page() {
                           />
                           {isNewTrade && (
                             <motion.div
-                              className="absolute inset-0 z-5"
-                              style={{
-                                background: tx.isBuy
-                                  ? 'linear-gradient(90deg, rgba(34, 197, 94, 0.6) 0%, transparent 100%)'
-                                  : 'linear-gradient(90deg, rgba(244, 63, 94, 0.6) 0%, transparent 100%)',
-                              }}
+                              className={`absolute inset-0 z-5 ${tx.isBuy ? 'bg-green-500/30' : 'bg-red-500/30'}`}
                               initial={{ opacity: 1, x: -20 }}
                               animate={{ opacity: 0, x: 0 }}
                               transition={{ duration: 0.8, ease: "easeOut" }}
@@ -3882,6 +3918,183 @@ export default function ChartV2Page() {
                   Confirm Swap
                 </button>
               </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Watchlist Modal */}
+      <AnimatePresence>
+        {showWatchlistModal && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowWatchlistModal(false)}
+              className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-gray-900 border border-gray-800 rounded-xl w-full max-w-md overflow-hidden"
+              >
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+                  <h3 className="text-lg font-semibold text-white">Add to Watchlist</h3>
+                  <button
+                    onClick={() => setShowWatchlistModal(false)}
+                    className="p-1.5 hover:bg-gray-800 rounded-lg transition-colors"
+                  >
+                    <FiX className="w-5 h-5 text-gray-400" />
+                  </button>
+                </div>
+                <div className="p-4 space-y-2 max-h-96 overflow-y-auto">
+                  {watchlists.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-4">No watchlists found. Create one from the discover page.</p>
+                  ) : (
+                    watchlists.map((watchlist) => {
+                      const isInList = poolAddress && isInWatchlist(watchlist.id, poolAddress);
+                      return (
+                        <button
+                          key={watchlist.id}
+                          onClick={async () => {
+                            if (poolAddress) {
+                              if (isInList) {
+                                await removeFromWatchlist(watchlist.id, poolAddress);
+                              } else {
+                                await addToWatchlist(watchlist.id, poolAddress);
+                              }
+                            }
+                            setShowWatchlistModal(false);
+                          }}
+                          className={`w-full p-3 rounded-lg border transition-colors ${
+                            isInList
+                              ? 'bg-blue-500/10 border-blue-500/30 text-blue-300'
+                              : 'bg-gray-800/50 border-gray-700 hover:border-gray-600 text-gray-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{watchlist.name}</span>
+                            {isInList && <FiCheck className="w-5 h-5" />}
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Price Alert Modal */}
+      <AnimatePresence>
+        {showAlertModal && poolAddress && pair?.baseToken?.address && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAlertModal(false)}
+              className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-gray-900 border border-gray-800 rounded-xl w-full max-w-md overflow-hidden"
+              >
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+                  <h3 className="text-lg font-semibold text-white">Set Price Alert</h3>
+                  <button
+                    onClick={() => setShowAlertModal(false)}
+                    className="p-1.5 hover:bg-gray-800 rounded-lg transition-colors"
+                  >
+                    <FiX className="w-5 h-5 text-gray-400" />
+                  </button>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Alert when price goes
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setAlertDirection("above")}
+                        className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+                          alertDirection === "above"
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                        }`}
+                      >
+                        Above
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAlertDirection("below")}
+                        className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+                          alertDirection === "below"
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                        }`}
+                      >
+                        Below
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Price Threshold (USD)
+                    </label>
+                    <input
+                      type="number"
+                      value={alertThreshold}
+                      onChange={(e) => setAlertThreshold(e.target.value)}
+                      placeholder={currentPrice ? currentPrice.toFixed(6) : "0.0"}
+                      step="any"
+                      className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                    />
+                    {currentPrice && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Current: ${currentPrice.toFixed(6)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowAlertModal(false)}
+                      className="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!alertThreshold || parseFloat(alertThreshold) <= 0) {
+                          return;
+                        }
+                        if (pair.baseToken?.address) {
+                          await createAlert(
+                            pair.baseToken.address,
+                            pair.baseToken.symbol || "TOKEN",
+                            parseFloat(alertThreshold),
+                            alertDirection
+                          );
+                        }
+                        setShowAlertModal(false);
+                        setAlertThreshold("");
+                      }}
+                      className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+                    >
+                      Create Alert
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
             </motion.div>
           </>
         )}

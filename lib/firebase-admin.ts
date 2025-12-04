@@ -71,38 +71,50 @@ const initializeAdmin = () => {
     }
 
     // Method 2: Try environment variables (fallback)
+    // Supports both FIREBASE_* and ADMIN_* prefixes for flexibility
     if (!initialized) {
       try {
         console.log("🔧 Method 2: Trying environment variables...");
-        console.log("🔧 FIREBASE_PROJECT_ID:", process.env.FIREBASE_PROJECT_ID ? "✅ Set" : "❌ Missing");
-        console.log("🔧 FIREBASE_CLIENT_EMAIL:", process.env.FIREBASE_CLIENT_EMAIL ? "✅ Set" : "❌ Missing");
-        console.log("🔧 FIREBASE_PRIVATE_KEY:", process.env.FIREBASE_PRIVATE_KEY ? "✅ Set" : "❌ Missing");
         
-        if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+        // Check for either FIREBASE_* or ADMIN_* prefixed variables
+        const projectId = process.env.FIREBASE_PROJECT_ID || process.env.ADMIN_PROJECT_ID;
+        const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || process.env.ADMIN_CLIENT_EMAIL;
+        const privateKey = process.env.FIREBASE_PRIVATE_KEY || process.env.ADMIN_PRIVATE_KEY;
+        
+        console.log("🔧 PROJECT_ID:", projectId ? "✅ Set" : "❌ Missing");
+        console.log("🔧 CLIENT_EMAIL:", clientEmail ? "✅ Set" : "❌ Missing");
+        console.log("🔧 PRIVATE_KEY:", privateKey ? "✅ Set" : "❌ Missing");
+        
+        if (projectId && clientEmail && privateKey) {
           const normalizePrivateKey = (key: string): string => {
+            // Only replace literal \n with actual newlines, don't remove other whitespace
+            // The private key needs its whitespace preserved
+            // Also remove surrounding quotes if present
             return key
+              .replace(/^["']|["']$/g, "") // Remove surrounding quotes
               .replace(/\\n/g, "\n")
               .replace(/\\r/g, "")
-              .replace(/\s+/g, "")
               .trim();
           };
 
           const serviceAccount = {
-            projectId: process.env.FIREBASE_PROJECT_ID,
-            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-            privateKey: normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY),
+            projectId: projectId,
+            clientEmail: clientEmail,
+            privateKey: normalizePrivateKey(privateKey),
           };
 
           console.log("🔧 Service account config:", {
             projectId: serviceAccount.projectId,
             clientEmail: serviceAccount.clientEmail,
-            privateKeyLength: serviceAccount.privateKey.length
+            privateKeyLength: serviceAccount.privateKey.length,
+            privateKeyStart: serviceAccount.privateKey.substring(0, 50),
+            privateKeyEnd: serviceAccount.privateKey.substring(serviceAccount.privateKey.length - 50)
           });
 
           if (!admin.apps.length) {
             admin.initializeApp({
               credential: admin.credential.cert(serviceAccount),
-              projectId: process.env.FIREBASE_PROJECT_ID
+              projectId: projectId
             });
           }
           
@@ -114,9 +126,9 @@ const initializeAdmin = () => {
         } else {
           console.log("⚠️  Environment variables not complete");
           console.log("🔧 Missing:", {
-            FIREBASE_PROJECT_ID: !process.env.FIREBASE_PROJECT_ID,
-            FIREBASE_CLIENT_EMAIL: !process.env.FIREBASE_CLIENT_EMAIL,
-            FIREBASE_PRIVATE_KEY: !process.env.FIREBASE_PRIVATE_KEY
+            PROJECT_ID: !projectId,
+            CLIENT_EMAIL: !clientEmail,
+            PRIVATE_KEY: !privateKey
           });
         }
       } catch (error) {
