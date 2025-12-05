@@ -434,50 +434,34 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
   const renderProfileContent = () => (
     <>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-800/60 bg-gray-950 flex-shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/40 flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="w-11 h-11 rounded-xl bg-gray-900/80 border border-gray-800/60 flex items-center justify-center overflow-hidden">
+            <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden">
               {profilePicture ? (
                 <Image
                   src={profilePicture}
                   alt="Profile"
-                  width={44}
-                  height={44}
+                  width={40}
+                  height={40}
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <FiUser className="w-5 h-5 text-gray-400" />
+                <FiUser className="w-4 h-4 text-gray-500" />
               )}
             </div>
-            {user && (
-              <div 
-                className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-gray-950"
-                style={{ backgroundColor: getTierColor(tier) }}
-              />
-            )}
           </div>
           <div>
-            <h3 className="text-white font-semibold text-sm">
+            <div className="text-sm text-white">
               {user ? (displayName || 'My Profile') : 'Welcome'}
-            </h3>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span 
-                className="text-[11px] font-medium capitalize px-1.5 py-0.5 rounded-md"
-                style={{ 
-                  backgroundColor: `${getTierColor(tier)}20`,
-                  color: getTierColor(tier)
-                }}
-              >
-                {tier}
-              </span>
             </div>
+            <div className="text-xs text-gray-500 capitalize">{tier}</div>
           </div>
         </div>
         {/* Close button for mobile */}
         <button
           onClick={() => setShowAccountModal(false)}
-          className="sm:hidden w-9 h-9 flex items-center justify-center rounded-xl bg-gray-900/60 hover:bg-gray-800/80 border border-gray-800/60 hover:border-gray-700 text-gray-400 hover:text-white transition-all duration-200"
+          className="sm:hidden p-2 text-gray-500 hover:text-white transition-colors"
           aria-label="Close"
         >
           <FiX className="w-5 h-5" />
@@ -485,24 +469,22 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
       </div>
 
       {/* Content */}
-      <div className="px-3 sm:px-4 py-3 space-y-2 overflow-y-auto flex-1 min-h-0 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+      <div className="px-3 sm:px-4 py-2 overflow-y-auto flex-1 min-h-0 scrollbar-hide">
         {/* Navigation Links */}
-        <div className="space-y-1">
+        <div>
           {walletAddress && (
             <button
               onClick={() => {
                 setShowPnLCalendar(true);
                 setShowAccountModal(false);
               }}
-              className="flex items-center justify-between w-full px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-xl transition-all duration-200 group"
+              className="flex items-center justify-between w-full py-3 text-gray-400 hover:text-white transition-colors border-b border-gray-800/40"
             >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                  <FiCalendar className="w-4 h-4 text-purple-400" />
-                </div>
-                <span className="font-medium text-sm">P&L Calendar</span>
+                <FiCalendar className="w-4 h-4" />
+                <span className="text-sm">P&L Calendar</span>
               </div>
-              <FiChevronRight className="w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-colors" />
+              <FiChevronRight className="w-4 h-4 text-gray-600" />
             </button>
           )}
 
@@ -512,29 +494,25 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                 setShowAuthorDashboardModal(true);
                 setShowAccountModal(false);
               }}
-              className="flex items-center justify-between w-full px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-xl transition-all duration-200 group"
+              className="flex items-center justify-between w-full py-3 text-gray-400 hover:text-white transition-colors border-b border-gray-800/40"
             >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
-                  <FiFileText className="w-4 h-4 text-green-400" />
-                </div>
-                <span className="font-medium text-sm">Author Dashboard</span>
+                <FiFileText className="w-4 h-4" />
+                <span className="text-sm">Author Dashboard</span>
               </div>
-              <FiChevronRight className="w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-colors" />
+              <FiChevronRight className="w-4 h-4 text-gray-600" />
             </button>
           )}
 
           <button
             onClick={() => setShowAliasModal(true)}
-            className="flex items-center justify-between w-full px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-xl transition-all duration-200 group"
+            className="flex items-center justify-between w-full py-3 text-gray-400 hover:text-white transition-colors border-b border-gray-800/40"
           >
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                <FiEdit3 className="w-4 h-4 text-blue-400" />
-              </div>
-              <span className="font-medium text-sm">Set Alias</span>
+              <FiEdit3 className="w-4 h-4" />
+              <span className="text-sm">Set Alias</span>
             </div>
-            <FiChevronRight className="w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-colors" />
+            <FiChevronRight className="w-4 h-4 text-gray-600" />
           </button>
 
           <button
@@ -542,47 +520,36 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
               setShowAccountSettingsModal(true);
               setShowAccountModal(false);
             }}
-            className="flex items-center justify-between w-full px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-xl transition-all duration-200 group"
+            className="flex items-center justify-between w-full py-3 text-gray-400 hover:text-white transition-colors border-b border-gray-800/40"
           >
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gray-500/10 flex items-center justify-center">
-                <FiSettings className="w-4 h-4 text-gray-400" />
-              </div>
-              <span className="font-medium text-sm">Account Settings</span>
+              <FiSettings className="w-4 h-4" />
+              <span className="text-sm">Account Settings</span>
             </div>
-            <FiChevronRight className="w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-colors" />
+            <FiChevronRight className="w-4 h-4 text-gray-600" />
           </button>
 
           <Link
             href="/rewards"
-            className="flex items-center justify-between w-full px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-xl transition-all duration-200 group"
+            className="flex items-center justify-between w-full py-3 text-gray-400 hover:text-white transition-colors border-b border-gray-800/40"
             onClick={() => setShowAccountModal(false)}
           >
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                <FiGift className="w-4 h-4 text-amber-400" />
-              </div>
-              <span className="font-medium text-sm">Rewards & Referrals</span>
+              <FiGift className="w-4 h-4" />
+              <span className="text-sm">Rewards & Referrals</span>
             </div>
-            <FiChevronRight className="w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-colors" />
+            <FiChevronRight className="w-4 h-4 text-gray-600" />
           </Link>
-        </div>
 
-        {/* Divider */}
-        <div className="border-t border-gray-800/50 my-2" />
-
-        {/* Logout Section */}
-        <div>
+          {/* Sign Out / Sign In */}
           {user ? (
             <button
               onClick={handleSignOut}
-              className="flex items-center justify-between w-full px-3 py-2.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-all duration-200 group"
+              className="flex items-center justify-between w-full py-3 text-gray-400 hover:text-red-400 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
-                  <FiLogOut className="w-4 h-4 text-red-400" />
-                </div>
-                <span className="font-medium text-sm">Sign Out</span>
+                <FiLogOut className="w-4 h-4" />
+                <span className="text-sm">Sign Out</span>
               </div>
             </button>
           ) : (
@@ -592,13 +559,11 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                 setShowLoginModal(true);
                 setShowAccountModal(false);
               }}
-              className="flex items-center justify-between w-full px-3 py-2.5 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-xl transition-all duration-200 group"
+              className="flex items-center justify-between w-full py-3 text-blue-400 hover:text-blue-300 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <FiLogIn className="w-4 h-4 text-blue-400" />
-                </div>
-                <span className="font-medium text-sm">Sign In</span>
+                <FiLogIn className="w-4 h-4" />
+                <span className="text-sm">Sign In</span>
               </div>
             </button>
           )}
@@ -647,7 +612,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                   ref={modalRef}
                   className="fixed w-72 bg-gray-950/95 backdrop-blur-xl border border-gray-800/60 shadow-2xl shadow-black/40 overflow-hidden z-[9999] rounded-2xl"
                   style={{
-                    top: buttonRef.getBoundingClientRect().bottom + 12,
+                    top: '85px',
                     right: window.innerWidth - buttonRef.getBoundingClientRect().right,
                   }}
                 >

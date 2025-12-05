@@ -700,14 +700,11 @@ const Header: React.FC = () => {
               </div>
               
               {/* Header */}
-              <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-800/60 flex-shrink-0">
-                <div>
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-amber-400/70 font-medium">Saved</span>
-                  <h3 className="text-base sm:text-lg font-semibold text-white mt-0.5">My Watchlists</h3>
-                </div>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/40 flex-shrink-0">
+                <h3 className="text-sm text-white">Watchlists</h3>
                 <button
                   onClick={() => setShowWatchlistsModal(false)}
-                  className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-900/60 hover:bg-gray-800/80 border border-gray-800/60 hover:border-gray-700 text-gray-400 hover:text-white transition-all duration-200"
+                  className="p-2 text-gray-500 hover:text-white transition-colors"
                   aria-label="Close"
                 >
                   <FiX className="w-5 h-5" />
@@ -715,57 +712,35 @@ const Header: React.FC = () => {
               </div>
               
               {/* Content */}
-              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent px-4 sm:px-5 py-4 space-y-4">
-                {/* Default Watchlist (Favorites) */}
-                <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-3">
+              <div className="flex-1 overflow-y-auto scrollbar-hide px-4 py-3">
+                {/* Favorites Section */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between py-2 border-b border-gray-800/40">
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                        <FiStar className="w-3.5 h-3.5 text-amber-400" />
-                      </div>
-                      <h4 className="text-sm font-semibold text-white">Favorites</h4>
+                      <FiStar className="w-4 h-4 text-gray-500" />
+                      <span className="text-sm text-gray-300">Favorites</span>
                     </div>
-                    <span className="text-xs text-gray-500 bg-gray-800/50 px-2 py-0.5 rounded-md">{favorites.length}</span>
+                    <span className="text-xs text-gray-500">{favorites.length}</span>
                   </div>
                   {favorites.length === 0 ? (
-                    <div className="text-gray-500 text-xs bg-gray-900/60 rounded-lg p-3 text-center">
-                      Tap the star icon on any token to add it here.
+                    <div className="text-gray-500 text-xs py-4 text-center">
+                      Star any token to add it here
                     </div>
                   ) : (
-                    <div className="space-y-1.5">
-                      {expandedFavorites ? (
-                        favorites.map((poolAddress) => (
-                          <FavoriteTokenItem 
-                            key={poolAddress} 
-                            poolAddress={poolAddress} 
-                            onRemove={() => toggleFavorite(poolAddress)}
-                          />
-                        ))
-                      ) : (
-                        <>
-                          {favorites.slice(0, 3).map((poolAddress) => (
-                            <FavoriteTokenItem 
-                              key={poolAddress} 
-                              poolAddress={poolAddress} 
-                              onRemove={() => toggleFavorite(poolAddress)}
-                            />
-                          ))}
-                          {favorites.length > 3 && (
-                            <button
-                              onClick={() => setExpandedFavorites(true)}
-                              className="w-full text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer py-2 text-center bg-blue-500/5 hover:bg-blue-500/10 rounded-lg"
-                            >
-                              Show {favorites.length - 3} more
-                            </button>
-                          )}
-                        </>
-                      )}
-                      {expandedFavorites && favorites.length > 3 && (
+                    <div>
+                      {(expandedFavorites ? favorites : favorites.slice(0, 3)).map((poolAddress) => (
+                        <FavoriteTokenItem 
+                          key={poolAddress} 
+                          poolAddress={poolAddress} 
+                          onRemove={() => toggleFavorite(poolAddress)}
+                        />
+                      ))}
+                      {favorites.length > 3 && (
                         <button
-                          onClick={() => setExpandedFavorites(false)}
-                          className="w-full text-xs text-gray-400 hover:text-gray-300 transition-colors cursor-pointer py-2 text-center"
+                          onClick={() => setExpandedFavorites(!expandedFavorites)}
+                          className="w-full text-xs text-gray-500 hover:text-gray-400 transition-colors py-2 text-center"
                         >
-                          Show less
+                          {expandedFavorites ? 'Show less' : `Show ${favorites.length - 3} more`}
                         </button>
                       )}
                     </div>
@@ -773,71 +748,48 @@ const Header: React.FC = () => {
                 </div>
 
                 {/* Custom Watchlists */}
-                {watchlists.length > 0 && (
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wide px-1">Custom Lists</h4>
-                    {watchlists.map((watchlist) => (
-                      <div key={watchlist.id} className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-3 gap-2">
+                {watchlists.length > 0 && watchlists.map((watchlist) => (
+                  <div key={watchlist.id} className="mb-4">
+                    <div className="flex items-center justify-between py-2 border-b border-gray-800/40">
+                      <button
+                        onClick={() => setExpandedWatchlist(expandedWatchlist === watchlist.id ? null : watchlist.id)}
+                        className="text-sm text-gray-300 hover:text-white transition-colors"
+                      >
+                        {watchlist.name}
+                      </button>
+                      <span className="text-xs text-gray-500">{watchlist.tokens.length}</span>
+                    </div>
+                    <div>
+                      {(expandedWatchlist === watchlist.id ? watchlist.tokens : watchlist.tokens.slice(0, 3)).map((poolAddress) => (
+                        <div key={poolAddress} className="flex items-center justify-between py-2.5 border-b border-gray-800/30">
+                          <span className="text-xs text-gray-400 font-mono">{poolAddress.slice(0, 8)}...{poolAddress.slice(-6)}</span>
                           <button
-                            onClick={() => setExpandedWatchlist(expandedWatchlist === watchlist.id ? null : watchlist.id)}
-                            className="text-sm font-semibold text-white hover:text-gray-200 transition-colors cursor-pointer text-left flex-1"
+                            onClick={() => removeFromWatchlist(watchlist.id, poolAddress)}
+                            className="text-gray-600 hover:text-red-400 transition-colors p-1"
                           >
-                            {watchlist.name}
+                            <FiTrash2 className="w-3.5 h-3.5" />
                           </button>
-                          <span className="text-xs text-gray-500 bg-gray-800/50 px-2 py-0.5 rounded-md whitespace-nowrap">{watchlist.tokens.length}</span>
                         </div>
-                        <div className="space-y-1.5">
-                          {expandedWatchlist === watchlist.id ? (
-                            <div className="max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
-                              {watchlist.tokens.map((poolAddress) => (
-                                <div key={poolAddress} className="flex items-center justify-between text-xs py-2 px-2 hover:bg-gray-800/30 rounded-lg transition-colors">
-                                  <span className="text-gray-300 truncate font-mono">{poolAddress.slice(0, 8)}...{poolAddress.slice(-6)}</span>
-                                  <button
-                                    onClick={() => removeFromWatchlist(watchlist.id, poolAddress)}
-                                    className="text-gray-500 hover:text-red-400 transition-colors p-1"
-                                  >
-                                    <FiTrash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <>
-                              {watchlist.tokens.slice(0, 3).map((poolAddress) => (
-                                <div key={poolAddress} className="flex items-center justify-between text-xs py-2 px-2 hover:bg-gray-800/30 rounded-lg transition-colors">
-                                  <span className="text-gray-300 truncate font-mono">{poolAddress.slice(0, 8)}...{poolAddress.slice(-6)}</span>
-                                  <button
-                                    onClick={() => removeFromWatchlist(watchlist.id, poolAddress)}
-                                    className="text-gray-500 hover:text-red-400 transition-colors p-1"
-                                  >
-                                    <FiTrash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              ))}
-                              {watchlist.tokens.length > 3 && (
-                                <button
-                                  onClick={() => setExpandedWatchlist(watchlist.id)}
-                                  className="w-full text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer py-2 text-center bg-blue-500/5 hover:bg-blue-500/10 rounded-lg"
-                                >
-                                  Show {watchlist.tokens.length - 3} more
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                      {watchlist.tokens.length > 3 && (
+                        <button
+                          onClick={() => setExpandedWatchlist(expandedWatchlist === watchlist.id ? null : watchlist.id)}
+                          className="w-full text-xs text-gray-500 hover:text-gray-400 transition-colors py-2 text-center"
+                        >
+                          {expandedWatchlist === watchlist.id ? 'Show less' : `Show ${watchlist.tokens.length - 3} more`}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                )}
+                ))}
                 
-                {/* Empty state for no watchlists */}
+                {/* Empty state */}
                 {watchlists.length === 0 && favorites.length === 0 && (
                   <div className="text-center py-8">
-                    <div className="w-12 h-12 mx-auto rounded-xl bg-gray-900/60 flex items-center justify-center mb-3">
-                      <FiStar className="w-6 h-6 text-gray-600" />
+                    <div className="w-10 h-10 mx-auto rounded-full bg-gray-800 flex items-center justify-center mb-2">
+                      <FiStar className="w-5 h-5 text-gray-600" />
                     </div>
-                    <p className="text-gray-500 text-sm">No saved tokens yet</p>
+                    <p className="text-gray-500 text-sm">No saved tokens</p>
                     <p className="text-gray-600 text-xs mt-1">Star tokens to track them here</p>
                   </div>
                 )}
@@ -1022,6 +974,17 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
   const [preferredDex, setPreferredDex] = useState<string | null>(null);
   const [savingQuickBuy, setSavingQuickBuy] = useState(false);
   
+  // Auto DCA State
+  const DCA_ASSETS = [
+    { symbol: 'cbBTC', address: '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf', name: 'Coinbase BTC' },
+    { symbol: 'cbETH', address: '0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22', name: 'Coinbase ETH' },
+    { symbol: 'WETH', address: '0x4200000000000000000000000000000000000006', name: 'Wrapped ETH' },
+    { symbol: 'AERO', address: '0x940181a94A35A4569E4529A3CDfB74e38FD98631', name: 'Aerodrome' },
+  ];
+  const [autoDcaEnabled, setAutoDcaEnabled] = useState<boolean>(false);
+  const [autoDcaPercentage, setAutoDcaPercentage] = useState<number>(10);
+  const [autoDcaAsset, setAutoDcaAsset] = useState<string>('cbBTC');
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -1034,6 +997,34 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
       setPreferredDex(quickBuyConfig.preferredDex || null);
     }
   }, [quickBuyConfig, quickBuyConfigLoading]);
+
+  // Load Auto DCA settings from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('cypherx_auto_dca_settings');
+      if (saved) {
+        const settings = JSON.parse(saved);
+        setAutoDcaEnabled(settings.enabled || false);
+        setAutoDcaPercentage(settings.percentage || 10);
+        setAutoDcaAsset(settings.assetSymbol || 'cbBTC');
+      }
+    } catch (error) {
+      console.error('Error loading DCA settings:', error);
+    }
+  }, []);
+
+  // Save Auto DCA settings
+  const saveAutoDcaSettings = (enabled: boolean, percentage: number, assetSymbol: string) => {
+    try {
+      localStorage.setItem('cypherx_auto_dca_settings', JSON.stringify({
+        enabled,
+        percentage,
+        assetSymbol,
+      }));
+    } catch (error) {
+      console.error('Error saving DCA settings:', error);
+    }
+  };
 
   // Fetch user profile data
   useEffect(() => {
@@ -1270,283 +1261,317 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
             <div className="w-10 h-1 rounded-full bg-gray-600" />
           </div>
           
-          <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-800/60 bg-gray-950 flex-shrink-0">
-            <div className="text-left">
-              <span className="text-[10px] uppercase tracking-[0.2em] text-blue-400/70 font-medium">Profile</span>
-              <h3 className="text-white text-base sm:text-lg font-semibold mt-0.5">Settings</h3>
-            </div>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/40 flex-shrink-0">
+            <h3 className="text-sm text-white">Settings</h3>
             <button
               onClick={onClose}
-              className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-900/60 hover:bg-gray-800/80 border border-gray-800/60 hover:border-gray-700 text-gray-400 hover:text-white transition-all duration-200"
+              className="p-2 text-gray-500 hover:text-white transition-colors"
               aria-label="Close"
             >
               <FiX className="w-5 h-5" />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent px-4 sm:px-5 py-4 space-y-4">
+          <div className="flex-1 overflow-y-auto scrollbar-hide px-4 py-3">
             {/* Profile Section */}
-            <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
-              <h4 className="text-white font-semibold text-sm mb-4">Profile Information</h4>
-              <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-900/80 border border-gray-800/60">
-                      {profilePicture ? (
-                        <Image
-                          src={profilePicture}
-                          alt="Profile"
-                          width={64}
-                          height={64}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <FiUser className="w-6 h-6 text-gray-500" />
-                        </div>
-                      )}
-                      {uploadingImage && (
-                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                          <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-500 border-t-transparent" />
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadingImage}
-                      className="absolute -bottom-1.5 -right-1.5 w-7 h-7 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 flex items-center justify-center transition-colors rounded-lg shadow-lg"
-                    >
-                      <FiUser className="w-3.5 h-3.5 text-white" />
-                    </button>
-                  </div>
-                  <div className="flex-1">
-                    <h5 className="text-white font-medium text-sm">Profile Picture</h5>
-                    <p className="text-gray-400 text-xs mt-0.5">256x256 minimum</p>
-                    {uploadStatus !== 'idle' && uploadMessage && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className={`mt-2 px-2.5 py-1.5 text-xs flex items-center gap-1.5 rounded-lg ${
-                          uploadStatus === 'success' 
-                            ? 'bg-green-500/15 text-green-400'
-                            : 'bg-red-500/15 text-red-400'
-                        }`}
-                      >
-                        {uploadStatus === 'success' ? <FiCheck className="w-3.5 h-3.5" /> : <FiAlertCircle className="w-3.5 h-3.5" />}
-                        <span>{uploadMessage}</span>
-                      </motion.div>
+            <div className="mb-4">
+              <h4 className="text-xs text-gray-500 uppercase tracking-wide mb-3">Profile</h4>
+              <div className="flex items-center gap-3 py-3 border-b border-gray-800/40">
+                <div className="relative">
+                  <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-800">
+                    {profilePicture ? (
+                      <Image
+                        src={profilePicture}
+                        alt="Profile"
+                        width={48}
+                        height={48}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <FiUser className="w-5 h-5 text-gray-500" />
+                      </div>
+                    )}
+                    {uploadingImage && (
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent" />
+                      </div>
                     )}
                   </div>
                 </div>
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
-
-                <div>
-                  <label className="block text-gray-400 text-xs font-medium uppercase tracking-wide mb-2">Display Name</label>
-                  <input
-                    type="text"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-gray-900/80 border border-gray-800/60 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 text-sm transition-all duration-200"
-                    placeholder="Enter your display name"
-                  />
+                <div className="flex-1">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingImage}
+                    className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                  >
+                    Change photo
+                  </button>
+                  {uploadStatus !== 'idle' && uploadMessage && (
+                    <p className={`text-xs mt-1 ${uploadStatus === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                      {uploadMessage}
+                    </p>
+                  )}
                 </div>
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
+
+              <div className="py-3 border-b border-gray-800/40">
+                <label className="block text-xs text-gray-500 mb-1.5">Display Name</label>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-gray-600 transition-colors"
+                  placeholder="Enter display name"
+                />
               </div>
             </div>
 
             {/* Notifications Section */}
-            <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
-              <h4 className="text-white font-semibold text-sm mb-3">Notifications</h4>
-              <div className="space-y-2">
-                {[
-                  { key: 'email', label: 'Email', desc: 'Cycle insights and updates' },
-                  { key: 'push', label: 'Push', desc: 'Instant signals to your device' },
-                  { key: 'trading', label: 'Trading', desc: 'Positions and P&L alerts' },
-                  { key: 'news', label: 'News', desc: 'Market commentary' },
-                ].map(({ key, label, desc }) => (
-                  <label key={key} className="flex items-center justify-between gap-3 p-3 bg-gray-900/60 hover:bg-gray-800/40 rounded-xl transition-all duration-200 cursor-pointer border border-transparent hover:border-gray-800/60">
-                    <div className="flex-1 min-w-0">
-                      <span className="text-gray-200 text-sm font-medium">{label}</span>
-                      <p className="text-[11px] text-gray-500 mt-0.5 truncate">{desc}</p>
-                    </div>
-                    <div className="relative flex-shrink-0">
-                      <input
-                        type="checkbox"
-                        checked={notifications[key as keyof typeof notifications]}
-                        onChange={(e) => setNotifications(prev => ({ ...prev, [key]: e.target.checked }))}
-                        className="sr-only"
-                      />
-                      <div className={`w-10 h-5.5 rounded-full transition-colors duration-200 flex items-center px-0.5 ${
-                        notifications[key as keyof typeof notifications] ? 'bg-blue-500' : 'bg-gray-700'
-                      }`}>
-                        <div className={`w-4.5 h-4.5 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          notifications[key as keyof typeof notifications] ? 'translate-x-[18px]' : 'translate-x-0'
-                        }`} />
-                      </div>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Privacy Section */}
-            <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
-              <h4 className="text-white font-semibold text-sm mb-3">Privacy</h4>
-              <div className="space-y-2">
-                {[
-                  { key: 'showProfile', label: 'Show Profile', desc: 'Allow others to discover you' },
-                  { key: 'showTrades', label: 'Show Trades', desc: 'Share trades with followers' },
-                  { key: 'showBalance', label: 'Show Balance', desc: 'Display wallet balance' },
-                ].map(({ key, label, desc }) => (
-                  <label key={key} className="flex items-center justify-between gap-3 p-3 bg-gray-900/60 hover:bg-gray-800/40 rounded-xl transition-all duration-200 cursor-pointer border border-transparent hover:border-gray-800/60">
-                    <div className="flex-1 min-w-0">
-                      <span className="text-gray-200 text-sm font-medium">{label}</span>
-                      <p className="text-[11px] text-gray-500 mt-0.5 truncate">{desc}</p>
-                    </div>
-                    <div className="relative flex-shrink-0">
-                      <input
-                        type="checkbox"
-                        checked={privacy[key as keyof typeof privacy]}
-                        onChange={(e) => setPrivacy(prev => ({ ...prev, [key]: e.target.checked }))}
-                        className="sr-only"
-                      />
-                      <div className={`w-10 h-5.5 rounded-full transition-colors duration-200 flex items-center px-0.5 ${
-                        privacy[key as keyof typeof privacy] ? 'bg-blue-500' : 'bg-gray-700'
-                      }`}>
-                        <div className={`w-4.5 h-4.5 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          privacy[key as keyof typeof privacy] ? 'translate-x-[18px]' : 'translate-x-0'
-                        }`} />
-                      </div>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Quick Buy Configuration Section */}
-            <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
-              <div className="mb-4">
-                <h4 className="text-white font-semibold text-sm">Quick Buy</h4>
-                <p className="text-gray-400 text-xs mt-0.5">Customize quick buy amounts</p>
-              </div>
-              <div className="space-y-4">
-                {/* Quick Buy Amounts */}
-                <div>
-                  <label className="block text-gray-400 text-xs font-medium uppercase tracking-wide mb-2">
-                    Amounts (ETH)
-                  </label>
-                  <div className="space-y-2">
-                    {quickBuyAmounts.map((amount, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          step="0.001"
-                          min="0"
-                          value={amount}
-                          onChange={(e) => handleUpdateAmount(index, e.target.value)}
-                          className="flex-1 px-3.5 py-2.5 bg-gray-900/80 border border-gray-800/60 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 text-sm transition-all duration-200"
-                          placeholder="0.01"
-                        />
-                        {quickBuyAmounts.length > 1 && (
-                          <button
-                            onClick={() => handleRemoveAmount(index)}
-                            className="w-10 h-10 flex items-center justify-center bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 rounded-xl transition-all duration-200"
-                          >
-                            <FiX className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    {quickBuyAmounts.length < 6 && (
-                      <button
-                        onClick={handleAddAmount}
-                        className="w-full px-3 py-2.5 bg-gray-900/60 border border-gray-800/60 border-dashed text-gray-400 hover:border-gray-700 hover:text-gray-300 rounded-xl transition-all duration-200 text-sm flex items-center justify-center gap-2"
-                      >
-                        <span>+ Add Amount</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Default Slippage */}
-                <div>
-                  <label className="block text-gray-400 text-xs font-medium uppercase tracking-wide mb-2">
-                    Default Slippage (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0.1"
-                    max="50"
-                    value={defaultSlippage}
-                    onChange={(e) => setDefaultSlippage(parseFloat(e.target.value) || 1)}
-                    className="w-full px-3.5 py-2.5 bg-gray-900/80 border border-gray-800/60 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 text-sm transition-all duration-200"
-                    placeholder="1"
-                  />
-                  <p className="text-[11px] text-gray-500 mt-1.5">Maximum price movement (1-50%)</p>
-                </div>
-
-                {/* Auto Approve */}
-                <label className="flex items-center justify-between gap-3 p-3 bg-gray-900/60 hover:bg-gray-800/40 rounded-xl transition-all duration-200 cursor-pointer border border-transparent hover:border-gray-800/60">
-                  <div className="flex-1 min-w-0">
-                    <span className="text-gray-200 text-sm font-medium">Auto Approve</span>
-                    <p className="text-[11px] text-gray-500 mt-0.5">Auto-approve for faster trades</p>
-                  </div>
-                  <div className="relative flex-shrink-0">
+            <div className="mb-4">
+              <h4 className="text-xs text-gray-500 uppercase tracking-wide mb-3">Notifications</h4>
+              {[
+                { key: 'email', label: 'Email notifications' },
+                { key: 'push', label: 'Push notifications' },
+                { key: 'trading', label: 'Trading alerts' },
+                { key: 'news', label: 'News updates' },
+              ].map(({ key, label }) => (
+                <label key={key} className="flex items-center justify-between py-3 border-b border-gray-800/40 cursor-pointer">
+                  <span className="text-sm text-gray-400">{label}</span>
+                  <div className="relative">
                     <input
                       type="checkbox"
-                      checked={autoApprove}
-                      onChange={(e) => setAutoApprove(e.target.checked)}
+                      checked={notifications[key as keyof typeof notifications]}
+                      onChange={(e) => setNotifications(prev => ({ ...prev, [key]: e.target.checked }))}
                       className="sr-only"
                     />
-                    <div className={`w-10 h-5.5 rounded-full transition-colors duration-200 flex items-center px-0.5 ${
-                      autoApprove ? 'bg-blue-500' : 'bg-gray-700'
+                    <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 ${
+                      notifications[key as keyof typeof notifications] ? 'bg-blue-500' : 'bg-gray-700'
                     }`}>
-                      <div className={`w-4.5 h-4.5 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                        autoApprove ? 'translate-x-[18px]' : 'translate-x-0'
+                      <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                        notifications[key as keyof typeof notifications] ? 'translate-x-4' : ''
                       }`} />
                     </div>
                   </div>
                 </label>
+              ))}
+            </div>
 
-                {/* Preferred DEX */}
-                <div>
-                  <label className="block text-gray-400 text-xs font-medium uppercase tracking-wide mb-2">
-                    Preferred DEX
-                  </label>
-                  <select
-                    value={preferredDex || ''}
-                    onChange={(e) => setPreferredDex(e.target.value || null)}
-                    className="w-full px-3.5 py-2.5 bg-gray-900/80 border border-gray-800/60 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 text-sm transition-all duration-200"
-                  >
-                    <option value="">Auto (Best Price)</option>
-                    <option value="uniswap">Uniswap</option>
-                    <option value="sushiswap">SushiSwap</option>
-                    <option value="0x">0x Protocol</option>
-                  </select>
-                  <p className="text-[11px] text-gray-500 mt-1.5">Defaults to best price</p>
+            {/* Privacy Section */}
+            <div className="mb-4">
+              <h4 className="text-xs text-gray-500 uppercase tracking-wide mb-3">Privacy</h4>
+              {[
+                { key: 'showProfile', label: 'Show profile publicly' },
+                { key: 'showTrades', label: 'Show trades' },
+                { key: 'showBalance', label: 'Show balance' },
+              ].map(({ key, label }) => (
+                <label key={key} className="flex items-center justify-between py-3 border-b border-gray-800/40 cursor-pointer">
+                  <span className="text-sm text-gray-400">{label}</span>
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={privacy[key as keyof typeof privacy]}
+                      onChange={(e) => setPrivacy(prev => ({ ...prev, [key]: e.target.checked }))}
+                      className="sr-only"
+                    />
+                    <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 ${
+                      privacy[key as keyof typeof privacy] ? 'bg-blue-500' : 'bg-gray-700'
+                    }`}>
+                      <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                        privacy[key as keyof typeof privacy] ? 'translate-x-4' : ''
+                      }`} />
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            {/* Trading Section */}
+            <div className="mb-4">
+              <h4 className="text-xs text-gray-500 uppercase tracking-wide mb-3">Trading</h4>
+              
+              {/* Quick Buy Amounts */}
+              <div className="py-3 border-b border-gray-800/40">
+                <label className="block text-xs text-gray-500 mb-2">Quick Buy Amounts (ETH)</label>
+                <div className="space-y-2">
+                  {quickBuyAmounts.map((amount, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0"
+                        value={amount}
+                        onChange={(e) => handleUpdateAmount(index, e.target.value)}
+                        className="flex-1 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-gray-600 transition-colors"
+                        placeholder="0.01"
+                      />
+                      {quickBuyAmounts.length > 1 && (
+                        <button
+                          onClick={() => handleRemoveAmount(index)}
+                          className="p-2 text-gray-500 hover:text-red-400 transition-colors"
+                        >
+                          <FiX className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {quickBuyAmounts.length < 6 && (
+                    <button
+                      onClick={handleAddAmount}
+                      className="w-full py-2 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                    >
+                      + Add amount
+                    </button>
+                  )}
                 </div>
+              </div>
 
-                {/* Save Quick Buy Config Button */}
+              {/* Default Slippage */}
+              <div className="py-3 border-b border-gray-800/40">
+                <label className="block text-xs text-gray-500 mb-1.5">Default Slippage (%)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  max="50"
+                  value={defaultSlippage}
+                  onChange={(e) => setDefaultSlippage(parseFloat(e.target.value) || 1)}
+                  className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-gray-600 transition-colors"
+                  placeholder="1"
+                />
+              </div>
+
+              {/* Preferred DEX */}
+              <div className="py-3 border-b border-gray-800/40">
+                <label className="block text-xs text-gray-500 mb-1.5">Preferred DEX</label>
+                <select
+                  value={preferredDex || ''}
+                  onChange={(e) => setPreferredDex(e.target.value || null)}
+                  className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm focus:outline-none focus:border-gray-600 transition-colors"
+                >
+                  <option value="">Auto (Best Price)</option>
+                  <option value="uniswap">Uniswap</option>
+                  <option value="sushiswap">SushiSwap</option>
+                  <option value="0x">0x Protocol</option>
+                </select>
+              </div>
+
+              {/* Auto Approve */}
+              <label className="flex items-center justify-between py-3 border-b border-gray-800/40 cursor-pointer">
+                <span className="text-sm text-gray-400">Auto approve tokens</span>
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={autoApprove}
+                    onChange={(e) => setAutoApprove(e.target.checked)}
+                    className="sr-only"
+                  />
+                  <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 ${
+                    autoApprove ? 'bg-blue-500' : 'bg-gray-700'
+                  }`}>
+                    <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                      autoApprove ? 'translate-x-4' : ''
+                    }`} />
+                  </div>
+                </div>
+              </label>
+
+              {/* Auto Profit DCA */}
+              <label className="flex items-center justify-between py-3 border-b border-gray-800/40 cursor-pointer">
+                <div>
+                  <span className="text-sm text-gray-400">Auto Profit DCA</span>
+                  <p className="text-xs text-gray-600">Auto-save trading profits</p>
+                </div>
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={autoDcaEnabled}
+                    onChange={(e) => {
+                      setAutoDcaEnabled(e.target.checked);
+                      saveAutoDcaSettings(e.target.checked, autoDcaPercentage, autoDcaAsset);
+                    }}
+                    className="sr-only"
+                  />
+                  <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 ${
+                    autoDcaEnabled ? 'bg-blue-500' : 'bg-gray-700'
+                  }`}>
+                    <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                      autoDcaEnabled ? 'translate-x-4' : ''
+                    }`} />
+                  </div>
+                </div>
+              </label>
+
+              {/* DCA Options - Show when enabled */}
+              {autoDcaEnabled && (
+                <div className="py-3 border-b border-gray-800/40 space-y-3">
+                  {/* Percentage */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-500">Percentage of profit</span>
+                      <span className="text-xs text-blue-400">{autoDcaPercentage}%</span>
+                    </div>
+                    <div className="flex gap-2">
+                      {[5, 10, 25, 50].map((pct) => (
+                        <button
+                          key={pct}
+                          onClick={() => {
+                            setAutoDcaPercentage(pct);
+                            saveAutoDcaSettings(autoDcaEnabled, pct, autoDcaAsset);
+                          }}
+                          className={`flex-1 py-1.5 text-xs rounded transition-colors ${
+                            autoDcaPercentage === pct
+                              ? 'bg-blue-500 text-white'
+                              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                          }`}
+                        >
+                          {pct}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Asset Selection */}
+                  <div>
+                    <span className="text-xs text-gray-500 block mb-2">DCA into</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      {DCA_ASSETS.map((asset) => (
+                        <button
+                          key={asset.symbol}
+                          onClick={() => {
+                            setAutoDcaAsset(asset.symbol);
+                            saveAutoDcaSettings(autoDcaEnabled, autoDcaPercentage, asset.symbol);
+                          }}
+                          className={`py-2 px-3 text-xs rounded transition-colors ${
+                            autoDcaAsset === asset.symbol
+                              ? 'bg-blue-500/20 border border-blue-500/40 text-blue-400'
+                              : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-transparent'
+                          }`}
+                        >
+                          {asset.symbol}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Save Trading Settings Button */}
+              <div className="pt-3">
                 <button
                   onClick={handleSaveQuickBuyConfig}
                   disabled={savingQuickBuy || quickBuyConfigLoading}
-                  className="w-full px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-medium text-sm"
+                  className="w-full py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm rounded-lg transition-colors"
                 >
-                  {savingQuickBuy ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                      <span>Saving...</span>
-                    </>
-                  ) : (
-                    <span>Save Quick Buy Preferences</span>
-                  )}
+                  {savingQuickBuy ? 'Saving...' : 'Save Trading Settings'}
                 </button>
               </div>
             </div>

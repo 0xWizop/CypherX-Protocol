@@ -498,7 +498,13 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
 }
 
 .animate-infinite-scroll {
-  animation: scroll 30s linear infinite;
+  animation: scroll 8s linear infinite;
+}
+
+@media (min-width: 640px) {
+  .animate-infinite-scroll {
+    animation: scroll 12s linear infinite;
+  }
 }
 
 .animate-infinite-scroll:hover {

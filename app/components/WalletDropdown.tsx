@@ -2629,71 +2629,77 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                 )}
 
                 {currentSection === 'send' && (
-                  <div className="px-4 py-4 flex-1 overflow-y-auto scrollbar-hide">
-                    {/* Header */}
-                    <div className="flex items-center gap-2 mb-4">
-                      <button
-                        onClick={() => setCurrentSection('main')}
-                        className="p-1.5 text-gray-400 hover:text-white rounded-lg transition-colors"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
-                      </button>
-                      <span className="text-sm font-medium text-white">Send</span>
-                    </div>
-
-                    <div className="space-y-4">
-                      {/* Token Selection */}
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-2">Token</label>
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    {/* Scrollable Content */}
+                    <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-4 pb-2">
+                      {/* Header */}
+                      <div className="flex items-center gap-2 mb-4">
                         <button
-                          onClick={() => {
-                            setSelectingTokenFor('send');
-                            setShowTokenSelector(true);
-                            setTokenSearchQuery('');
-                            setTokenSearchResults([]);
-                          }}
-                          className="w-full flex items-center justify-between gap-2 bg-gray-800/50 border border-gray-700/50 rounded-lg px-3 py-2.5 hover:bg-gray-800 transition-colors"
+                          onClick={() => setCurrentSection('main')}
+                          className="p-1.5 text-gray-400 hover:text-white rounded-lg transition-colors"
                         >
-                          <div className="flex items-center gap-2">
-                            {renderTokenIcon(sendToken, 'sm')}
-                            <span className="text-sm text-white">{sendToken.symbol}</span>
-                          </div>
-                          <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                           </svg>
                         </button>
+                        <span className="text-sm font-medium text-white">Send</span>
                       </div>
-                      
-                      {/* Amount */}
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-2">Amount</label>
-                        <input
-                          type="number"
-                          value={sendAmount}
-                          onChange={(e) => setSendAmount(e.target.value)}
-                          placeholder="0.0"
-                          className="w-full px-3 py-2.5 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-gray-600 transition-colors"
-                        />
-                        <div className="text-xs text-gray-500 mt-1.5">
-                          Balance: {sendToken.symbol === 'ETH' ? parseFloat(ethBalance).toFixed(6) : 
-                            tokenHoldings.find(t => t.symbol === sendToken.symbol)?.tokenBalance || '0'} {sendToken.symbol}
+
+                      <div className="space-y-4">
+                        {/* Token Selection */}
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-2">Token</label>
+                          <button
+                            onClick={() => {
+                              setSelectingTokenFor('send');
+                              setShowTokenSelector(true);
+                              setTokenSearchQuery('');
+                              setTokenSearchResults([]);
+                            }}
+                            className="w-full flex items-center justify-between gap-2 bg-gray-800/50 border border-gray-700/50 rounded-lg px-3 py-2.5 hover:bg-gray-800 transition-colors"
+                          >
+                            <div className="flex items-center gap-2">
+                              {renderTokenIcon(sendToken, 'sm')}
+                              <span className="text-sm text-white">{sendToken.symbol}</span>
+                            </div>
+                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                        </div>
+                        
+                        {/* Amount */}
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-2">Amount</label>
+                          <input
+                            type="number"
+                            value={sendAmount}
+                            onChange={(e) => setSendAmount(e.target.value)}
+                            placeholder="0.0"
+                            className="w-full px-3 py-2.5 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-gray-600 transition-colors"
+                          />
+                          <div className="text-xs text-gray-500 mt-1.5">
+                            Balance: {sendToken.symbol === 'ETH' ? parseFloat(ethBalance).toFixed(6) : 
+                              tokenHoldings.find(t => t.symbol === sendToken.symbol)?.tokenBalance || '0'} {sendToken.symbol}
+                          </div>
+                        </div>
+
+                        {/* Address */}
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-2">To Address</label>
+                          <input
+                            type="text"
+                            value={sendAddress}
+                            onChange={(e) => setSendAddress(e.target.value)}
+                            placeholder="0x..."
+                            className="w-full px-3 py-2.5 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-gray-600 transition-colors"
+                          />
                         </div>
                       </div>
+                    </div>
 
-                      {/* Address */}
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-2">To Address</label>
-                        <input
-                          type="text"
-                          value={sendAddress}
-                          onChange={(e) => setSendAddress(e.target.value)}
-                          placeholder="0x..."
-                          className="w-full px-3 py-2.5 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-gray-600 transition-colors"
-                        />
-                      </div>
-
+                    {/* Fixed Bottom Section */}
+                    <div className="flex-shrink-0 px-4 pb-4 pt-2 bg-[#0d1628] space-y-3">
                       {sendError && (
                         <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
                           {sendError}
@@ -3041,8 +3047,8 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
             {/* Swap Section - Full Screen */}
             {walletSystem === "self-custodial" && currentSection === 'swap' && !walletLoading && (
               <div className="flex-1 flex flex-col overflow-hidden relative">
-                {/* Swap UI */}
-                <div className="flex-1 overflow-y-auto scrollbar-hide px-4 py-4">
+                {/* Swap UI - Scrollable Form */}
+                <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-4 pb-2">
                   {/* Header with Slippage */}
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-sm font-medium text-white">Swap</span>
@@ -3209,20 +3215,23 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                       </button>
                     </div>
                   </div>
+                </div>
 
+                {/* Fixed Bottom Section - Error, Progress, Button */}
+                <div className="flex-shrink-0 px-4 pb-4 pt-2 bg-[#0d1628]">
                   {/* Error Message */}
                   {swapError && (
-                    <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+                    <div className="mb-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
                       {swapError}
                     </div>
                   )}
 
                   {/* Swap Progress */}
                   {isSwapping && (
-                    <div className="mb-4 p-4 bg-gray-800/30 rounded-xl">
+                    <div className="mb-3 p-3 bg-gray-800/30 rounded-xl">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
-                          <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                        <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center">
+                          <div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
                         </div>
                         <div>
                           <div className="text-sm text-white">Processing swap...</div>
@@ -3676,15 +3685,15 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                   <div className="flex-1 overflow-y-auto scrollbar-hide">
                   {/* Balance Section */}
                   {walletData ? (
-                    <div className="px-4 py-4">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-2xl font-semibold text-white">{getDisplayBalance()}</span>
+                    <div className="px-4 py-3">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-xl font-semibold text-white">{getDisplayBalance()}</span>
                         <button 
                           onClick={toggleBalanceVisibility}
-                          className="p-1.5 text-gray-500 hover:text-gray-400 transition-colors"
+                          className="p-1 text-gray-500 hover:text-gray-400 transition-colors"
                           title={showBalance ? "Hide balance" : "Show balance"}
                         >
-                          {showBalance ? <FaEyeSlash className="w-4 h-4" /> : <FaEye className="w-4 h-4" />}
+                          {showBalance ? <FaEyeSlash className="w-3.5 h-3.5" /> : <FaEye className="w-3.5 h-3.5" />}
                         </button>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-gray-500">
@@ -3699,17 +3708,17 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                       </div>
                     </div>
                   ) : (
-                    <div className="px-4 py-8 text-center">
-                      <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <FaWallet className="w-5 h-5 text-gray-500" />
+                    <div className="px-4 py-4 text-center">
+                      <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-2">
+                        <FaWallet className="w-4 h-4 text-gray-500" />
                       </div>
-                      <h3 className="text-sm font-medium text-white mb-1">Welcome to CypherX</h3>
-                      <p className="text-xs text-gray-500 mb-4">Create or import a wallet to get started</p>
-                      <div className="space-y-2">
-                        <button onClick={createWallet} className="w-full py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-xl transition-colors">
+                      <h3 className="text-sm font-medium text-white mb-0.5">Welcome to CypherX</h3>
+                      <p className="text-xs text-gray-500 mb-3">Create or import a wallet to get started</p>
+                      <div className="space-y-1.5">
+                        <button onClick={createWallet} className="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-xl transition-colors">
                           Create New Wallet
                         </button>
-                        <button onClick={importWallet} className="w-full py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium rounded-xl transition-colors">
+                        <button onClick={importWallet} className="w-full py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium rounded-xl transition-colors">
                           Import Existing Wallet
                         </button>
                       </div>
@@ -3718,35 +3727,35 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
 
                   {/* Quick Actions */}
                   {walletData && (
-                    <div className="px-4 pb-3">
+                    <div className="px-4 pb-2">
                       <div className="flex items-center justify-between">
-                        <button onClick={handleBuySell} className="flex flex-col items-center flex-1 py-2">
-                          <div className="w-9 h-9 bg-blue-500/15 hover:bg-blue-500/25 rounded-full flex items-center justify-center mb-1.5 transition-colors">
-                            <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <button onClick={handleBuySell} className="flex flex-col items-center flex-1 py-1.5">
+                          <div className="w-8 h-8 bg-blue-500/15 hover:bg-blue-500/25 rounded-full flex items-center justify-center mb-1 transition-colors">
+                            <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                             </svg>
                           </div>
                           <span className="text-[10px] text-gray-400">Buy</span>
                         </button>
-                        <button onClick={handleSwap} className="flex flex-col items-center flex-1 py-2">
-                          <div className="w-9 h-9 bg-blue-500/15 hover:bg-blue-500/25 rounded-full flex items-center justify-center mb-1.5 transition-colors">
-                            <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <button onClick={handleSwap} className="flex flex-col items-center flex-1 py-1.5">
+                          <div className="w-8 h-8 bg-blue-500/15 hover:bg-blue-500/25 rounded-full flex items-center justify-center mb-1 transition-colors">
+                            <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                             </svg>
                           </div>
                           <span className="text-[10px] text-gray-400">Swap</span>
                         </button>
-                        <button onClick={handleSend} className="flex flex-col items-center flex-1 py-2">
-                          <div className="w-9 h-9 bg-blue-500/15 hover:bg-blue-500/25 rounded-full flex items-center justify-center mb-1.5 transition-colors">
-                            <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <button onClick={handleSend} className="flex flex-col items-center flex-1 py-1.5">
+                          <div className="w-8 h-8 bg-blue-500/15 hover:bg-blue-500/25 rounded-full flex items-center justify-center mb-1 transition-colors">
+                            <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
                             </svg>
                           </div>
                           <span className="text-[10px] text-gray-400">Send</span>
                         </button>
-                        <button onClick={handleReceive} className="flex flex-col items-center flex-1 py-2">
-                          <div className="w-9 h-9 bg-blue-500/15 hover:bg-blue-500/25 rounded-full flex items-center justify-center mb-1.5 transition-colors">
-                            <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <button onClick={handleReceive} className="flex flex-col items-center flex-1 py-1.5">
+                          <div className="w-8 h-8 bg-blue-500/15 hover:bg-blue-500/25 rounded-full flex items-center justify-center mb-1 transition-colors">
+                            <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                             </svg>
                           </div>
@@ -3953,9 +3962,9 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                           )}
                         </div>
                       ) : (
-                        <div className="flex flex-col items-center justify-center py-16 px-4">
-                          <div className="w-12 h-12 rounded-full bg-gray-800 flex items-center justify-center mb-3">
-                            <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="flex flex-col items-center justify-center py-8 px-4">
+                          <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center mb-2">
+                            <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                             </svg>
                           </div>
@@ -3967,7 +3976,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                   )}
 
                         {activeTab === "history" && !walletLoading && (
-                    <div className="h-96 overflow-y-auto scrollbar-hide">
+                    <div className="flex-1 overflow-y-auto scrollbar-hide">
                       {isLoadingTransactions ? (
                         <div className="flex items-center justify-center py-12">
                           <LoadingSpinner size="md" text="Loading..." />
@@ -4072,9 +4081,9 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                           })}
                         </div>
                       ) : (
-                        <div className="flex flex-col items-center justify-center py-16 px-4">
-                          <div className="w-12 h-12 rounded-full bg-gray-800 flex items-center justify-center mb-3">
-                            <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="flex flex-col items-center justify-center py-8 px-4">
+                          <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center mb-2">
+                            <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                           </div>
