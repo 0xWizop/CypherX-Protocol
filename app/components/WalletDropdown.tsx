@@ -3803,7 +3803,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                           {parseFloat(ethBalance) > 0 && !balanceError && (
                             <button 
                               onClick={handleEthClick}
-                              className="w-full flex items-center py-3.5 px-4 hover:bg-gray-800/30 transition-colors border-b border-gray-800/40"
+                              className="w-full flex items-center py-3.5 px-4 hover:bg-gray-800/30 transition-colors border-b border-gray-800/40 group"
                             >
                               <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-800 flex items-center justify-center flex-shrink-0 mr-3">
                                 <img 
@@ -3821,6 +3821,8 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                                 <div className="text-sm font-medium text-white">${ethPrice > 0 ? (parseFloat(ethBalance) * ethPrice).toFixed(2) : '0.00'}</div>
                                 <div className="text-xs text-gray-500">${ethPrice > 0 ? ethPrice.toFixed(2) : '—'}</div>
                               </div>
+                              {/* Placeholder to match token row spacing */}
+                              <div className="w-[26px] flex-shrink-0"></div>
                             </button>
                           )}
 
