@@ -69,43 +69,7 @@ const PULL_TO_REFRESH_THRESHOLD = 80;
 
 const firebaseAuth = auth;
 
-// DexScreenerPair type
-
-type DexScreenerPair = {
-  pairAddress: string;
-  baseToken?: {
-    address: string;
-    symbol: string;
-    name: string;
-    decimals: number;
-  };
-  quoteToken?: {
-    address: string;
-    symbol: string;
-    name: string;
-    decimals: number;
-  };
-  priceUsd: string;
-  priceChange: {
-    m5: number;
-    h1: number;
-    h6: number;
-    h24: number;
-  };
-  volume: {
-    h1: number;
-    h24: number;
-  };
-  liquidity: {
-    usd: number;
-  };
-  marketCap: number;
-  info?: {
-    imageUrl: string;
-  };
-  pairCreatedAt: number;
-  dexId?: string;
-};
+// DexScreenerPair type removed - now using optimized API
 
 // Memoized Token Row Component
 
@@ -1125,98 +1089,66 @@ export default function TokenScreener() {
     return () => unsubscribe();
   }, []);
 
-  // Fetch Tokens from Firebase and DexScreener - Ensure unique by tokenAddress, optimize with caching
-  useEffect(() => {
-    setLoading(true);
-    setError("");
-            const unsubscribe = onSnapshot(collection(db, "tokens"), async (snapshot) => {
-      try {
-        const tokenList = snapshot.docs.map((doc) => ({
-          poolAddress: doc.data().pool as string || "",
-          tokenAddress: doc.data().address as string || "",
-          symbol: doc.data().symbol as string || "",
-          name: doc.data().name as string || doc.data().symbol || "Unknown",
-          decimals: doc.data().decimals as number || 18,
-          pairCreatedAt: doc.data().createdAt?.toDate().getTime() || 0,
-          docId: doc.id,
+  // Fetch Tokens from optimized API with server-side caching
+  const fetchTokens = useCallback(async (isRefresh = false) => {
+    try {
+      if (!isRefresh) setLoading(true);
+      setError("");
+      
+      const res = await fetch(`/api/discover/tokens${isRefresh ? '?refresh=true' : ''}`, {
+        headers: { Accept: "application/json" },
+      });
+      
+      if (!res.ok) {
+        throw new Error('Failed to fetch tokens');
+      }
+      
+      const data = await res.json();
+      
+      if (data.tokens && data.tokens.length > 0) {
+        // Map API response to our TokenData format
+        const mappedTokens: TokenData[] = data.tokens.map((token: any) => ({
+          poolAddress: token.poolAddress || "",
+          tokenAddress: token.tokenAddress || "",
+          symbol: token.symbol || "",
+          name: token.name || token.symbol || "Unknown",
+          decimals: 18,
+          pairCreatedAt: token.pairCreatedAt || 0,
+          priceUsd: token.priceUsd || "0",
+          priceChange: token.priceChange || { m5: 0, h1: 0, h6: 0, h24: 0 },
+          volume: token.volume || { h1: 0, h24: 0 },
+          liquidity: token.liquidity || { usd: 0 },
+          marketCap: token.marketCap || 0,
+          info: token.info,
+          txns: token.txns,
+          dexId: token.dexId || "unknown",
         }));
-        const uniqueTokenMap = new Map<string, typeof tokenList[0]>();
-        tokenList.forEach((token) => {
-          if (!uniqueTokenMap.has(token.tokenAddress)) {
-            uniqueTokenMap.set(token.tokenAddress, token);
-          }
-        });
-        const uniqueTokens = Array.from(uniqueTokenMap.values());
-        const validTokens = uniqueTokens.filter((token) => /^0x[a-fA-F0-9]{40}$/.test(token.tokenAddress));
-        if (validTokens.length === 0) {
-          setError("No valid token addresses found in Firebase.");
-          setTokens([]);
-          setLoading(false);
-          return;
-        }
-
-        // Chunk and fetch from DexScreener, cache results if possible
-        const tokenChunks: string[][] = [];
-        for (let i = 0; i < validTokens.length; i += 10) {
-          tokenChunks.push(validTokens.slice(i, i + 10).map((t) => t.tokenAddress));
-        }
-        const allResults: TokenData[] = [];
-        for (const chunk of tokenChunks) {
-          const joinedChunk = chunk.join(",");
-          const res = await fetch(
-            `https://api.dexscreener.com/tokens/v1/base/${encodeURIComponent(joinedChunk)}`,
-            {
-              headers: { Accept: "application/json" },
-            }
-          );
-          if (!res.ok) {
-            console.error(`API fetch failed for chunk: ${joinedChunk}, status: ${res.status}`);
-            continue;
-          }
-          const data: DexScreenerPair[] = await res.json();
-          data.forEach((pair) => {
-            if (pair && pair.baseToken && pair.baseToken.address) {
-              const firestoreToken = validTokens.find(
-                (t) => t.tokenAddress.toLowerCase() === pair.baseToken?.address.toLowerCase()
-              );
-              if (firestoreToken && !allResults.some((r) => r.tokenAddress === firestoreToken.tokenAddress)) {
-                allResults.push({
-                  ...firestoreToken,
-                  poolAddress: pair.pairAddress,
-                  quoteToken: pair.quoteToken ? {
-                    address: pair.quoteToken.address,
-                    symbol: pair.quoteToken.symbol,
-                    name: pair.quoteToken.name,
-                    decimals: pair.quoteToken.decimals,
-                  } : undefined,
-                  priceUsd: pair.priceUsd || "0",
-                  priceChange: pair.priceChange || { m5: 0, h1: 0, h6: 0, h24: 0 },
-                  volume: pair.volume || { h1: 0, h24: 0 },
-                  liquidity: pair.liquidity || { usd: 0 },
-                  marketCap: pair.marketCap || 0,
-                  info: pair.info ? { imageUrl: pair.info.imageUrl } : undefined,
-                  dexId: (pair as any).dexId || "unknown",
-                });
-              }
-            }
-          });
-        }
-        if (allResults.length === 0) {
-          setTokens([]);
-        } else {
-          setTokens(allResults);
-        }
-      } catch (err) {
-        setError("Unable to load tokens. Please try again later.");
-        console.error(err);
+        setTokens(mappedTokens);
+      } else {
         setTokens([]);
-              } finally {
-          setLoading(false);
-          setInitialLoad(false);
-        }
-    });
-    return () => unsubscribe();
+      }
+    } catch (err) {
+      setError("Unable to load tokens. Please try again later.");
+      console.error(err);
+      setTokens([]);
+    } finally {
+      setLoading(false);
+      setInitialLoad(false);
+    }
   }, []);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchTokens();
+  }, [fetchTokens]);
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchTokens(true); // Silent refresh
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [fetchTokens]);
 
   // Fetch Alerts from Firestore and Clean Up
   // TODO: Reintroduce alert subscription once the new alert system is ready
