@@ -617,26 +617,19 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                   onClick={() => setShowAccountModal(false)}
                 />
                 <motion.div
-                  className="fixed inset-0 z-[9999] flex items-end sm:items-center sm:justify-center"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
+                  ref={modalRef}
+                  initial={{ opacity: 0, y: '100%' }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: '100%' }}
+                  transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                  className="fixed left-0 right-0 bottom-0 sm:bottom-auto sm:left-auto sm:right-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 w-full sm:max-w-sm h-auto max-h-[70vh] sm:max-h-[75vh] bg-gray-950 border-t border-gray-800/60 sm:border sm:border-gray-800/60 shadow-2xl overflow-hidden rounded-t-[28px] sm:rounded-2xl flex flex-col z-[9999]"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <motion.div
-                    ref={modalRef}
-                    initial={{ opacity: 0, y: '100%' }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: '100%' }}
-                    transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-                    className="w-full sm:max-w-sm h-auto max-h-[50vh] sm:h-auto sm:max-h-[75vh] bg-gray-950 sm:border sm:border-gray-800/60 shadow-2xl overflow-hidden rounded-t-3xl sm:rounded-2xl flex flex-col sm:mx-4"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {/* Mobile drag handle */}
-                    <div className="sm:hidden flex justify-center pt-3 pb-1">
-                      <div className="w-10 h-1 rounded-full bg-gray-600" />
-                    </div>
-                    {renderProfileContent()}
-                  </motion.div>
+                  {/* Mobile drag handle */}
+                  <div className="sm:hidden flex justify-center pt-3 pb-1">
+                    <div className="w-10 h-1 rounded-full bg-gray-600" />
+                  </div>
+                  {renderProfileContent()}
                 </motion.div>
               </>
             )
