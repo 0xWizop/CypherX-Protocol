@@ -60,44 +60,67 @@ const WalletDisplay: React.FC<WalletDisplayProps> = ({
     }
   }, [setSelfCustodialWallet]);
 
-  // Load wallet from localStorage on component mount
+  // Load wallet from localStorage
+  const loadWallet = useCallback(() => {
+    if (typeof window !== "undefined") {
+      const storedWallet = localStorage.getItem("cypherx_wallet");
+      if (storedWallet) {
+        try {
+          const data = JSON.parse(storedWallet);
+          console.log("🔍 WalletDisplay - Loading wallet from localStorage:", data.address);
+          setWalletData(data);
+          
+          // Update global context so other components can access the wallet
+          console.log("🔍 WalletDisplay - Updating global context with wallet:", data.address);
+          setSelfCustodialWallet({
+            address: data.address,
+            isConnected: true,
+            ethBalance: "",
+            tokenBalance: ""
+          });
+          
+          fetchBalance(data.address);
+        } catch (error) {
+          console.error("Error loading wallet:", error);
+        }
+      } else {
+        console.log("🔍 WalletDisplay - No wallet found in localStorage");
+        setWalletData(null);
+        setSelfCustodialWallet(null);
+      }
+      
+      // Set loading to false regardless of whether wallet was found
+      setWalletLoading(false);
+    }
+  }, [fetchBalance, setSelfCustodialWallet, setWalletLoading]);
+
+  // Load wallet on component mount
   useEffect(() => {
     if (walletLoadedRef.current) return;
-    
-    const loadWallet = () => {
-      if (typeof window !== "undefined") {
-        const storedWallet = localStorage.getItem("cypherx_wallet");
-        if (storedWallet) {
-          try {
-            const data = JSON.parse(storedWallet);
-            console.log("🔍 WalletDisplay - Loading wallet from localStorage:", data.address);
-            setWalletData(data);
-            
-            // Update global context so other components can access the wallet
-            console.log("🔍 WalletDisplay - Updating global context with wallet:", data.address);
-            setSelfCustodialWallet({
-              address: data.address,
-              isConnected: true,
-              ethBalance: "",
-              tokenBalance: ""
-            });
-            
-            fetchBalance(data.address);
-          } catch (error) {
-            console.error("Error loading wallet:", error);
-          }
-        } else {
-          console.log("🔍 WalletDisplay - No wallet found in localStorage");
-        }
-        
-        // Set loading to false regardless of whether wallet was found
-        setWalletLoading(false);
-        walletLoadedRef.current = true;
-      }
+    loadWallet();
+    walletLoadedRef.current = true;
+  }, [loadWallet]);
+
+  // Listen for wallet updates from WalletDropdown
+  useEffect(() => {
+    const handleWalletUpdate = () => {
+      console.log("🔍 WalletDisplay - Received wallet-updated event, reloading wallet...");
+      loadWallet();
     };
 
-    loadWallet();
-  }, []);
+    const handleWalletConnected = (event: CustomEvent) => {
+      console.log("🔍 WalletDisplay - Received wallet-connected event:", event.detail);
+      loadWallet();
+    };
+
+    window.addEventListener("wallet-updated", handleWalletUpdate);
+    window.addEventListener("wallet-connected", handleWalletConnected as EventListener);
+
+    return () => {
+      window.removeEventListener("wallet-updated", handleWalletUpdate);
+      window.removeEventListener("wallet-connected", handleWalletConnected as EventListener);
+    };
+  }, [loadWallet]);
 
 
 

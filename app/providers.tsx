@@ -254,7 +254,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
               }}
             >
               <div className={`flex min-h-screen flex-col ${isExplorerPage ? 'bg-gray-950' : ''}`}>
-                {!isDocsPage && <SiteBanner />}
                 <main
                   className={`flex-1 ${isExplorerPage ? 'bg-gray-950' : ''}`}
                   style={{ 
@@ -266,6 +265,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 >
                   {children}
                 </main>
+                {/* SiteBanner is now fixed positioned - desktop: bottom-left toast, mobile: top banner */}
+                {!isDocsPage && <SiteBanner />}
                 {!isDocsPage && <Footer isSticky={!isHomepage} />}
               </div>
               <LoginModal

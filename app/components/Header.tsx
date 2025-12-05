@@ -680,46 +680,59 @@ const Header: React.FC = () => {
       <AnimatePresence>
         {showWatchlistsModal && (
           <motion.div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 sm:flex sm:items-center sm:justify-center sm:p-6"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center sm:justify-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setShowWatchlistsModal(false)}
           >
             <motion.div
-              className="bg-gray-950 sm:border sm:border-gray-800 w-full h-full sm:h-auto sm:max-w-lg sm:max-w-xl shadow-2xl p-5 sm:p-6 flex flex-col sm:max-h-[85vh]"
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gray-950 w-full h-[85vh] sm:h-auto sm:max-w-md sm:mx-4 sm:max-h-[80vh] sm:border sm:border-gray-800/60 sm:rounded-2xl rounded-t-3xl shadow-2xl flex flex-col overflow-hidden"
+              initial={{ opacity: 0, y: '100%' }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="relative flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white">
-                  My Watchlists
-                </h3>
+              {/* Mobile drag handle */}
+              <div className="sm:hidden flex justify-center pt-3 pb-1">
+                <div className="w-10 h-1 rounded-full bg-gray-600" />
+              </div>
+              
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-800/60 flex-shrink-0">
+                <div>
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-amber-400/70 font-medium">Saved</span>
+                  <h3 className="text-base sm:text-lg font-semibold text-white mt-0.5">My Watchlists</h3>
+                </div>
                 <button
                   onClick={() => setShowWatchlistsModal(false)}
-                  className="absolute top-0 right-0 w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg bg-gray-900/50 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 text-gray-300 hover:text-white transition-all duration-200"
+                  className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-900/60 hover:bg-gray-800/80 border border-gray-800/60 hover:border-gray-700 text-gray-400 hover:text-white transition-all duration-200"
                   aria-label="Close"
                 >
-                  <FiX className="w-5 h-5 sm:w-6 sm:h-6" />
+                  <FiX className="w-5 h-5" />
                 </button>
               </div>
-              <div className="space-y-4 overflow-y-auto scrollbar-hide pr-0.5">
+              
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent px-4 sm:px-5 py-4 space-y-4">
                 {/* Default Watchlist (Favorites) */}
-                <div className="bg-gray-900/50 border border-gray-800 p-3 sm:p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-gray-100">
-                      Favorites
-                    </h4>
-                    <span className="text-xs text-gray-400">{favorites.length} tokens</span>
+                <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                        <FiStar className="w-3.5 h-3.5 text-amber-400" />
+                      </div>
+                      <h4 className="text-sm font-semibold text-white">Favorites</h4>
+                    </div>
+                    <span className="text-xs text-gray-500 bg-gray-800/50 px-2 py-0.5 rounded-md">{favorites.length}</span>
                   </div>
                   {favorites.length === 0 ? (
-                    <div className="text-gray-400 text-xs">
-                      No tokens in your favorites yet. Tap the star icon on any token to add it.
+                    <div className="text-gray-500 text-xs bg-gray-900/60 rounded-lg p-3 text-center">
+                      Tap the star icon on any token to add it here.
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {expandedFavorites ? (
                         favorites.map((poolAddress) => (
                           <FavoriteTokenItem 
@@ -740,9 +753,9 @@ const Header: React.FC = () => {
                           {favorites.length > 3 && (
                             <button
                               onClick={() => setExpandedFavorites(true)}
-                              className="text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+                              className="w-full text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer py-2 text-center bg-blue-500/5 hover:bg-blue-500/10 rounded-lg"
                             >
-                              +{favorites.length - 3} more tokens
+                              Show {favorites.length - 3} more
                             </button>
                           )}
                         </>
@@ -750,7 +763,7 @@ const Header: React.FC = () => {
                       {expandedFavorites && favorites.length > 3 && (
                         <button
                           onClick={() => setExpandedFavorites(false)}
-                          className="text-xs text-gray-400 hover:text-gray-300 transition-colors cursor-pointer"
+                          className="w-full text-xs text-gray-400 hover:text-gray-300 transition-colors cursor-pointer py-2 text-center"
                         >
                           Show less
                         </button>
@@ -762,29 +775,29 @@ const Header: React.FC = () => {
                 {/* Custom Watchlists */}
                 {watchlists.length > 0 && (
                   <div className="space-y-3">
-                    <h4 className="text-sm font-medium text-gray-300">Custom Watchlists</h4>
+                    <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wide px-1">Custom Lists</h4>
                     {watchlists.map((watchlist) => (
-                      <div key={watchlist.id} className="bg-gray-900/50 border border-gray-800 p-3 sm:p-4">
-                        <div className="flex items-center justify-between mb-2 gap-2">
+                      <div key={watchlist.id} className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-3 gap-2">
                           <button
                             onClick={() => setExpandedWatchlist(expandedWatchlist === watchlist.id ? null : watchlist.id)}
-                            className="text-sm font-medium text-gray-200 hover:text-white transition-colors cursor-pointer text-left flex-1"
+                            className="text-sm font-semibold text-white hover:text-gray-200 transition-colors cursor-pointer text-left flex-1"
                           >
                             {watchlist.name}
                           </button>
-                          <span className="text-xs text-gray-400 whitespace-nowrap">{watchlist.tokens.length} tokens</span>
+                          <span className="text-xs text-gray-500 bg-gray-800/50 px-2 py-0.5 rounded-md whitespace-nowrap">{watchlist.tokens.length}</span>
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           {expandedWatchlist === watchlist.id ? (
-                            <div className="max-h-48 overflow-y-auto scrollbar-hide pr-0.5">
+                            <div className="max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
                               {watchlist.tokens.map((poolAddress) => (
-                                <div key={poolAddress} className="flex items-center justify-between text-xs py-1">
-                                  <span className="text-gray-300 truncate">{poolAddress.slice(0, 8)}...{poolAddress.slice(-6)}</span>
+                                <div key={poolAddress} className="flex items-center justify-between text-xs py-2 px-2 hover:bg-gray-800/30 rounded-lg transition-colors">
+                                  <span className="text-gray-300 truncate font-mono">{poolAddress.slice(0, 8)}...{poolAddress.slice(-6)}</span>
                                   <button
                                     onClick={() => removeFromWatchlist(watchlist.id, poolAddress)}
-                                    className="text-gray-400 hover:text-red-400 transition-colors"
+                                    className="text-gray-500 hover:text-red-400 transition-colors p-1"
                                   >
-                                    <FiTrash2 className="w-3 h-3" />
+                                    <FiTrash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
                               ))}
@@ -792,22 +805,22 @@ const Header: React.FC = () => {
                           ) : (
                             <>
                               {watchlist.tokens.slice(0, 3).map((poolAddress) => (
-                                <div key={poolAddress} className="flex items-center justify-between text-xs">
-                                  <span className="text-gray-300 truncate">{poolAddress.slice(0, 8)}...{poolAddress.slice(-6)}</span>
+                                <div key={poolAddress} className="flex items-center justify-between text-xs py-2 px-2 hover:bg-gray-800/30 rounded-lg transition-colors">
+                                  <span className="text-gray-300 truncate font-mono">{poolAddress.slice(0, 8)}...{poolAddress.slice(-6)}</span>
                                   <button
                                     onClick={() => removeFromWatchlist(watchlist.id, poolAddress)}
-                                    className="text-gray-400 hover:text-red-400 transition-colors"
+                                    className="text-gray-500 hover:text-red-400 transition-colors p-1"
                                   >
-                                    <FiTrash2 className="w-3 h-3" />
+                                    <FiTrash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
                               ))}
                               {watchlist.tokens.length > 3 && (
                                 <button
                                   onClick={() => setExpandedWatchlist(watchlist.id)}
-                                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+                                  className="w-full text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer py-2 text-center bg-blue-500/5 hover:bg-blue-500/10 rounded-lg"
                                 >
-                                  +{watchlist.tokens.length - 3} more tokens
+                                  Show {watchlist.tokens.length - 3} more
                                 </button>
                               )}
                             </>
@@ -815,6 +828,17 @@ const Header: React.FC = () => {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+                
+                {/* Empty state for no watchlists */}
+                {watchlists.length === 0 && favorites.length === 0 && (
+                  <div className="text-center py-8">
+                    <div className="w-12 h-12 mx-auto rounded-xl bg-gray-900/60 flex items-center justify-center mb-3">
+                      <FiStar className="w-6 h-6 text-gray-600" />
+                    </div>
+                    <p className="text-gray-500 text-sm">No saved tokens yet</p>
+                    <p className="text-gray-600 text-xs mt-1">Star tokens to track them here</p>
                   </div>
                 )}
               </div>
@@ -1226,7 +1250,7 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] sm:flex sm:items-center sm:justify-center sm:p-5"
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-end sm:items-center sm:justify-center"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -1234,95 +1258,81 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
       >
         <motion.div
           ref={modalRef}
-          className="bg-gray-950 w-full h-full sm:h-auto sm:max-w-[520px] sm:mx-0 sm:border sm:border-gray-800 shadow-2xl flex flex-col sm:max-h-[82vh] sm:my-auto"
-          initial={{ scale: 0.9, opacity: 0, y: 20 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          transition={{ duration: 0.2 }}
+          className="bg-gray-950 w-full h-full sm:h-auto sm:max-w-[520px] sm:mx-4 sm:border sm:border-gray-800/60 shadow-2xl flex flex-col sm:max-h-[85vh] sm:rounded-2xl"
+          initial={{ opacity: 0, y: '100%' }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: '100%' }}
+          transition={{ type: 'spring', damping: 30, stiffness: 300 }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="relative flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-800 bg-gray-950">
+          {/* Mobile drag handle */}
+          <div className="sm:hidden flex justify-center pt-3 pb-1">
+            <div className="w-10 h-1 rounded-full bg-gray-600" />
+          </div>
+          
+          <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-800/60 bg-gray-950 flex-shrink-0">
             <div className="text-left">
-              <span className="text-[10px] uppercase tracking-[0.3em] text-blue-400/70 font-medium">Profile</span>
-              <h3 className="text-white text-base sm:text-2xl font-semibold mt-1">Account Settings</h3>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-blue-400/70 font-medium">Profile</span>
+              <h3 className="text-white text-base sm:text-lg font-semibold mt-0.5">Settings</h3>
             </div>
             <button
               onClick={onClose}
-              className="absolute top-3 sm:top-4 right-4 sm:right-6 w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg bg-gray-900/50 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 text-gray-300 hover:text-white transition-all duration-200"
+              className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-900/60 hover:bg-gray-800/80 border border-gray-800/60 hover:border-gray-700 text-gray-400 hover:text-white transition-all duration-200"
               aria-label="Close"
             >
-              <FiX className="w-5 h-5 sm:w-6 sm:h-6" />
+              <FiX className="w-5 h-5" />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-6 py-4 space-y-4 sm:space-y-6">
+          <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent px-4 sm:px-5 py-4 space-y-4">
             {/* Profile Section */}
-            <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner mt-1">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
-                <h4 className="text-white font-semibold text-base sm:text-lg">Profile Information</h4>
-              </div>
-              <div className="space-y-3 sm:space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-5 gap-3 sm:gap-4">
-                  <div className="relative self-center sm:self-auto">
-                    <div className="w-14 h-14 sm:w-20 sm:h-20 overflow-hidden bg-gray-900 border border-gray-800 shadow-lg">
+            <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
+              <h4 className="text-white font-semibold text-sm mb-4">Profile Information</h4>
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-900/80 border border-gray-800/60">
                       {profilePicture ? (
                         <Image
                           src={profilePicture}
                           alt="Profile"
-                          width={72}
-                          height={72}
+                          width={64}
+                          height={64}
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gray-900">
+                        <div className="w-full h-full flex items-center justify-center">
                           <FiUser className="w-6 h-6 text-gray-500" />
                         </div>
                       )}
                       {uploadingImage && (
                         <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                          <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-500 border-t-transparent" />
                         </div>
                       )}
                     </div>
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingImage}
-                      className="absolute -bottom-2 -right-2 w-6 h-6 sm:w-7 sm:h-7 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 flex items-center justify-center transition-colors shadow-lg"
+                      className="absolute -bottom-1.5 -right-1.5 w-7 h-7 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 flex items-center justify-center transition-colors rounded-lg shadow-lg"
                     >
-                      {uploadingImage ? (
-                        <div className="animate-spin rounded-full h-3 w-3 border-b border-white"></div>
-                      ) : (
-                        <FiUser className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
-                      )}
+                      <FiUser className="w-3.5 h-3.5 text-white" />
                     </button>
                   </div>
-                  <div className="flex-1 w-full">
-                    <h5 className="text-white font-semibold text-sm sm:text-base">Profile Picture</h5>
-                    <p className="text-gray-400 text-xs sm:text-sm mb-3">
-                      Upload an image with a minimum size of 256x256 for best clarity.
-                    </p>
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadingImage}
-                      className="inline-flex items-center gap-2 px-3 py-2 bg-gray-900 border border-gray-800 hover:border-gray-600 hover:bg-gray-900/80 text-xs sm:text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-1"
-                    >
-                      {uploadingImage ? 'Uploading...' : 'Upload Image'}
-                    </button>
+                  <div className="flex-1">
+                    <h5 className="text-white font-medium text-sm">Profile Picture</h5>
+                    <p className="text-gray-400 text-xs mt-0.5">256x256 minimum</p>
                     {uploadStatus !== 'idle' && uploadMessage && (
                       <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`mt-3 px-3 py-2 text-xs sm:text-sm flex items-center gap-2 border ${
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className={`mt-2 px-2.5 py-1.5 text-xs flex items-center gap-1.5 rounded-lg ${
                           uploadStatus === 'success' 
-                            ? 'bg-green-500/15 text-green-300 border-green-500/30'
-                            : 'bg-red-500/15 text-red-300 border-red-500/30'
+                            ? 'bg-green-500/15 text-green-400'
+                            : 'bg-red-500/15 text-red-400'
                         }`}
                       >
-                        {uploadStatus === 'success' ? (
-                          <FiCheck className="w-4 h-4" />
-                        ) : (
-                          <FiAlertCircle className="w-4 h-4" />
-                        )}
+                        {uploadStatus === 'success' ? <FiCheck className="w-3.5 h-3.5" /> : <FiAlertCircle className="w-3.5 h-3.5" />}
                         <span>{uploadMessage}</span>
                       </motion.div>
                     )}
@@ -1337,115 +1347,99 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                   className="hidden"
                 />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="col-span-1 sm:col-span-2">
-                    <label className="block text-gray-300 text-xs sm:text-sm font-medium mb-2">Display Name</label>
-                    <input
-                      type="text"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      className="w-full px-3 py-2 bg-gray-950 border border-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/50 text-sm transition"
-                      placeholder="Enter your display name"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-gray-400 text-xs font-medium uppercase tracking-wide mb-2">Display Name</label>
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-gray-900/80 border border-gray-800/60 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 text-sm transition-all duration-200"
+                    placeholder="Enter your display name"
+                  />
                 </div>
               </div>
             </div>
 
             {/* Notifications Section */}
-            <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
-                <h4 className="text-white font-semibold text-base sm:text-lg">Notifications</h4>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-                {Object.entries(notifications).map(([key, value]) => {
-                  const label = key.replace(/([A-Z])/g, ' $1').trim();
-                  const descriptions: Record<string, string> = {
-                    email: 'Cycle insights and important updates.',
-                    push: 'Instant signals delivered to your device.',
-                    trading: 'Get notified about positions and P&L shifts.',
-                    news: 'Macro stories and curated market commentary.'
-                  };
-                  return (
-                    <label key={key} className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer capitalize">
-                      <div>
-                        <span className="text-gray-200 text-sm font-medium">{label}</span>
-                        <p className="text-[11px] sm:text-xs text-gray-500 mt-1">{descriptions[key] || 'Stay in the loop without the noise.'}</p>
+            <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
+              <h4 className="text-white font-semibold text-sm mb-3">Notifications</h4>
+              <div className="space-y-2">
+                {[
+                  { key: 'email', label: 'Email', desc: 'Cycle insights and updates' },
+                  { key: 'push', label: 'Push', desc: 'Instant signals to your device' },
+                  { key: 'trading', label: 'Trading', desc: 'Positions and P&L alerts' },
+                  { key: 'news', label: 'News', desc: 'Market commentary' },
+                ].map(({ key, label, desc }) => (
+                  <label key={key} className="flex items-center justify-between gap-3 p-3 bg-gray-900/60 hover:bg-gray-800/40 rounded-xl transition-all duration-200 cursor-pointer border border-transparent hover:border-gray-800/60">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-gray-200 text-sm font-medium">{label}</span>
+                      <p className="text-[11px] text-gray-500 mt-0.5 truncate">{desc}</p>
+                    </div>
+                    <div className="relative flex-shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={notifications[key as keyof typeof notifications]}
+                        onChange={(e) => setNotifications(prev => ({ ...prev, [key]: e.target.checked }))}
+                        className="sr-only"
+                      />
+                      <div className={`w-10 h-5.5 rounded-full transition-colors duration-200 flex items-center px-0.5 ${
+                        notifications[key as keyof typeof notifications] ? 'bg-blue-500' : 'bg-gray-700'
+                      }`}>
+                        <div className={`w-4.5 h-4.5 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                          notifications[key as keyof typeof notifications] ? 'translate-x-[18px]' : 'translate-x-0'
+                        }`} />
                       </div>
-                      <div className="relative">
-                        <input
-                          type="checkbox"
-                          checked={value}
-                          onChange={(e) => setNotifications(prev => ({ ...prev, [key]: e.target.checked }))}
-                          className="sr-only"
-                        />
-                        <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
-                          value ? 'bg-blue-500' : 'bg-gray-700'
-                        }`}>
-                          <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                            value ? 'translate-x-5' : 'translate-x-0'
-                          }`}></div>
-                        </div>
-                      </div>
-                    </label>
-                  );
-                })}
+                    </div>
+                  </label>
+                ))}
               </div>
             </div>
 
             {/* Privacy Section */}
-            <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
-                <h4 className="text-white font-semibold text-base sm:text-lg">Privacy</h4>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-                {Object.entries(privacy).map(([key, value]) => {
-                  const label = key.replace(/([A-Z])/g, ' $1').trim();
-                  const descriptions: Record<string, string> = {
-                    showProfile: 'Allow others to discover and follow you.',
-                    showTrades: 'Share recent trades with your followers.',
-                    showBalance: 'Reveal your wallet balance on your profile.'
-                  };
-                  return (
-                    <label key={key} className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer capitalize">
-                      <div>
-                        <span className="text-gray-200 text-sm font-medium">{label}</span>
-                        <p className="text-[11px] sm:text-xs text-gray-500 mt-1">{descriptions[key] || 'Fine-tune visibility to match your comfort.'}</p>
+            <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
+              <h4 className="text-white font-semibold text-sm mb-3">Privacy</h4>
+              <div className="space-y-2">
+                {[
+                  { key: 'showProfile', label: 'Show Profile', desc: 'Allow others to discover you' },
+                  { key: 'showTrades', label: 'Show Trades', desc: 'Share trades with followers' },
+                  { key: 'showBalance', label: 'Show Balance', desc: 'Display wallet balance' },
+                ].map(({ key, label, desc }) => (
+                  <label key={key} className="flex items-center justify-between gap-3 p-3 bg-gray-900/60 hover:bg-gray-800/40 rounded-xl transition-all duration-200 cursor-pointer border border-transparent hover:border-gray-800/60">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-gray-200 text-sm font-medium">{label}</span>
+                      <p className="text-[11px] text-gray-500 mt-0.5 truncate">{desc}</p>
+                    </div>
+                    <div className="relative flex-shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={privacy[key as keyof typeof privacy]}
+                        onChange={(e) => setPrivacy(prev => ({ ...prev, [key]: e.target.checked }))}
+                        className="sr-only"
+                      />
+                      <div className={`w-10 h-5.5 rounded-full transition-colors duration-200 flex items-center px-0.5 ${
+                        privacy[key as keyof typeof privacy] ? 'bg-blue-500' : 'bg-gray-700'
+                      }`}>
+                        <div className={`w-4.5 h-4.5 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                          privacy[key as keyof typeof privacy] ? 'translate-x-[18px]' : 'translate-x-0'
+                        }`} />
                       </div>
-                      <div className="relative">
-                        <input
-                          type="checkbox"
-                          checked={value}
-                          onChange={(e) => setPrivacy(prev => ({ ...prev, [key]: e.target.checked }))}
-                          className="sr-only"
-                        />
-                        <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
-                          value ? 'bg-blue-500' : 'bg-gray-700'
-                        }`}>
-                          <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                            value ? 'translate-x-5' : 'translate-x-0'
-                          }`}></div>
-                        </div>
-                      </div>
-                    </label>
-                  );
-                })}
+                    </div>
+                  </label>
+                ))}
               </div>
             </div>
 
             {/* Quick Buy Configuration Section */}
-            <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
-                <div>
-                  <h4 className="text-white font-semibold text-base sm:text-lg">Quick Buy Configuration</h4>
-                  <p className="text-gray-400 text-xs sm:text-sm mt-1">Customize your quick buy button amounts and preferences</p>
-                </div>
+            <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
+              <div className="mb-4">
+                <h4 className="text-white font-semibold text-sm">Quick Buy</h4>
+                <p className="text-gray-400 text-xs mt-0.5">Customize quick buy amounts</p>
               </div>
               <div className="space-y-4">
                 {/* Quick Buy Amounts */}
                 <div>
-                  <label className="block text-gray-300 text-xs sm:text-sm font-medium mb-2">
-                    Quick Buy Amounts (ETH)
+                  <label className="block text-gray-400 text-xs font-medium uppercase tracking-wide mb-2">
+                    Amounts (ETH)
                   </label>
                   <div className="space-y-2">
                     {quickBuyAmounts.map((amount, index) => (
@@ -1456,13 +1450,13 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                           min="0"
                           value={amount}
                           onChange={(e) => handleUpdateAmount(index, e.target.value)}
-                          className="flex-1 px-3 py-2 bg-gray-950 border border-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/50 text-sm transition"
+                          className="flex-1 px-3.5 py-2.5 bg-gray-900/80 border border-gray-800/60 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 text-sm transition-all duration-200"
                           placeholder="0.01"
                         />
                         {quickBuyAmounts.length > 1 && (
                           <button
                             onClick={() => handleRemoveAmount(index)}
-                            className="px-3 py-2 bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition-colors text-sm"
+                            className="w-10 h-10 flex items-center justify-center bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 rounded-xl transition-all duration-200"
                           >
                             <FiX className="w-4 h-4" />
                           </button>
@@ -1472,7 +1466,7 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                     {quickBuyAmounts.length < 6 && (
                       <button
                         onClick={handleAddAmount}
-                        className="w-full px-3 py-2 bg-gray-900 border border-gray-800 text-gray-300 hover:border-gray-600 hover:text-white transition-colors text-sm flex items-center justify-center gap-2"
+                        className="w-full px-3 py-2.5 bg-gray-900/60 border border-gray-800/60 border-dashed text-gray-400 hover:border-gray-700 hover:text-gray-300 rounded-xl transition-all duration-200 text-sm flex items-center justify-center gap-2"
                       >
                         <span>+ Add Amount</span>
                       </button>
@@ -1482,7 +1476,7 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
 
                 {/* Default Slippage */}
                 <div>
-                  <label className="block text-gray-300 text-xs sm:text-sm font-medium mb-2">
+                  <label className="block text-gray-400 text-xs font-medium uppercase tracking-wide mb-2">
                     Default Slippage (%)
                   </label>
                   <input
@@ -1492,68 +1486,62 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                     max="50"
                     value={defaultSlippage}
                     onChange={(e) => setDefaultSlippage(parseFloat(e.target.value) || 1)}
-                    className="w-full px-3 py-2 bg-gray-950 border border-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/50 text-sm transition"
+                    className="w-full px-3.5 py-2.5 bg-gray-900/80 border border-gray-800/60 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 text-sm transition-all duration-200"
                     placeholder="1"
                   />
-                  <p className="text-[11px] sm:text-xs text-gray-500 mt-1">
-                    Maximum price movement you're willing to accept (1-50%)
-                  </p>
+                  <p className="text-[11px] text-gray-500 mt-1.5">Maximum price movement (1-50%)</p>
                 </div>
 
                 {/* Auto Approve */}
-                <label className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer">
-                  <div>
-                    <span className="text-gray-200 text-sm font-medium">Auto Approve Tokens</span>
-                    <p className="text-[11px] sm:text-xs text-gray-500 mt-1">
-                      Automatically approve token spending for faster trades
-                    </p>
+                <label className="flex items-center justify-between gap-3 p-3 bg-gray-900/60 hover:bg-gray-800/40 rounded-xl transition-all duration-200 cursor-pointer border border-transparent hover:border-gray-800/60">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-gray-200 text-sm font-medium">Auto Approve</span>
+                    <p className="text-[11px] text-gray-500 mt-0.5">Auto-approve for faster trades</p>
                   </div>
-                  <div className="relative">
+                  <div className="relative flex-shrink-0">
                     <input
                       type="checkbox"
                       checked={autoApprove}
                       onChange={(e) => setAutoApprove(e.target.checked)}
                       className="sr-only"
                     />
-                    <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
+                    <div className={`w-10 h-5.5 rounded-full transition-colors duration-200 flex items-center px-0.5 ${
                       autoApprove ? 'bg-blue-500' : 'bg-gray-700'
                     }`}>
-                      <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                        autoApprove ? 'translate-x-5' : 'translate-x-0'
-                      }`}></div>
+                      <div className={`w-4.5 h-4.5 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                        autoApprove ? 'translate-x-[18px]' : 'translate-x-0'
+                      }`} />
                     </div>
                   </div>
                 </label>
 
                 {/* Preferred DEX */}
                 <div>
-                  <label className="block text-gray-300 text-xs sm:text-sm font-medium mb-2">
-                    Preferred DEX (Optional)
+                  <label className="block text-gray-400 text-xs font-medium uppercase tracking-wide mb-2">
+                    Preferred DEX
                   </label>
                   <select
                     value={preferredDex || ''}
                     onChange={(e) => setPreferredDex(e.target.value || null)}
-                    className="w-full px-3 py-2 bg-gray-950 border border-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/50 text-sm transition"
+                    className="w-full px-3.5 py-2.5 bg-gray-900/80 border border-gray-800/60 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 text-sm transition-all duration-200"
                   >
                     <option value="">Auto (Best Price)</option>
                     <option value="uniswap">Uniswap</option>
                     <option value="sushiswap">SushiSwap</option>
                     <option value="0x">0x Protocol</option>
                   </select>
-                  <p className="text-[11px] sm:text-xs text-gray-500 mt-1">
-                    Prefer a specific DEX for swaps (defaults to best price)
-                  </p>
+                  <p className="text-[11px] text-gray-500 mt-1.5">Defaults to best price</p>
                 </div>
 
                 {/* Save Quick Buy Config Button */}
                 <button
                   onClick={handleSaveQuickBuyConfig}
                   disabled={savingQuickBuy || quickBuyConfigLoading}
-                  className="w-full px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                  className="w-full px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-medium text-sm"
                 >
                   {savingQuickBuy ? (
                     <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
                       <span>Saving...</span>
                     </>
                   ) : (
@@ -1566,46 +1554,42 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
             {/* Settings Status Messages */}
             {settingsStatus !== 'idle' && settingsMessage && (
               <motion.div
-                initial={{ opacity: 0, y: -10 }}
+                initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`p-3 sm:p-4 text-xs sm:text-sm flex items-center gap-2 sm:gap-3 border ${
+                className={`p-3 text-xs flex items-center gap-2 rounded-xl ${
                   settingsStatus === 'success' 
-                    ? 'bg-green-500/15 text-green-300 border-green-500/30'
-                    : 'bg-red-500/15 text-red-300 border-red-500/30'
+                    ? 'bg-green-500/15 text-green-400'
+                    : 'bg-red-500/15 text-red-400'
                 }`}
               >
-                {settingsStatus === 'success' ? (
-                  <FiCheck className="w-4 h-4" />
-                ) : (
-                  <FiAlertCircle className="w-4 h-4" />
-                )}
+                {settingsStatus === 'success' ? <FiCheck className="w-4 h-4" /> : <FiAlertCircle className="w-4 h-4" />}
                 <span>{settingsMessage}</span>
               </motion.div>
             )}
-
-            {/* Actions */}
-            <div className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 pt-2 sm:pt-0">
-              <button
-                onClick={onClose}
-                className="flex-1 px-4 py-2.5 bg-gray-900 border border-gray-800 text-gray-300 hover:border-gray-600 hover:text-white transition-colors"
-              >
-                Cancel
+          </div>
+          
+          {/* Footer Actions */}
+          <div className="flex gap-3 px-4 sm:px-5 py-4 border-t border-gray-800/60 flex-shrink-0">
+            <button
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 bg-gray-900/60 border border-gray-800/60 text-gray-300 hover:bg-gray-800/60 hover:border-gray-700 rounded-xl transition-all duration-200 font-medium text-sm"
+            >
+              Cancel
               </button>
-              <button
-                onClick={handleSaveSettings}
-                disabled={savingSettings}
-                className="flex-1 px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-              >
-                {savingSettings ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <span>Save Changes</span>
-                )}
-              </button>
-            </div>
+            <button
+              onClick={handleSaveSettings}
+              disabled={savingSettings}
+              className="flex-1 px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-medium text-sm"
+            >
+              {savingSettings ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <span>Save Changes</span>
+              )}
+            </button>
           </div>
         </motion.div>
       </motion.div>

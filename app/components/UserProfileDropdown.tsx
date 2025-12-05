@@ -9,7 +9,7 @@ import { auth as firebaseAuth, db, storage } from "@/lib/firebase";
 import { useAuth, useWalletSystem, useLoginModal } from "@/app/providers";
 import { useUserSettings } from "@/app/hooks/useUserSettings";
 import { motion, AnimatePresence } from "framer-motion";
-import { FiUser, FiX, FiCheck, FiAlertCircle } from "react-icons/fi";
+import { FiUser, FiX, FiCheck, FiAlertCircle, FiChevronRight, FiLogOut, FiLogIn, FiCalendar, FiEdit3, FiSettings, FiGift, FiFileText } from "react-icons/fi";
 
 import Link from "next/link";
 import Image from "next/image";
@@ -17,6 +17,7 @@ import { createPortal } from "react-dom";
 import TierProgressionModal from "./TierProgressionModal";
 import PointsHistoryModal from "./PointsHistoryModal";
 import PnLCalendarModal from "./PnLCalendarModal";
+import { motionPresets } from "@/app/styles/design-tokens";
 
 type UserProfileDropdownProps = {
   variant?: "circle" | "rounded";
@@ -433,62 +434,75 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
   const renderProfileContent = () => (
     <>
       {/* Header */}
-      <div className="relative flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-800 bg-gray-950 flex-shrink-0">
-        <div className="flex items-center space-x-3">
+      <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-800/60 bg-gray-950 flex-shrink-0">
+        <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="w-12 h-12 rounded-full bg-gray-900 border border-gray-800 flex items-center justify-center overflow-hidden">
-                {profilePicture ? (
-                  <Image
-                    src={profilePicture}
-                    alt="Profile"
-                  width={48}
-                  height={48}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                <FiUser className="w-6 h-6 text-gray-400" />
-                )}
-              </div>
+            <div className="w-11 h-11 rounded-xl bg-gray-900/80 border border-gray-800/60 flex items-center justify-center overflow-hidden">
+              {profilePicture ? (
+                <Image
+                  src={profilePicture}
+                  alt="Profile"
+                  width={44}
+                  height={44}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <FiUser className="w-5 h-5 text-gray-400" />
+              )}
+            </div>
             {user && (
               <div 
-                className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-gray-950"
+                className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-gray-950"
                 style={{ backgroundColor: getTierColor(tier) }}
-              ></div>
+              />
             )}
-            </div>
+          </div>
           <div>
-            <h3 className="text-white font-semibold text-base">
+            <h3 className="text-white font-semibold text-sm">
               {user ? (displayName || 'My Profile') : 'Welcome'}
             </h3>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-gray-400 text-xs capitalize">{tier}</span>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span 
+                className="text-[11px] font-medium capitalize px-1.5 py-0.5 rounded-md"
+                style={{ 
+                  backgroundColor: `${getTierColor(tier)}20`,
+                  color: getTierColor(tier)
+                }}
+              >
+                {tier}
+              </span>
+            </div>
           </div>
-              </div>
-              </div>
-        {/* Close button for mobile */}
-            <button
-          onClick={() => setShowAccountModal(false)}
-          className="sm:hidden w-8 h-8 flex items-center justify-center rounded-lg bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 text-gray-400 hover:text-white transition-all duration-200"
-          aria-label="Close"
-            >
-          <FiX className="w-5 h-5" />
-            </button>
         </div>
+        {/* Close button for mobile */}
+        <button
+          onClick={() => setShowAccountModal(false)}
+          className="sm:hidden w-9 h-9 flex items-center justify-center rounded-xl bg-gray-900/60 hover:bg-gray-800/80 border border-gray-800/60 hover:border-gray-700 text-gray-400 hover:text-white transition-all duration-200"
+          aria-label="Close"
+        >
+          <FiX className="w-5 h-5" />
+        </button>
+      </div>
 
       {/* Content */}
-      <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
+      <div className="px-3 sm:px-4 py-3 space-y-2 overflow-y-auto flex-1 min-h-0 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
         {/* Navigation Links */}
         <div className="space-y-1">
-
           {walletAddress && (
             <button
               onClick={() => {
                 setShowPnLCalendar(true);
                 setShowAccountModal(false);
               }}
-              className="flex items-center w-full p-3 text-gray-300 hover:text-white hover:bg-gray-900/50 rounded-lg transition-all duration-200 border border-transparent hover:border-gray-800"
+              className="flex items-center justify-between w-full px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-xl transition-all duration-200 group"
             >
-              <span className="font-medium text-sm">P&L Calendar</span>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                  <FiCalendar className="w-4 h-4 text-purple-400" />
+                </div>
+                <span className="font-medium text-sm">P&L Calendar</span>
+              </div>
+              <FiChevronRight className="w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-colors" />
             </button>
           )}
 
@@ -498,17 +512,29 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                 setShowAuthorDashboardModal(true);
                 setShowAccountModal(false);
               }}
-              className="flex items-center w-full p-3 text-gray-300 hover:text-white hover:bg-gray-900/50 rounded-lg transition-all duration-200 border border-transparent hover:border-gray-800"
+              className="flex items-center justify-between w-full px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-xl transition-all duration-200 group"
             >
-              <span className="font-medium text-sm">Author Dashboard</span>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
+                  <FiFileText className="w-4 h-4 text-green-400" />
+                </div>
+                <span className="font-medium text-sm">Author Dashboard</span>
+              </div>
+              <FiChevronRight className="w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-colors" />
             </button>
           )}
 
           <button
             onClick={() => setShowAliasModal(true)}
-            className="flex items-center w-full p-3 text-gray-300 hover:text-white hover:bg-gray-900/50 rounded-lg transition-all duration-200 border border-transparent hover:border-gray-800"
+            className="flex items-center justify-between w-full px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-xl transition-all duration-200 group"
           >
-            <span className="font-medium text-sm">Set Alias</span>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                <FiEdit3 className="w-4 h-4 text-blue-400" />
+              </div>
+              <span className="font-medium text-sm">Set Alias</span>
+            </div>
+            <FiChevronRight className="w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-colors" />
           </button>
 
           <button
@@ -516,31 +542,49 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
               setShowAccountSettingsModal(true);
               setShowAccountModal(false);
             }}
-            className="flex items-center w-full p-3 text-gray-300 hover:text-white hover:bg-gray-900/50 rounded-lg transition-all duration-200 border border-transparent hover:border-gray-800"
+            className="flex items-center justify-between w-full px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-xl transition-all duration-200 group"
           >
-            <span className="font-medium text-sm">Account Settings</span>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-gray-500/10 flex items-center justify-center">
+                <FiSettings className="w-4 h-4 text-gray-400" />
+              </div>
+              <span className="font-medium text-sm">Account Settings</span>
+            </div>
+            <FiChevronRight className="w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-colors" />
           </button>
 
           <Link
             href="/rewards"
-            className="flex items-center w-full p-3 text-gray-300 hover:text-white hover:bg-gray-900/50 rounded-lg transition-all duration-200 border border-transparent hover:border-gray-800"
+            className="flex items-center justify-between w-full px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-xl transition-all duration-200 group"
             onClick={() => setShowAccountModal(false)}
           >
-            <span className="font-medium text-sm">Rewards & Referrals</span>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                <FiGift className="w-4 h-4 text-amber-400" />
+              </div>
+              <span className="font-medium text-sm">Rewards & Referrals</span>
+            </div>
+            <FiChevronRight className="w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-colors" />
           </Link>
         </div>
 
+        {/* Divider */}
+        <div className="border-t border-gray-800/50 my-2" />
+
         {/* Logout Section */}
-        <div className="pt-2 border-t border-gray-800">
+        <div>
           {user ? (
-            <motion.button
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
+            <button
               onClick={handleSignOut}
-              className="flex items-center w-full p-3 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-all duration-200 border border-transparent hover:border-red-500/20"
+              className="flex items-center justify-between w-full px-3 py-2.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-all duration-200 group"
             >
-              <span className="font-medium text-sm">Sign Out</span>
-            </motion.button>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
+                  <FiLogOut className="w-4 h-4 text-red-400" />
+                </div>
+                <span className="font-medium text-sm">Sign Out</span>
+              </div>
+            </button>
           ) : (
             <button
               onClick={() => {
@@ -548,9 +592,14 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                 setShowLoginModal(true);
                 setShowAccountModal(false);
               }}
-              className="flex items-center w-full p-3 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-lg transition-all duration-200 border border-transparent hover:border-blue-500/20"
+              className="flex items-center justify-between w-full px-3 py-2.5 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-xl transition-all duration-200 group"
             >
-              <span className="font-medium text-sm">Sign In</span>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                  <FiLogIn className="w-4 h-4 text-blue-400" />
+                </div>
+                <span className="font-medium text-sm">Sign In</span>
+              </div>
             </button>
           )}
         </div>
@@ -594,14 +643,11 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
             isInlineDropdown ? (
               buttonRef && (
                 <motion.div
-                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                  transition={{ duration: 0.15, ease: "easeOut" }}
+                  {...motionPresets.dropdownDesktop}
                   ref={modalRef}
-                  className="fixed w-80 bg-gray-950 backdrop-blur-sm border border-gray-800 shadow-2xl overflow-hidden z-[9999]"
+                  className="fixed w-72 bg-gray-950/95 backdrop-blur-xl border border-gray-800/60 shadow-2xl shadow-black/40 overflow-hidden z-[9999] rounded-2xl"
                   style={{
-                    top: buttonRef.getBoundingClientRect().bottom + 32,
+                    top: buttonRef.getBoundingClientRect().bottom + 12,
                     right: window.innerWidth - buttonRef.getBoundingClientRect().right,
                   }}
                 >
@@ -618,20 +664,24 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                   onClick={() => setShowAccountModal(false)}
                 />
                 <motion.div
-                  className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+                  className="fixed inset-0 z-[9999] flex items-end sm:items-center sm:justify-center"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                 >
                   <motion.div
                     ref={modalRef}
-                    initial={{ opacity: 0, y: 16, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 16, scale: 0.95 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="w-full max-w-sm h-auto max-h-[90vh] border border-gray-800 bg-gray-950 shadow-2xl overflow-hidden rounded-xl flex flex-col"
+                    initial={{ opacity: 0, y: '100%' }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: '100%' }}
+                    transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                    className="w-full sm:max-w-sm h-[85vh] sm:h-auto sm:max-h-[75vh] bg-gray-950 sm:border sm:border-gray-800/60 shadow-2xl overflow-hidden rounded-t-3xl sm:rounded-2xl flex flex-col sm:mx-4"
                     onClick={(e) => e.stopPropagation()}
                   >
+                    {/* Mobile drag handle */}
+                    <div className="sm:hidden flex justify-center pt-3 pb-1">
+                      <div className="w-10 h-1 rounded-full bg-gray-600" />
+                    </div>
                     {renderProfileContent()}
                   </motion.div>
                 </motion.div>
@@ -675,36 +725,46 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
 
       {/* Alias Modal */}
       {showAliasModal && createPortal(
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center sm:justify-center z-[9999]">
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-gray-950 p-6 w-96 border border-gray-800"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="bg-gray-950 w-full sm:w-96 sm:border sm:border-gray-800/60 sm:rounded-2xl rounded-t-3xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-white text-lg font-semibold mb-4">Set Your Alias</h3>
-            <p className="text-gray-400 text-sm mb-4">
-              Choose a display name that will appear on leaderboards and in the community.
-            </p>
+            {/* Mobile drag handle */}
+            <div className="sm:hidden flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-gray-600" />
+            </div>
             
-            <div className="mb-4">
-              <label className="block text-gray-300 text-sm font-medium mb-2">
-                Display Name (Alias)
+            <div className="px-5 py-4 border-b border-gray-800/60">
+              <h3 className="text-white text-lg font-semibold">Set Your Alias</h3>
+              <p className="text-gray-400 text-sm mt-1">
+                Choose a display name for leaderboards and community.
+              </p>
+            </div>
+            
+            <div className="px-5 py-4">
+              <label className="block text-gray-300 text-xs font-medium uppercase tracking-wide mb-2">
+                Display Name
               </label>
               <input
                 type="text"
                 value={alias}
                 onChange={(e) => setAlias(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3.5 py-2.5 bg-gray-900/80 border border-gray-800/60 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 text-sm transition-all duration-200"
                 placeholder="Enter your preferred display name"
                 maxLength={20}
               />
+              <p className="text-gray-500 text-xs mt-2">{alias.length}/20 characters</p>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-3 px-5 py-4 border-t border-gray-800/60">
               <button
                 onClick={() => setShowAliasModal(false)}
-                className="flex-1 px-4 py-2 bg-gray-900 text-gray-300 hover:bg-gray-800 transition-colors"
+                className="flex-1 px-4 py-2.5 bg-gray-900/60 border border-gray-800/60 text-gray-300 hover:bg-gray-800/60 hover:border-gray-700 rounded-xl transition-all duration-200 font-medium text-sm"
               >
                 Cancel
               </button>
@@ -717,7 +777,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                   }
                 }}
                 disabled={!alias.trim() || settingsLoading}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all duration-200 font-medium text-sm"
               >
                 {settingsLoading ? 'Updating...' : 'Update Alias'}
               </button>
@@ -729,99 +789,83 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
 
       {/* Account Settings Modal */}
       {showAccountSettingsModal && createPortal(
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm sm:flex sm:items-center sm:justify-center z-[9999] sm:p-5">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm sm:flex sm:items-center sm:justify-center z-[9999]">
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            transition={{ duration: 0.2 }}
-            className="bg-gray-950 w-full h-full sm:h-auto sm:max-w-[520px] sm:mx-0 sm:border sm:border-gray-800 shadow-2xl flex flex-col sm:max-h-[82vh] sm:my-auto"
+            initial={{ opacity: 0, y: '100%' }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className="bg-gray-950 w-full h-full sm:h-auto sm:max-w-[520px] sm:mx-4 sm:border sm:border-gray-800/60 shadow-2xl flex flex-col sm:max-h-[85vh] sm:rounded-2xl"
           >
-            <div className="relative flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-800 bg-gray-950">
+            {/* Mobile drag handle */}
+            <div className="sm:hidden flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-gray-600" />
+            </div>
+            
+            <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-800/60 bg-gray-950 flex-shrink-0">
               <div className="text-left">
-                <span className="text-[10px] uppercase tracking-[0.3em] text-blue-400/70 font-medium">Profile</span>
-                <h3 className="text-white text-base sm:text-2xl font-semibold mt-1">Account Settings</h3>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-blue-400/70 font-medium">Profile</span>
+                <h3 className="text-white text-base sm:text-lg font-semibold mt-0.5">Account Settings</h3>
               </div>
               <button
                 onClick={() => setShowAccountSettingsModal(false)}
-                className="absolute top-3 sm:top-4 right-4 sm:right-6 w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg bg-gray-900/50 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 text-gray-300 hover:text-white transition-all duration-200"
+                className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-900/60 hover:bg-gray-800/80 border border-gray-800/60 hover:border-gray-700 text-gray-400 hover:text-white transition-all duration-200"
                 aria-label="Close"
               >
-                <FiX className="w-5 h-5 sm:w-6 sm:h-6" />
+                <FiX className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-6 py-4 space-y-4 sm:space-y-6">
+            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent px-4 sm:px-5 py-4 space-y-4">
               {/* Profile Section */}
-              <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner mt-1">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
-                  <h4 className="text-white font-semibold text-base sm:text-lg">Profile Information</h4>
-                </div>
-                <div className="space-y-3 sm:space-y-4">
+              <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
+                <h4 className="text-white font-semibold text-sm mb-4">Profile Information</h4>
+                <div className="space-y-4">
                   {/* Profile Picture */}
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-5 gap-3 sm:gap-4">
-                    <div className="relative self-center sm:self-auto">
-                      <div className="w-14 h-14 sm:w-20 sm:h-20 overflow-hidden bg-gray-900 border border-gray-800 shadow-lg">
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-900/80 border border-gray-800/60">
                         {profilePicture ? (
                           <Image
                             src={profilePicture}
                             alt="Profile"
-                            width={72}
-                            height={72}
+                            width={64}
+                            height={64}
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gray-900">
+                          <div className="w-full h-full flex items-center justify-center">
                             <FiUser className="w-6 h-6 text-gray-500" />
                           </div>
                         )}
                         {uploadingImage && (
                           <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                            <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-500 border-t-transparent" />
                           </div>
                         )}
                       </div>
                       <button
                         onClick={() => fileInputRef.current?.click()}
                         disabled={uploadingImage}
-                        className="absolute -bottom-2 -right-2 w-6 h-6 sm:w-7 sm:h-7 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 flex items-center justify-center transition-colors shadow-lg"
+                        className="absolute -bottom-1.5 -right-1.5 w-7 h-7 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 flex items-center justify-center transition-colors rounded-lg shadow-lg"
                       >
-                        {uploadingImage ? (
-                          <div className="animate-spin rounded-full h-3 w-3 border-b border-white"></div>
-                        ) : (
-                          <FiUser className="w-3 h-3 text-white" />
-                        )}
+                        <FiEdit3 className="w-3.5 h-3.5 text-white" />
                       </button>
                     </div>
-                    <div className="flex-1 w-full">
-                      <h5 className="text-white font-semibold text-sm sm:text-base">Profile Picture</h5>
-                      <p className="text-gray-400 text-xs sm:text-sm mb-3">
-                        Upload an image with a minimum size of 256x256 for best clarity.
-                      </p>
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploadingImage}
-                        className="inline-flex items-center gap-2 px-3 py-2 bg-gray-900 border border-gray-800 hover:border-gray-600 hover:bg-gray-900/80 text-xs sm:text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {uploadingImage ? 'Uploading...' : 'Upload Image'}
-                      </button>
-                      
-                      {/* Status Messages */}
+                    <div className="flex-1">
+                      <h5 className="text-white font-medium text-sm">Profile Picture</h5>
+                      <p className="text-gray-400 text-xs mt-0.5">256x256 minimum</p>
                       {uploadStatus !== 'idle' && uploadMessage && (
                         <motion.div
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className={`mt-3 px-3 py-2 text-sm flex items-center gap-2 ${
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className={`mt-2 px-2.5 py-1.5 text-xs flex items-center gap-1.5 rounded-lg ${
                             uploadStatus === 'success' 
-                              ? 'bg-green-500/15 text-green-300 border border-green-500/30'
-                              : 'bg-red-500/15 text-red-300 border border-red-500/30'
+                              ? 'bg-green-500/15 text-green-400'
+                              : 'bg-red-500/15 text-red-400'
                           }`}
                         >
-                          {uploadStatus === 'success' ? (
-                            <FiCheck className="w-4 h-4" />
-                          ) : (
-                            <FiAlertCircle className="w-4 h-4" />
-                          )}
+                          {uploadStatus === 'success' ? <FiCheck className="w-3.5 h-3.5" /> : <FiAlertCircle className="w-3.5 h-3.5" />}
                           <span>{uploadMessage}</span>
                         </motion.div>
                       )}
@@ -836,235 +880,128 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                     className="hidden"
                   />
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="col-span-1 sm:col-span-2">
-                      <label className="block text-gray-300 text-xs sm:text-sm font-medium mb-2">Display Name</label>
-                      <input
-                        type="text"
-                        value={displayName}
-                        onChange={(e) => setDisplayName(e.target.value)}
-                        className="w-full px-3 py-2 bg-gray-950 border border-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/50 text-sm transition"
-                        placeholder="Enter your display name"
-                      />
-                    </div>
+                  {/* Display Name */}
+                  <div>
+                    <label className="block text-gray-400 text-xs font-medium uppercase tracking-wide mb-2">Display Name</label>
+                    <input
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-gray-900/80 border border-gray-800/60 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 text-sm transition-all duration-200"
+                      placeholder="Enter your display name"
+                    />
                   </div>
-
                 </div>
               </div>
 
               {/* Notifications Section */}
-              <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
-                  <h4 className="text-white font-semibold text-base sm:text-lg">Notifications</h4>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-                  <label className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer">
-                    <div>
-                      <span className="text-gray-200 text-sm font-medium">Email Notifications</span>
-                      <p className="text-[11px] sm:text-xs text-gray-500 mt-1">Cycle insights and important updates.</p>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="checkbox"
-                        checked={notifications.email}
-                        onChange={(e) => setNotifications(prev => ({ ...prev, email: e.target.checked }))}
-                        className="sr-only"
-                      />
-                      <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
-                        notifications.email ? 'bg-blue-500' : 'bg-gray-700'
-                      }`}>
-                        <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          notifications.email ? 'translate-x-5' : 'translate-x-0'
-                        }`}></div>
+              <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
+                <h4 className="text-white font-semibold text-sm mb-3">Notifications</h4>
+                <div className="space-y-2">
+                  {[
+                    { key: 'email', label: 'Email', desc: 'Cycle insights and updates' },
+                    { key: 'push', label: 'Push', desc: 'Instant signals to your device' },
+                    { key: 'trading', label: 'Trading', desc: 'Positions and P&L alerts' },
+                    { key: 'news', label: 'News', desc: 'Market commentary' },
+                  ].map(({ key, label, desc }) => (
+                    <label key={key} className="flex items-center justify-between gap-3 p-3 bg-gray-900/60 hover:bg-gray-800/40 rounded-xl transition-all duration-200 cursor-pointer border border-transparent hover:border-gray-800/60">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-gray-200 text-sm font-medium">{label}</span>
+                        <p className="text-[11px] text-gray-500 mt-0.5 truncate">{desc}</p>
                       </div>
-                    </div>
-                  </label>
-
-                  <label className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer">
-                    <div>
-                      <span className="text-gray-200 text-sm font-medium">Push Notifications</span>
-                      <p className="text-[11px] sm:text-xs text-gray-500 mt-1">Instant signals delivered to your device.</p>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="checkbox"
-                        checked={notifications.push}
-                        onChange={(e) => setNotifications(prev => ({ ...prev, push: e.target.checked }))}
-                        className="sr-only"
-                      />
-                      <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
-                        notifications.push ? 'bg-blue-500' : 'bg-gray-700'
-                      }`}>
-                        <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          notifications.push ? 'translate-x-5' : 'translate-x-0'
-                        }`}></div>
+                      <div className="relative flex-shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={notifications[key as keyof typeof notifications]}
+                          onChange={(e) => setNotifications(prev => ({ ...prev, [key]: e.target.checked }))}
+                          className="sr-only"
+                        />
+                        <div className={`w-10 h-5.5 rounded-full transition-colors duration-200 flex items-center px-0.5 ${
+                          notifications[key as keyof typeof notifications] ? 'bg-blue-500' : 'bg-gray-700'
+                        }`}>
+                          <div className={`w-4.5 h-4.5 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                            notifications[key as keyof typeof notifications] ? 'translate-x-[18px]' : 'translate-x-0'
+                          }`} />
+                        </div>
                       </div>
-                    </div>
-                  </label>
-
-                  <label className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer">
-                    <div>
-                      <span className="text-gray-200 text-sm font-medium">Trading Notifications</span>
-                      <p className="text-[11px] sm:text-xs text-gray-500 mt-1">Get notified about positions and P&L shifts.</p>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="checkbox"
-                        checked={notifications.trading}
-                        onChange={(e) => setNotifications(prev => ({ ...prev, trading: e.target.checked }))}
-                        className="sr-only"
-                      />
-                      <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
-                        notifications.trading ? 'bg-blue-500' : 'bg-gray-700'
-                      }`}>
-                        <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          notifications.trading ? 'translate-x-5' : 'translate-x-0'
-                        }`}></div>
-                      </div>
-                    </div>
-                  </label>
-
-                  <label className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer">
-                    <div>
-                      <span className="text-gray-200 text-sm font-medium">News Notifications</span>
-                      <p className="text-[11px] sm:text-xs text-gray-500 mt-1">Macro stories and curated market commentary.</p>
-                    </div>
-                    <div className="relative">
-                    <input
-                        type="checkbox"
-                        checked={notifications.news}
-                        onChange={(e) => setNotifications(prev => ({ ...prev, news: e.target.checked }))}
-                        className="sr-only"
-                      />
-                      <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
-                        notifications.news ? 'bg-blue-500' : 'bg-gray-700'
-                      }`}>
-                        <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          notifications.news ? 'translate-x-5' : 'translate-x-0'
-                        }`}></div>
-                      </div>
-                    </div>
-                  </label>
+                    </label>
+                  ))}
                 </div>
               </div>
 
               {/* Privacy Section */}
-              <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
-                  <h4 className="text-white font-semibold text-base sm:text-lg">Privacy</h4>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-                  <label className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer">
-                    <div>
-                      <span className="text-gray-200 text-sm font-medium">Show Profile</span>
-                      <p className="text-[11px] sm:text-xs text-gray-500 mt-1">Allow others to discover and follow you.</p>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="checkbox"
-                        checked={privacy.showProfile}
-                        onChange={(e) => setPrivacy(prev => ({ ...prev, showProfile: e.target.checked }))}
-                        className="sr-only"
-                      />
-                      <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
-                        privacy.showProfile ? 'bg-blue-500' : 'bg-gray-700'
-                      }`}>
-                        <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          privacy.showProfile ? 'translate-x-5' : 'translate-x-0'
-                        }`}></div>
+              <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
+                <h4 className="text-white font-semibold text-sm mb-3">Privacy</h4>
+                <div className="space-y-2">
+                  {[
+                    { key: 'showProfile', label: 'Show Profile', desc: 'Allow others to discover you' },
+                    { key: 'showTrades', label: 'Show Trades', desc: 'Share trades with followers' },
+                    { key: 'showBalance', label: 'Show Balance', desc: 'Display wallet balance' },
+                  ].map(({ key, label, desc }) => (
+                    <label key={key} className="flex items-center justify-between gap-3 p-3 bg-gray-900/60 hover:bg-gray-800/40 rounded-xl transition-all duration-200 cursor-pointer border border-transparent hover:border-gray-800/60">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-gray-200 text-sm font-medium">{label}</span>
+                        <p className="text-[11px] text-gray-500 mt-0.5 truncate">{desc}</p>
                       </div>
-                    </div>
-                  </label>
-
-                  <label className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer">
-                    <div>
-                      <span className="text-gray-200 text-sm font-medium">Show Trades</span>
-                      <p className="text-[11px] sm:text-xs text-gray-500 mt-1">Share recent trades with your followers.</p>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="checkbox"
-                        checked={privacy.showTrades}
-                        onChange={(e) => setPrivacy(prev => ({ ...prev, showTrades: e.target.checked }))}
-                        className="sr-only"
-                      />
-                      <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
-                        privacy.showTrades ? 'bg-blue-500' : 'bg-gray-700'
-                      }`}>
-                        <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          privacy.showTrades ? 'translate-x-5' : 'translate-x-0'
-                        }`}></div>
+                      <div className="relative flex-shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={privacy[key as keyof typeof privacy]}
+                          onChange={(e) => setPrivacy(prev => ({ ...prev, [key]: e.target.checked }))}
+                          className="sr-only"
+                        />
+                        <div className={`w-10 h-5.5 rounded-full transition-colors duration-200 flex items-center px-0.5 ${
+                          privacy[key as keyof typeof privacy] ? 'bg-blue-500' : 'bg-gray-700'
+                        }`}>
+                          <div className={`w-4.5 h-4.5 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                            privacy[key as keyof typeof privacy] ? 'translate-x-[18px]' : 'translate-x-0'
+                          }`} />
+                        </div>
                       </div>
-                    </div>
-                  </label>
-
-                  <label className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer">
-                    <div>
-                      <span className="text-gray-200 text-sm font-medium">Show Balance</span>
-                      <p className="text-[11px] sm:text-xs text-gray-500 mt-1">Reveal your wallet balance on your profile.</p>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="checkbox"
-                        checked={privacy.showBalance}
-                        onChange={(e) => setPrivacy(prev => ({ ...prev, showBalance: e.target.checked }))}
-                        className="sr-only"
-                      />
-                      <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
-                        privacy.showBalance ? 'bg-blue-500' : 'bg-gray-700'
-                      }`}>
-                        <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                          privacy.showBalance ? 'translate-x-5' : 'translate-x-0'
-                        }`}></div>
-                      </div>
-                    </div>
-                  </label>
+                    </label>
+                  ))}
                 </div>
               </div>
 
               {/* Settings Status Messages */}
               {settingsStatus !== 'idle' && settingsMessage && (
                 <motion.div
-                  initial={{ opacity: 0, y: -10 }}
+                  initial={{ opacity: 0, y: -8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`p-3 sm:p-4 text-xs sm:text-sm flex items-center gap-2 sm:gap-3 border ${
+                  className={`p-3 text-xs flex items-center gap-2 rounded-xl ${
                     settingsStatus === 'success' 
-                      ? 'bg-green-500/15 text-green-300 border-green-500/30'
-                      : 'bg-red-500/15 text-red-300 border-red-500/30'
+                      ? 'bg-green-500/15 text-green-400'
+                      : 'bg-red-500/15 text-red-400'
                   }`}
                 >
-                  {settingsStatus === 'success' ? (
-                    <FiCheck className="w-4 h-4" />
-                  ) : (
-                    <FiAlertCircle className="w-4 h-4" />
-                  )}
+                  {settingsStatus === 'success' ? <FiCheck className="w-4 h-4" /> : <FiAlertCircle className="w-4 h-4" />}
                   <span>{settingsMessage}</span>
                 </motion.div>
               )}
-
-              {/* Actions */}
-              <div className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 pt-2 sm:pt-0">
-                <button
-                  onClick={() => setShowAccountSettingsModal(false)}
-                  className="flex-1 px-4 py-2.5 bg-gray-900 border border-gray-800 text-gray-300 hover:border-gray-600 hover:text-white transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveSettings}
-                  disabled={savingSettings}
-                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                >
-                  {savingSettings ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      <span>Saving...</span>
-                    </>
-                  ) : (
-                    <span>Save Changes</span>
-                  )}
-                </button>
-              </div>
+            </div>
+            
+            {/* Footer Actions */}
+            <div className="flex gap-3 px-4 sm:px-5 py-4 border-t border-gray-800/60 flex-shrink-0">
+              <button
+                onClick={() => setShowAccountSettingsModal(false)}
+                className="flex-1 px-4 py-2.5 bg-gray-900/60 border border-gray-800/60 text-gray-300 hover:bg-gray-800/60 hover:border-gray-700 rounded-xl transition-all duration-200 font-medium text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveSettings}
+                disabled={savingSettings}
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all duration-200 font-medium text-sm flex items-center justify-center gap-2"
+              >
+                {savingSettings ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Changes</span>
+                )}
+              </button>
             </div>
           </motion.div>
         </div>
@@ -1073,70 +1010,77 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
 
       {/* Author Dashboard Modal */}
       {showAuthorDashboardModal && createPortal(
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999]">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center sm:justify-center z-[9999]">
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-gray-950 p-6 w-[700px] max-h-[80vh] overflow-y-auto border border-gray-800"
+            initial={{ opacity: 0, y: '100%' }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className="bg-gray-950 w-full h-[90vh] sm:h-auto sm:max-w-2xl sm:mx-4 sm:max-h-[85vh] sm:border sm:border-gray-800/60 sm:rounded-2xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col"
           >
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-white text-xl font-semibold">Author Dashboard</h3>
+            {/* Mobile drag handle */}
+            <div className="sm:hidden flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-gray-600" />
+            </div>
+            
+            <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-800/60 flex-shrink-0">
+              <div>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-green-400/70 font-medium">Author</span>
+                <h3 className="text-white text-base sm:text-lg font-semibold mt-0.5">Dashboard</h3>
+              </div>
               <button
                 onClick={() => setShowAuthorDashboardModal(false)}
-                  className="p-2 hover:bg-gray-900 transition-colors"
+                className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-900/60 hover:bg-gray-800/80 border border-gray-800/60 hover:border-gray-700 text-gray-400 hover:text-white transition-all duration-200"
               >
-                <FiX className="w-5 h-5 text-gray-400" />
+                <FiX className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-6">
+            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent px-4 sm:px-5 py-4 space-y-4">
               {/* Stats Overview */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-gray-800/50 p-4 text-center">
-                  <div className="text-2xl font-bold text-blue-400">0</div>
-                  <div className="text-gray-400 text-sm">Total Posts</div>
-                </div>
-                <div className="bg-gray-800/50 p-4 text-center">
-                  <div className="text-2xl font-bold text-green-400">0</div>
-                  <div className="text-gray-400 text-sm">Total Views</div>
-                </div>
-                <div className="bg-gray-800/50 p-4 text-center">
-                  <div className="text-2xl font-bold text-purple-400">0</div>
-                  <div className="text-gray-400 text-sm">Total Earnings</div>
-                </div>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { value: '0', label: 'Posts', color: 'blue' },
+                  { value: '0', label: 'Views', color: 'green' },
+                  { value: '0', label: 'Earnings', color: 'purple' },
+                ].map(({ value, label, color }) => (
+                  <div key={label} className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-3 text-center">
+                    <div className={`text-xl sm:text-2xl font-bold text-${color}-400`}>{value}</div>
+                    <div className="text-gray-400 text-xs mt-0.5">{label}</div>
+                  </div>
+                ))}
               </div>
 
               {/* Quick Actions */}
-              <div className="bg-gray-800/50 rounded-lg p-4">
-                <h4 className="text-white font-medium mb-3">Quick Actions</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                    Create New Post
+              <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
+                <h4 className="text-white font-semibold text-sm mb-3">Quick Actions</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  <button className="px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-500 transition-all duration-200 text-sm font-medium">
+                    Create Post
                   </button>
-                  <button className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors">
-                    View Analytics
+                  <button className="px-4 py-2.5 bg-gray-900/60 border border-gray-800/60 text-gray-300 hover:bg-gray-800/60 hover:border-gray-700 rounded-xl transition-all duration-200 text-sm font-medium">
+                    Analytics
                   </button>
                 </div>
               </div>
 
               {/* Recent Activity */}
-              <div className="bg-gray-800/50 rounded-lg p-4">
-                <h4 className="text-white font-medium mb-3">Recent Activity</h4>
-                <div className="text-gray-400 text-sm text-center py-8">
+              <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
+                <h4 className="text-white font-semibold text-sm mb-3">Recent Activity</h4>
+                <div className="text-gray-500 text-sm text-center py-8">
                   No recent activity
                 </div>
               </div>
+            </div>
 
-              {/* Close Button */}
-              <div className="flex justify-end pt-4">
-                <button
-                  onClick={() => setShowAuthorDashboardModal(false)}
-                  className="px-4 py-2 bg-gray-900 text-gray-300 hover:bg-gray-800 transition-colors"
-                >
-                  Close
-                </button>
-              </div>
+            {/* Footer */}
+            <div className="flex justify-end px-4 sm:px-5 py-4 border-t border-gray-800/60 flex-shrink-0">
+              <button
+                onClick={() => setShowAuthorDashboardModal(false)}
+                className="px-4 py-2.5 bg-gray-900/60 border border-gray-800/60 text-gray-300 hover:bg-gray-800/60 hover:border-gray-700 rounded-xl transition-all duration-200 font-medium text-sm"
+              >
+                Close
+              </button>
             </div>
           </motion.div>
         </div>

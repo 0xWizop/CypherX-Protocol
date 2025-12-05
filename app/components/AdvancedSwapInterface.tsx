@@ -760,7 +760,7 @@ const AdvancedSwapInterface: React.FC<AdvancedSwapInterfaceProps> = ({
         </div>
       )}
 
-      {/* Swap Confirmation Dialog */}
+      {/* Swap Confirmation Dialog - Enhanced Desktop UX */}
       <AnimatePresence>
         {showSwapConfirmation && pendingSwapData && (
           <>
@@ -768,67 +768,100 @@ const AdvancedSwapInterface: React.FC<AdvancedSwapInterfaceProps> = ({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+              className="fixed inset-0 bg-black/70 backdrop-blur-md z-50"
               onClick={() => setShowSwapConfirmation(false)}
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="fixed inset-x-4 top-1/2 -translate-y-1/2 bg-slate-900 border border-slate-700 rounded-2xl p-6 z-50 max-w-md mx-auto"
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="fixed inset-x-4 top-1/2 -translate-y-1/2 bg-gradient-to-b from-slate-800 to-slate-900 border border-slate-600/50 rounded-2xl p-6 z-50 max-w-md mx-auto shadow-2xl shadow-black/50"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white">Confirm Swap</h3>
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                    <FaExchangeAlt className="w-4 h-4 text-blue-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-white">Confirm Swap</h3>
+                </div>
                 <button
                   onClick={() => setShowSwapConfirmation(false)}
-                  className="text-gray-400 hover:text-white"
+                  className="p-2 -mr-2 text-gray-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
-              <div className="space-y-4 mb-6">
-                <div className="bg-slate-800/50 rounded-xl p-4">
-                  <div className="text-xs text-gray-400 mb-1">You Pay</div>
+              
+              {/* Swap Details */}
+              <div className="space-y-3 mb-6">
+                {/* You Pay */}
+                <div className="bg-slate-800/70 rounded-xl p-4 border border-slate-700/50 hover:border-slate-600/50 transition-colors">
+                  <div className="text-xs text-gray-400 mb-2 uppercase tracking-wide font-medium">You Pay</div>
                   <div className="flex items-center justify-between">
-                    <span className="text-xl font-bold text-white">{pendingSwapData.amountIn}</span>
-                    <span className="text-sm text-gray-300">{pendingSwapData.tokenIn}</span>
+                    <span className="text-2xl font-bold text-white">{pendingSwapData.amountIn}</span>
+                    <div className="flex items-center gap-2 bg-slate-700/50 px-3 py-1.5 rounded-lg border border-slate-600/30">
+                      <span className="text-sm font-medium text-gray-200">{pendingSwapData.tokenIn}</span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex justify-center">
-                  <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                  </svg>
-                </div>
-                <div className="bg-slate-800/50 rounded-xl p-4">
-                  <div className="text-xs text-gray-400 mb-1">You Receive</div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xl font-bold text-white">{pendingSwapData.amountOut}</span>
-                    <span className="text-sm text-gray-300">{pendingSwapData.tokenOut}</span>
-                  </div>
-                </div>
-                {insufficientFunds && (
-                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm flex items-center gap-2">
-                    <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                
+                {/* Swap Arrow */}
+                <div className="flex justify-center -my-1 relative z-10">
+                  <div className="w-10 h-10 bg-slate-700 border-2 border-slate-600 rounded-full flex items-center justify-center shadow-lg">
+                    <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                     </svg>
-                    <span>Insufficient funds. You have {tokenInBalance} {pendingSwapData.tokenIn}</span>
                   </div>
+                </div>
+                
+                {/* You Receive */}
+                <div className="bg-green-500/10 rounded-xl p-4 border border-green-500/30 hover:border-green-500/50 transition-colors">
+                  <div className="text-xs text-green-400/70 mb-2 uppercase tracking-wide font-medium">You Receive</div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-2xl font-bold text-green-400">{pendingSwapData.amountOut}</span>
+                    <div className="flex items-center gap-2 bg-green-500/20 px-3 py-1.5 rounded-lg border border-green-500/30">
+                      <span className="text-sm font-medium text-green-300">{pendingSwapData.tokenOut}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Insufficient Funds Warning */}
+                {insufficientFunds && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-red-500/10 border border-red-500/40 rounded-xl p-4 flex items-center gap-3"
+                  >
+                    <div className="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-red-400">Insufficient Balance</div>
+                      <div className="text-xs text-red-400/70">You have {tokenInBalance} {pendingSwapData.tokenIn}</div>
+                    </div>
+                  </motion.div>
                 )}
               </div>
+              
+              {/* Action Buttons */}
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowSwapConfirmation(false)}
-                  className="flex-1 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-medium"
+                  className="flex-1 px-4 py-3.5 bg-slate-700 hover:bg-slate-600 active:bg-slate-500 text-white rounded-xl font-medium transition-all duration-150 hover:shadow-lg"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => !insufficientFunds && executeSwap()}
                   disabled={insufficientFunds}
-                  className="flex-1 px-4 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-xl font-semibold"
+                  className="flex-1 px-4 py-3.5 bg-blue-500 hover:bg-blue-400 active:bg-blue-600 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-xl font-semibold transition-all duration-150 hover:shadow-lg hover:shadow-blue-500/25 disabled:shadow-none"
                 >
                   Confirm Swap
                 </button>

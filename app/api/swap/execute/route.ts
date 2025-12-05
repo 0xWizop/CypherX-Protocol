@@ -6,13 +6,17 @@ import { FieldValue } from "firebase-admin/firestore";
 // Constants
 const BASE_RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://base-mainnet.g.alchemy.com/v2/8KR6qwxbLlIISgrMCZfsrYeMmn6-S-bN";
 const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
+const BASE_CHAIN_ID = "8453";
+
+// 0x API Configuration
+const ZEROX_API_KEY = process.env.ZEROX_API_KEY || "";
+const ZEROX_API_URL = "https://api.0x.org";
 
 // Treasury configuration
-// Treasury address for future direct transfers: 0xC0dFa8af8b9d2Ed4e6b9AA76615CCf51ea3F3fdC
-const PLATFORM_FEE_PERCENT = 0.3; // 0.3% platform fee
-const BASE_CASHBACK_PERCENT = 5; // 5% of fee back to user
+const PLATFORM_FEE_PERCENT = 0.3;
+const BASE_CASHBACK_PERCENT = 5;
 
-// Referral volume tiers for extra cashback
+// Referral volume tiers
 const REFERRAL_VOLUME_TIERS = [
   { minVolume: 0, extraCashback: 0 },
   { minVolume: 1000, extraCashback: 5 },
@@ -21,102 +25,12 @@ const REFERRAL_VOLUME_TIERS = [
   { minVolume: 100000, extraCashback: 20 },
 ];
 
-// 🔧 FIXED: DEX Router Addresses on Base Chain - Updated with correct addresses
-const DEX_ROUTERS = {
-  // Uniswap V2 - Most reliable on Base chain
-  uniswap_v2: {
-    router: "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24",
-    factory: "0x8909dc15e40173ff4699343b6eb8132c65e18ec6",
-    version: "v2"
-  },
-  // Aerodrome - Verified router address
-  aerodrome: {
-    router: "0xE9992487b2EE03b7a91241695A58E0ef3654643E",
-    factory: "0x420DD381b31aEf6683db6B902084cB0FFECe40Da",
-    quoter: "0x6F257E7F63cB7C88Cd4FDBb4C6B6f5D4c6A6E7F3",
-    version: "v2"
-  },
-  // Uniswap V3 - Verified addresses
-  uniswap_v3: {
-    router: "0x6ff5693b99212da76ad316178a184ab56d299b43", // SwapRouter2
-    factory: "0x33128a8fC17869897dcE68Ed026d694621f6FDfD",
-    quoter: "0x3d4e44Eb137fd1710B3961a3B3A04F56a85e5870",
-    version: "v3"
-  },
-  // BaseSwap - Verified addresses
-  baseswap: {
-    router: "0xFD14567eaf9ba9b71d4a6b255d96842dEF71D2bE",
-    factory: "0xFDa619b6d209A7e7De1A5c7C7bDC9F1bEA73f33a",
-    version: "v2"
-  },
-  // SushiSwap - Verified addresses
-  sushiswap: {
-    router: "0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506", // Router02
-    factory: "0xc35DADB65012eC5796536bD9864eD8773ABc74C4",
-    version: "v2"
-  },
-  // 1inch Aggregator
-  oneinch: {
-    router: "0x1111111254EEB25477B68fb85Ed929f73A960582", // AggregationRouterV5
-    version: "aggregator"
-  }
-};
-
-// 🔧 FIXED: Updated router ABIs with correct methods for each DEX
-const ROUTER_ABIS = {
-  // Uniswap V2 ABI
-  uniswap_v2: [
-    "function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)",
-    "function swapExactETHForTokensSupportingFeeOnTransferTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable",
-    "function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
-    "function swapExactTokensForETHSupportingFeeOnTransferTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external",
-    "function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
-    "function swapExactTokensForTokensSupportingFeeOnTransferTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external"
-  ],
-  // Aerodrome ABI - FIXED: Added missing methods
-  aerodrome: [
-    "function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)",
-    "function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
-    "function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
-    "function swap(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOutMin, address to, uint256 deadline) external payable returns (uint256 amountOut)"
-  ],
-  // Baseswap ABI
-  baseswap: [
-    "function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)",
-    "function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
-    "function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)"
-  ]
-};
-
 // ERC20 ABI for approvals
 const ERC20_ABI = [
-  {
-    inputs: [
-      { name: "spender", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    name: "approve",
-    outputs: [{ name: "", type: "bool" }],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [{ name: "account", type: "address" }],
-    name: "balanceOf",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [
-      { name: "owner", type: "address" },
-      { name: "spender", type: "address" },
-    ],
-    name: "allowance",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
+  "function approve(address spender, uint256 amount) external returns (bool)",
+  "function balanceOf(address account) external view returns (uint256)",
+  "function allowance(address owner, address spender) external view returns (uint256)",
+  "function decimals() external view returns (uint8)",
 ];
 
 interface SwapRequest {
@@ -128,46 +42,59 @@ interface SwapRequest {
   walletAddress: string;
   privateKey: string;
   tokenAddress?: string;
-  preferredDex?: string;
+  outputTokenAddress?: string;
 }
 
-interface SwapResponse {
-  success: boolean;
-  transactionHash?: string;
-  amountOut?: string;
-  gasUsed?: string;
-  gasPrice?: string;
-  error?: string;
-  dexUsed?: string;
-}
-
-// Get token info
-function getTokenInfo(symbol: string, tokenAddress?: string) {
-  if (symbol === "ETH") {
-    return {
-      address: WETH_ADDRESS,
-      symbol: "WETH",
-      name: "Wrapped Ethereum",
-      decimals: 18,
-      logo: "https://assets.coingecko.com/coins/images/2518/small/weth.png"
+interface ZeroXQuote {
+  buyAmount: string;
+  sellAmount: string;
+  allowanceTarget?: string;
+  transaction: {
+    to: string;
+    data: string;
+    value: string;
+    gas: string;
+    gasPrice: string;
+  };
+  permit2?: {
+    eip712: object;
+  };
+  issues?: {
+    allowance?: {
+      spender: string;
+      actual: string;
+      expected: string;
     };
+    balance?: {
+      token: string;
+      actual: string;
+      expected: string;
+    };
+  };
+}
+
+// Get token address from symbol
+function getTokenAddress(symbol: string, tokenAddress?: string): string {
+  if (symbol === "ETH" || symbol === "WETH") {
+    return WETH_ADDRESS;
   }
-  
-  if (tokenAddress && !tokenAddress.startsWith('0x')) {
-    throw new Error(`Invalid token address: ${tokenAddress}`);
-  }
-  
   if (tokenAddress) {
-    return {
-      address: tokenAddress,
-      symbol: symbol,
-      name: symbol,
-      decimals: 18,
-      logo: "https://via.placeholder.com/32"
-    };
+    return tokenAddress;
   }
-  
-  throw new Error(`Token ${symbol} not supported - token address required`);
+  throw new Error(`Token address required for ${symbol}`);
+}
+
+// Get token decimals
+async function getTokenDecimals(provider: ethers.Provider, tokenAddress: string): Promise<number> {
+  if (tokenAddress.toLowerCase() === WETH_ADDRESS.toLowerCase()) {
+    return 18;
+  }
+  try {
+    const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+    return await contract.decimals();
+  } catch {
+    return 18;
+  }
 }
 
 // Check wallet balance
@@ -178,365 +105,124 @@ async function checkBalance(
   amount: string,
   decimals: number
 ): Promise<boolean> {
-  if (tokenAddress === WETH_ADDRESS) {
+  const amountWei = ethers.parseUnits(amount, decimals);
+  
+  if (tokenAddress.toLowerCase() === WETH_ADDRESS.toLowerCase()) {
     const balance = await provider.getBalance(walletAddress);
-    const amountWei = ethers.parseUnits(amount, decimals);
     return balance >= amountWei;
   } else {
-    const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
-    const balance = await tokenContract.balanceOf(walletAddress);
-    const amountWei = ethers.parseUnits(amount, decimals);
+    const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+    const balance = await contract.balanceOf(walletAddress);
     return balance >= amountWei;
   }
 }
 
-// 🔧 FIXED: Enhanced token approval with better allowance handling
+// Fetch quote from 0x API
+async function get0xQuote(
+  sellToken: string,
+  buyToken: string,
+  sellAmount: string,
+  takerAddress: string,
+  slippageBps: number = 100
+): Promise<ZeroXQuote> {
+  const url = new URL(`${ZEROX_API_URL}/swap/allowance-holder/quote`);
+  url.searchParams.set("chainId", BASE_CHAIN_ID);
+  url.searchParams.set("sellToken", sellToken);
+  url.searchParams.set("buyToken", buyToken);
+  url.searchParams.set("sellAmount", sellAmount);
+  url.searchParams.set("taker", takerAddress);
+  url.searchParams.set("slippageBps", slippageBps.toString());
+
+  // Add affiliate fee if configured
+  const feeRecipient = process.env.ZEROX_FEE_RECIPIENT;
+  const feeBps = process.env.ZEROX_FEE_BPS;
+  if (feeRecipient && feeBps) {
+    url.searchParams.set("integratorFeeRecipient", feeRecipient);
+    url.searchParams.set("integratorFeeBps", feeBps);
+  }
+
+  console.log("🔍 Fetching 0x quote:", {
+    sellToken,
+    buyToken,
+    sellAmount,
+    takerAddress,
+    slippageBps,
+    hasApiKey: !!ZEROX_API_KEY
+  });
+
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "0x-version": "v2",
+  };
+  
+  if (ZEROX_API_KEY) {
+    headers["0x-api-key"] = ZEROX_API_KEY;
+  }
+
+  const response = await fetch(url.toString(), {
+    headers,
+    cache: "no-store",
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    console.error("❌ 0x Quote Error:", {
+      status: response.status,
+      error: data
+    });
+    throw new Error(
+      data?.reason || 
+      data?.validationErrors?.[0]?.description || 
+      `0x API error: ${response.status}`
+    );
+  }
+
+  console.log("✅ 0x Quote received:", {
+    buyAmount: data.buyAmount,
+    sellAmount: data.sellAmount,
+    hasAllowanceIssue: !!data.issues?.allowance,
+    hasBalanceIssue: !!data.issues?.balance
+  });
+
+  return data;
+}
+
+// Check and approve token spending
 async function checkAndApproveToken(
   signer: ethers.Signer,
   tokenAddress: string,
-  routerAddress: string,
-  amount: string,
-  decimals: number
+  spenderAddress: string,
+  amount: bigint
 ): Promise<void> {
-  if (tokenAddress === WETH_ADDRESS) {
-    return; // No approval needed for WETH
+  // ETH doesn't need approval
+  if (tokenAddress.toLowerCase() === WETH_ADDRESS.toLowerCase()) {
+    return;
   }
 
-  const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
-  const amountWei = ethers.parseUnits(amount, decimals);
-  const currentAllowance = await tokenContract.allowance(await signer.getAddress(), routerAddress);
+  const contract = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
+  const signerAddress = await signer.getAddress();
+  const currentAllowance = await contract.allowance(signerAddress, spenderAddress);
 
-  // 🔧 FIXED: Enhanced approval logic with better validation
-  const requiredAllowance = amountWei * 150n / 100n; // 50% buffer for better safety
-
-  console.log(`🔧 Token approval analysis:`, {
-    currentAllowance: ethers.formatUnits(currentAllowance, decimals),
-    requiredAllowance: ethers.formatUnits(requiredAllowance, decimals),
-    amount: amount,
-    buffer: "20%",
-    currentWei: currentAllowance.toString(),
-    requiredWei: requiredAllowance.toString()
+  console.log("🔧 Token allowance check:", {
+    currentAllowance: currentAllowance.toString(),
+    requiredAmount: amount.toString(),
+    needsApproval: currentAllowance < amount
   });
 
-  if (currentAllowance < requiredAllowance) {
-    console.log("🔄 Approval needed, starting approval process...");
-
-    try {
-      // 🔧 FIXED: First reset allowance to 0 (some tokens require this)
-      try {
-        console.log("🔄 Resetting allowance to 0...");
-        const resetTx = await tokenContract.approve(routerAddress, 0n);
-        await resetTx.wait();
-        console.log("✅ Allowance reset successful");
-      } catch (resetError) {
-        console.log("⚠️ Allowance reset failed, continuing:", resetError);
-      }
-
-      // 🔧 FIXED: Try buffer approval first
-      console.log("🔄 Approving with buffer amount...");
-      const approveTx = await tokenContract.approve(routerAddress, requiredAllowance);
-      console.log("⏳ Waiting for approval transaction...");
-      const receipt = await approveTx.wait();
-      
-      // 🔧 FIXED: Verify approval was successful
-      const newAllowance = await tokenContract.allowance(await signer.getAddress(), routerAddress);
-      console.log("✅ Buffer approval successful:", {
-        hash: receipt.hash,
-        newAllowance: ethers.formatUnits(newAllowance, decimals),
-        status: receipt.status === 1 ? "success" : "failed"
-      });
-
-      if (receipt.status !== 1 || newAllowance < requiredAllowance) {
-        throw new Error("Buffer approval failed, trying max approval");
-      }
-    } catch (approvalError) {
-      console.error("❌ Buffer approval failed:", approvalError);
-      
-      // 🔧 FIXED: Fallback to max approval
-      try {
-        console.log("🔄 Trying max approval...");
-        const maxApproval = ethers.MaxUint256;
-        const maxApproveTx = await tokenContract.approve(routerAddress, maxApproval);
-        const maxReceipt = await maxApproveTx.wait();
-        
-        const maxNewAllowance = await tokenContract.allowance(await signer.getAddress(), routerAddress);
-        console.log("✅ Max approval successful:", {
-          hash: maxReceipt.hash,
-          newAllowance: ethers.formatUnits(maxNewAllowance, decimals),
-          status: maxReceipt.status === 1 ? "success" : "failed"
-        });
-
-        if (maxReceipt.status !== 1) {
-          throw new Error("Max approval transaction reverted");
-        }
-      } catch (maxApprovalError) {
-        console.error("❌ Max approval also failed:", maxApprovalError);
-        throw new Error(`Token approval failed: ${maxApprovalError instanceof Error ? maxApprovalError.message : 'Unknown error'}`);
-      }
-    }
+  if (currentAllowance < amount) {
+    console.log("🔄 Approving token...");
+    
+    // Use max approval for convenience
+    const maxApproval = ethers.MaxUint256;
+    const approveTx = await contract.approve(spenderAddress, maxApproval);
+    console.log("⏳ Waiting for approval tx:", approveTx.hash);
+    
+    const receipt = await approveTx.wait();
+    console.log("✅ Token approved:", receipt.hash);
   } else {
-    console.log("✅ Sufficient token allowance already exists");
+    console.log("✅ Token already has sufficient allowance");
   }
-}
-
-// Test DEX liquidity and get best quote
-async function testDexLiquidity(
-  dexId: string,
-  tokenInAddress: string,
-  tokenOutAddress: string,
-  amountIn: string,
-  decimals: number
-): Promise<{ success: boolean; gasEstimate?: bigint; error?: string }> {
-  try {
-    const dexConfig = DEX_ROUTERS[dexId as keyof typeof DEX_ROUTERS];
-    if (!dexConfig) {
-      return { success: false, error: "DEX not supported" };
-    }
-
-    const provider = new ethers.JsonRpcProvider(BASE_RPC_URL);
-    const router = new ethers.Contract(dexConfig.router, ROUTER_ABIS[dexId as keyof typeof ROUTER_ABIS], provider);
-    
-    const isETHInput = tokenInAddress === WETH_ADDRESS;
-    
-    const amountInWei = ethers.parseUnits(amountIn, decimals);
-    
-    // Use more realistic slippage for testing (20% instead of 5%)
-    const amountOutMin = amountInWei * 80n / 100n; // 20% slippage for testing
-    const path = [tokenInAddress, tokenOutAddress];
-    const deadline = Math.floor(Date.now() / 1000) + 1200;
-    const dummyAddress = "0x0000000000000000000000000000000000000001";
-    
-    // Check if this is a self-swap (same token)
-    if (tokenInAddress.toLowerCase() === tokenOutAddress.toLowerCase()) {
-      return { success: false, error: "Cannot swap token for itself" };
-    }
-    
-    let gasEstimate: bigint;
-    try {
-      if (isETHInput) {
-        gasEstimate = await router.swapExactETHForTokens.estimateGas(
-          amountOutMin,
-          path,
-          dummyAddress,
-          deadline,
-          { value: amountInWei }
-        );
-      } else {
-        gasEstimate = await router.swapExactTokensForETHSupportingFeeOnTransferTokens.estimateGas(
-          amountInWei,
-          amountOutMin,
-          path,
-          dummyAddress,
-          deadline
-        );
-      }
-      
-      return { success: true, gasEstimate: gasEstimate * 120n / 100n }; // Add 20% buffer
-      
-    } catch (gasError) {
-      // If gas estimation fails, it might be due to insufficient liquidity or other issues
-      // But we can still provide a default gas estimate based on the DEX
-      let defaultGas = 200000n;
-      if (dexId === 'uniswap_v2') defaultGas = 180000n;
-      if (dexId === 'aerodrome') defaultGas = 200000n;
-      if (dexId === 'baseswap') defaultGas = 180000n;
-      
-      // Check if the error is due to insufficient liquidity
-      const errorMessage = gasError instanceof Error ? gasError.message : 'Unknown error';
-      if (errorMessage.includes("INSUFFICIENT_OUTPUT_AMOUNT") || 
-          errorMessage.includes("INSUFFICIENT_LIQUIDITY") ||
-          errorMessage.includes("TRANSFER_FROM_FAILED")) {
-        return { success: false, error: "Insufficient liquidity for this token pair" };
-      }
-      
-      // For other errors, we'll still try with default gas estimate
-      console.log(`⚠️ Gas estimation failed for ${dexId}, using default: ${defaultGas.toString()}`);
-      return { success: true, gasEstimate: defaultGas };
-    }
-    
-  } catch (error) {
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    };
-  }
-}
-
-// Find the best DEX for the swap
-async function findBestDex(
-  tokenInAddress: string,
-  tokenOutAddress: string,
-  amountIn: string,
-  preferredDex?: string
-): Promise<{ dexId: string; routerAddress: string; method: string; gasEstimate: bigint }> {
-  console.log("🔍 Finding best DEX for swap...");
-  
-  // If preferred DEX is specified, try it first
-  if (preferredDex && DEX_ROUTERS[preferredDex as keyof typeof DEX_ROUTERS]) {
-    console.log(`✅ Testing preferred DEX: ${preferredDex}`);
-    const testResult = await testDexLiquidity(preferredDex, tokenInAddress, tokenOutAddress, amountIn, 18);
-    
-    if (testResult.success && testResult.gasEstimate) {
-             const dexConfig = DEX_ROUTERS[preferredDex as keyof typeof DEX_ROUTERS];
-       const isETHInput = tokenInAddress === WETH_ADDRESS;
-       const method = isETHInput ? 'swapExactETHForTokens' : 'swapExactTokensForETHSupportingFeeOnTransferTokens';
-      
-      console.log(`✅ Preferred DEX ${preferredDex} works! Gas estimate: ${testResult.gasEstimate.toString()}`);
-      return {
-        dexId: preferredDex,
-        routerAddress: dexConfig.router,
-        method,
-        gasEstimate: testResult.gasEstimate
-      };
-    } else {
-      console.log(`❌ Preferred DEX ${preferredDex} failed:`, testResult.error);
-    }
-  }
-  
-  // Try DEXs in order of reliability
-  const dexOrder = ['uniswap_v2', 'aerodrome', 'baseswap'];
-  
-  for (const dexId of dexOrder) {
-    // Skip if already tried as preferred DEX
-    if (dexId === preferredDex) continue;
-    
-    console.log(`🔍 Testing ${dexId}...`);
-    const testResult = await testDexLiquidity(dexId, tokenInAddress, tokenOutAddress, amountIn, 18);
-    
-    if (testResult.success && testResult.gasEstimate) {
-      const dexConfig = DEX_ROUTERS[dexId as keyof typeof DEX_ROUTERS];
-      const isETHInput = tokenInAddress === WETH_ADDRESS;
-      const method = isETHInput ? 'swapExactETHForTokens' : 'swapExactTokensForETHSupportingFeeOnTransferTokens';
-      
-      console.log(`✅ ${dexId} works! Gas estimate: ${testResult.gasEstimate.toString()}`);
-      return {
-        dexId,
-        routerAddress: dexConfig.router,
-        method,
-        gasEstimate: testResult.gasEstimate
-      };
-    } else {
-      console.log(`❌ ${dexId} failed:`, testResult.error);
-    }
-  }
-  
-  // If no DEX works, throw error
-  throw new Error("No DEX has sufficient liquidity for this swap. Try a smaller amount or different token pair.");
-}
-
-// Execute the swap
-async function executeSwap(
-  signer: ethers.Signer,
-  inputTokenAddress: string,
-  outputTokenAddress: string,
-  inputAmount: string,
-  outputAmount: string,
-  slippage: number,
-  decimals: number,
-  preferredDex?: string
-): Promise<{ hash: string; gasUsed: string; gasPrice: string; dexUsed: string }> {
-  console.log("🚀 Executing swap...");
-  
-  // Find best DEX
-  const dexInfo = await findBestDex(inputTokenAddress, outputTokenAddress, inputAmount, preferredDex);
-  console.log("✅ Using DEX:", dexInfo);
-  
-  const router = new ethers.Contract(dexInfo.routerAddress, ROUTER_ABIS[dexInfo.dexId as keyof typeof ROUTER_ABIS], signer);
-  const amountInWei = ethers.parseUnits(inputAmount, decimals);
-  const amountOutWei = ethers.parseUnits(outputAmount, decimals);
-  
-  // Calculate minimum amount out with slippage
-  const slippageMultiplier = (100 - slippage) / 100;
-  const amountOutMinimum = amountOutWei * BigInt(Math.floor(slippageMultiplier * 1000)) / 1000n;
-  
-  const deadline = Math.floor(Date.now() / 1000) + 1200; // 20 minutes
-  const path = [inputTokenAddress, outputTokenAddress];
-
-  console.log("🔧 Swap parameters:", {
-    method: dexInfo.method,
-    amountIn: amountInWei.toString(),
-    amountOutMinimum: amountOutMinimum.toString(),
-    path,
-    deadline,
-    dexId: dexInfo.dexId
-  });
-
-  // Execute swap
-  let tx;
-  try {
-    if (dexInfo.method === 'swapExactETHForTokens') {
-      tx = await router.swapExactETHForTokens(
-        amountOutMinimum,
-        path,
-        await signer.getAddress(),
-        deadline,
-        { 
-          value: amountInWei,
-          gasLimit: dexInfo.gasEstimate
-        }
-      );
-    } else if (dexInfo.method === 'swapExactTokensForETHSupportingFeeOnTransferTokens') {
-      tx = await router.swapExactTokensForETHSupportingFeeOnTransferTokens(
-        amountInWei,
-        amountOutMinimum,
-        path,
-        await signer.getAddress(),
-        deadline,
-        { gasLimit: dexInfo.gasEstimate }
-      );
-    } else if (dexInfo.method === 'swapExactTokensForETH') {
-      tx = await router.swapExactTokensForETH(
-        amountInWei,
-        amountOutMinimum,
-        path,
-        await signer.getAddress(),
-        deadline,
-        { gasLimit: dexInfo.gasEstimate }
-      );
-    } else {
-      throw new Error(`Unsupported method: ${dexInfo.method}`);
-    }
-    
-    console.log("✅ Transaction sent:", tx.hash);
-  } catch (error) {
-    console.error("❌ Transaction execution failed:", error);
-    
-    // Provide more specific error messages
-    if (error instanceof Error) {
-      if (error.message.includes("INSUFFICIENT_OUTPUT_AMOUNT")) {
-        throw new Error("Slippage tolerance exceeded - try increasing slippage or reducing trade size");
-      } else if (error.message.includes("INSUFFICIENT_LIQUIDITY")) {
-        throw new Error("Insufficient liquidity in pool - try a smaller trade size");
-      } else if (error.message.includes("EXPIRED")) {
-        throw new Error("Transaction deadline expired - try again");
-      } else if (error.message.includes("INSUFFICIENT_INPUT_AMOUNT")) {
-        throw new Error("Insufficient input amount - check your balance");
-      } else if (error.message.includes("execution reverted")) {
-        throw new Error("Transaction reverted - insufficient liquidity or price impact too high. Try a smaller amount or different token pair.");
-      }
-    }
-    
-    throw error;
-  }
-
-  console.log("⏳ Waiting for transaction confirmation...");
-  const receipt = await tx.wait();
-  if (!receipt) {
-    throw new Error("Transaction receipt is null");
-  }
-  
-  if (receipt.status === 0) {
-    throw new Error("Transaction failed - check slippage tolerance and liquidity");
-  }
-  
-  console.log("✅ Transaction confirmed! Gas used:", receipt.gasUsed.toString());
-  
-  return {
-    hash: tx.hash,
-    gasUsed: receipt.gasUsed.toString(),
-    gasPrice: receipt.gasPrice?.toString() || "0",
-    dexUsed: dexInfo.dexId
-  };
 }
 
 // Get user's referral volume tier cashback bonus
@@ -550,14 +236,16 @@ function getReferralVolumeCashback(referralVolume: number): number {
   return extraCashback;
 }
 
-// Get ETH price (simplified - you may want to use an oracle)
+// Get ETH price
 async function getEthPrice(): Promise<number> {
   try {
-    const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd');
+    const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd', {
+      cache: 'no-store'
+    });
     const data = await response.json();
     return data.ethereum?.usd || 2500;
   } catch {
-    return 2500; // Fallback price
+    return 2500;
   }
 }
 
@@ -567,21 +255,18 @@ async function processFeesAndRewards(
   swapValueUsd: number,
   swapValueEth: number,
   transactionHash: string
-): Promise<{ platformFee: number; cashback: number; referralReward: number; referrerAddress?: string }> {
-  const db = adminDb();
-  if (!db) {
-    console.error("Database connection failed");
-    return { platformFee: 0, cashback: 0, referralReward: 0 };
-  }
-
+): Promise<{ platformFee: number; cashback: number; referralReward: number }> {
   try {
-    // Calculate platform fee (in ETH)
+    const db = adminDb();
+    if (!db) {
+      console.error("Database connection failed");
+      return { platformFee: 0, cashback: 0, referralReward: 0 };
+    }
+
     const platformFeeEth = swapValueEth * (PLATFORM_FEE_PERCENT / 100);
-    const platformFeeUsd = swapValueUsd * (PLATFORM_FEE_PERCENT / 100);
+    console.log(`💰 Platform fee: ${platformFeeEth.toFixed(6)} ETH`);
 
-    console.log(`💰 Platform fee: ${platformFeeEth.toFixed(6)} ETH ($${platformFeeUsd.toFixed(2)})`);
-
-    // Find user by wallet address
+    // Find user
     const userQuery = db.collection("users").where("walletAddress", "==", walletAddress);
     const userSnapshot = await userQuery.get();
     
@@ -594,10 +279,8 @@ async function processFeesAndRewards(
       const userData = userSnapshot.docs[0].data();
       referrerId = userData.referredBy || null;
 
-      // Get user's referral volume (how much their referrals have traded)
       const rewardsDoc = await db.collection("rewards").doc(userId).get();
       if (rewardsDoc.exists) {
-        // Calculate referral volume from referrals
         const referralsQuery = db.collection("referrals").where("referrerId", "==", userId);
         const referralsSnapshot = await referralsQuery.get();
         for (const ref of referralsSnapshot.docs) {
@@ -606,14 +289,14 @@ async function processFeesAndRewards(
       }
     }
 
-    // Calculate cashback (base + referral volume bonus)
+    // Calculate cashback
     const extraCashback = getReferralVolumeCashback(referralVolume);
     const totalCashbackPercent = BASE_CASHBACK_PERCENT + extraCashback;
     const cashbackEth = platformFeeEth * (totalCashbackPercent / 100);
 
-    console.log(`🎁 Cashback: ${cashbackEth.toFixed(6)} ETH (${totalCashbackPercent}% of fee)`);
+    console.log(`🎁 Cashback: ${cashbackEth.toFixed(6)} ETH (${totalCashbackPercent}%)`);
 
-    // Credit cashback to user's rewards
+    // Credit cashback
     if (userId) {
       const rewardsRef = db.collection("rewards").doc(userId);
       const rewardsDoc = await rewardsRef.get();
@@ -626,7 +309,6 @@ async function processFeesAndRewards(
           lastUpdated: new Date().toISOString()
         });
       } else {
-        // Generate referral code for new user
         const referralCode = 'CYPHERX' + Math.random().toString(36).substring(2, 8).toUpperCase();
         await rewardsRef.set({
           ethRewards: cashbackEth,
@@ -638,17 +320,13 @@ async function processFeesAndRewards(
           lastUpdated: new Date().toISOString()
         });
       }
-      console.log(`✅ Credited ${cashbackEth.toFixed(6)} ETH cashback to user ${userId}`);
     }
 
-    // Process referral reward (30% of platform fee to referrer)
+    // Process referral reward
     let referralRewardEth = 0;
-    let referrerWalletAddress: string | undefined;
-
     if (referrerId) {
-      referralRewardEth = platformFeeEth * 0.30; // 30% to referrer
+      referralRewardEth = platformFeeEth * 0.30;
       
-      // Credit referral reward to referrer
       const referrerRewardsRef = db.collection("rewards").doc(referrerId);
       const referrerRewardsDoc = await referrerRewardsRef.get();
       
@@ -657,10 +335,8 @@ async function processFeesAndRewards(
           ethRewards: FieldValue.increment(referralRewardEth),
           lastUpdated: new Date().toISOString()
         });
-        console.log(`✅ Credited ${referralRewardEth.toFixed(6)} ETH referral reward to referrer ${referrerId}`);
       }
 
-      // Update referral record with this swap
       await db.collection("referrals").add({
         referrerId,
         refereeId: userId,
@@ -672,17 +348,7 @@ async function processFeesAndRewards(
         transactionHash,
         timestamp: new Date().toISOString()
       });
-
-      // Get referrer's wallet address for logging
-      const referrerUserDoc = await db.collection("users").doc(referrerId).get();
-      if (referrerUserDoc.exists) {
-        referrerWalletAddress = referrerUserDoc.data()?.walletAddress;
-      }
     }
-
-    // Net fee to treasury (platform fee - cashback - referral reward)
-    const netTreasuryFee = platformFeeEth - cashbackEth - referralRewardEth;
-    console.log(`🏦 Net to treasury: ${netTreasuryFee.toFixed(6)} ETH`);
 
     // Record fee transaction
     await db.collection("fee_transactions").add({
@@ -693,7 +359,6 @@ async function processFeesAndRewards(
       platformFeeEth,
       cashbackEth,
       referralRewardEth,
-      netTreasuryFee,
       referrerId,
       transactionHash,
       timestamp: FieldValue.serverTimestamp()
@@ -702,11 +367,10 @@ async function processFeesAndRewards(
     return {
       platformFee: platformFeeEth,
       cashback: cashbackEth,
-      referralReward: referralRewardEth,
-      referrerAddress: referrerWalletAddress
+      referralReward: referralRewardEth
     };
   } catch (error) {
-    console.error("Error processing fees and rewards:", error);
+    console.error("Error processing fees:", error);
     return { platformFee: 0, cashback: 0, referralReward: 0 };
   }
 }
@@ -719,34 +383,22 @@ async function recordSwap(
   inputAmount: string,
   outputAmount: string,
   transactionHash: string,
-  gasUsed: string,
-  gasPrice: string,
-  dexUsed: string
+  gasUsed: string
 ): Promise<{ platformFee: number; cashback: number; referralReward: number }> {
-  const db = adminDb();
-  if (!db) {
-    console.error("Database connection failed");
-    return { platformFee: 0, cashback: 0, referralReward: 0 };
-  }
-
   try {
-    // Get current ETH price
+    const db = adminDb();
+    if (!db) {
+      return { platformFee: 0, cashback: 0, referralReward: 0 };
+    }
+
     const ethPrice = await getEthPrice();
-    
-    // Calculate values
-    const isEthInput = inputToken === "ETH";
+    const isEthInput = inputToken === "ETH" || inputToken === "WETH";
     const ethAmount = isEthInput ? parseFloat(inputAmount) : parseFloat(outputAmount);
     const swapValueUsd = ethAmount * ethPrice;
     const swapValueEth = ethAmount;
-    
-    const gasUsedEth = parseFloat(ethers.formatEther(ethers.parseUnits(gasUsed, "wei")));
-    const gasPriceGwei = parseFloat(ethers.formatUnits(gasPrice, "gwei"));
-    const gasCostEth = (gasUsedEth * gasPriceGwei) / 1e9;
-    const gasCostUsd = gasCostEth * ethPrice;
 
-    console.log(`📊 Swap recorded: ${swapValueEth.toFixed(4)} ETH ($${swapValueUsd.toFixed(2)})`);
+    console.log(`📊 Swap: ${swapValueEth.toFixed(4)} ETH ($${swapValueUsd.toFixed(2)})`);
 
-    // Record transaction
     await db.collection("wallet_transactions").add({
       walletAddress,
       type: "swap",
@@ -754,18 +406,15 @@ async function recordSwap(
       outputToken,
       inputAmount,
       outputAmount,
-      inputValue: isEthInput ? swapValueUsd : swapValueUsd,
-      outputValue: !isEthInput ? swapValueUsd : swapValueUsd,
+      inputValue: swapValueUsd,
+      outputValue: swapValueUsd,
       transactionHash,
       gasUsed,
-      gasPrice,
-      gasCostUsd,
-      dexUsed,
       timestamp: FieldValue.serverTimestamp(),
-      status: "confirmed"
+      status: "confirmed",
+      dexUsed: "0x"
     });
 
-    // Process fees and rewards
     const feeResult = await processFeesAndRewards(
       walletAddress,
       swapValueUsd,
@@ -773,7 +422,6 @@ async function recordSwap(
       transactionHash
     );
 
-    // Update user activity
     const userQuery = db.collection("users").where("walletAddress", "==", walletAddress);
     const userSnapshot = await userQuery.get();
     
@@ -783,8 +431,6 @@ async function recordSwap(
       });
     }
 
-    console.log(`✅ Swap recorded: ${transactionHash}, DEX: ${dexUsed}, Fee: ${feeResult.platformFee.toFixed(6)} ETH`);
-    
     return feeResult;
   } catch (error) {
     console.error("Error recording swap:", error);
@@ -795,17 +441,15 @@ async function recordSwap(
 export async function POST(request: Request) {
   try {
     const body: SwapRequest = await request.json();
-    console.log("Execute API received request:", {
+    console.log("🔄 Swap request:", {
       inputToken: body.inputToken,
       outputToken: body.outputToken,
       inputAmount: body.inputAmount,
-      outputAmount: body.outputAmount,
-      slippage: body.slippage,
-      walletAddress: body.walletAddress,
+      walletAddress: body.walletAddress.slice(0, 10) + "...",
       tokenAddress: body.tokenAddress,
-      preferredDex: body.preferredDex
+      outputTokenAddress: body.outputTokenAddress
     });
-    
+
     const { 
       inputToken, 
       outputToken, 
@@ -815,103 +459,139 @@ export async function POST(request: Request) {
       walletAddress, 
       privateKey,
       tokenAddress,
-      preferredDex
+      outputTokenAddress
     } = body;
-    
-    if (!inputToken || !outputToken || !inputAmount || !outputAmount || !walletAddress || !privateKey) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
+
+    if (!inputToken || !outputToken || !inputAmount || !walletAddress || !privateKey) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
-    
-    // Validate input
+
     const amount = parseFloat(inputAmount);
     if (isNaN(amount) || amount <= 0) {
-      return NextResponse.json(
-        { error: "Invalid input amount" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid input amount" }, { status: 400 });
     }
-    
-    // Get token information
-    console.log("Getting token info for:", { inputToken, outputToken, tokenAddress });
-    const inputTokenInfo = getTokenInfo(inputToken, inputToken === "ETH" ? undefined : tokenAddress);
-    const outputTokenInfo = getTokenInfo(outputToken, outputToken === "ETH" ? undefined : tokenAddress);
-    console.log("Token info:", { inputTokenInfo, outputTokenInfo });
-    
+
     // Setup provider and wallet
     const provider = new ethers.JsonRpcProvider(BASE_RPC_URL);
     const wallet = new ethers.Wallet(privateKey, provider);
-    
-    // Verify wallet address matches
+
     if (wallet.address.toLowerCase() !== walletAddress.toLowerCase()) {
-      return NextResponse.json(
-        { error: "Wallet address mismatch" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Wallet address mismatch" }, { status: 400 });
     }
+
+    // Get token addresses - use specific addresses if provided
+    const sellTokenAddress = getTokenAddress(inputToken, tokenAddress);
+    const buyTokenAddress = getTokenAddress(outputToken, outputTokenAddress);
+
+    // Check if it's a native ETH swap (use WETH for 0x)
+    const isSellingETH = inputToken === "ETH";
+    const actualSellToken = isSellingETH ? WETH_ADDRESS : sellTokenAddress;
+    const actualBuyToken = outputToken === "ETH" ? WETH_ADDRESS : buyTokenAddress;
+
+    // Get token decimals for both tokens
+    const sellDecimals = await getTokenDecimals(provider, actualSellToken);
+    const buyDecimals = await getTokenDecimals(provider, actualBuyToken);
     
     // Check balance
     const hasBalance = await checkBalance(
       provider,
       walletAddress,
-      inputTokenInfo.address,
+      isSellingETH ? WETH_ADDRESS : actualSellToken,
       inputAmount,
-      inputTokenInfo.decimals
+      sellDecimals
     );
-    
-    if (!hasBalance) {
-      return NextResponse.json(
-        { error: `Insufficient ${inputToken} balance` },
-        { status: 400 }
-      );
+
+    // For ETH, check native balance
+    if (isSellingETH) {
+      const ethBalance = await provider.getBalance(walletAddress);
+      const requiredWei = ethers.parseEther(inputAmount);
+      if (ethBalance < requiredWei) {
+        return NextResponse.json({ 
+          success: false,
+          error: `Insufficient ETH balance. Have: ${ethers.formatEther(ethBalance)}, Need: ${inputAmount}` 
+        }, { status: 400 });
+      }
+    } else if (!hasBalance) {
+      return NextResponse.json({ 
+        success: false,
+        error: `Insufficient ${inputToken} balance` 
+      }, { status: 400 });
     }
-    
-    // Check and approve token if needed (for sells)
-    if (inputTokenInfo.address !== WETH_ADDRESS) {
-      // Find the router address for approval
-      const dexInfo = await findBestDex(inputTokenInfo.address, outputTokenInfo.address, inputAmount, preferredDex);
-      await checkAndApproveToken(wallet, inputTokenInfo.address, dexInfo.routerAddress, inputAmount, inputTokenInfo.decimals);
-    }
-    
-    // Execute swap
-    const result = await executeSwap(
-      wallet,
-      inputTokenInfo.address,
-      outputTokenInfo.address,
-      inputAmount,
-      outputAmount,
-      slippage,
-      inputTokenInfo.decimals,
-      preferredDex
+
+    // Calculate sell amount in wei
+    const sellAmountWei = ethers.parseUnits(inputAmount, sellDecimals).toString();
+    const slippageBps = Math.round((slippage || 0.5) * 100);
+
+    // Get 0x quote
+    console.log("📊 Getting 0x quote...");
+    const quote = await get0xQuote(
+      actualSellToken,
+      actualBuyToken,
+      sellAmountWei,
+      walletAddress,
+      slippageBps
     );
+
+    // Handle token approval if needed (not for ETH)
+    if (!isSellingETH) {
+      // Get the spender address from allowanceTarget or issues
+      const spenderAddress = quote.allowanceTarget || quote.issues?.allowance?.spender;
+      
+      if (spenderAddress) {
+        console.log("🔐 Checking token approval for:", spenderAddress);
+        await checkAndApproveToken(
+          wallet,
+          actualSellToken,
+          spenderAddress,
+          BigInt(sellAmountWei)
+        );
+      }
+    }
+
+    // Execute the swap transaction
+    console.log("🚀 Executing swap via 0x...");
     
-    // Record swap in database and process fees
+    const txParams: ethers.TransactionRequest = {
+      to: quote.transaction.to,
+      data: quote.transaction.data,
+      gasLimit: BigInt(quote.transaction.gas) * 120n / 100n, // 20% buffer
+    };
+
+    // For ETH swaps, include value
+    if (isSellingETH) {
+      txParams.value = BigInt(quote.transaction.value || sellAmountWei);
+    }
+
+    const tx = await wallet.sendTransaction(txParams);
+    console.log("⏳ Transaction sent:", tx.hash);
+
+    const receipt = await tx.wait();
+    if (!receipt || receipt.status === 0) {
+      throw new Error("Transaction failed");
+    }
+
+    console.log("✅ Swap successful:", {
+      hash: tx.hash,
+      gasUsed: receipt.gasUsed.toString()
+    });
+
+    // Record swap and process fees
     const feeResult = await recordSwap(
       walletAddress,
       inputToken,
       outputToken,
       inputAmount,
-      outputAmount,
-      result.hash,
-      result.gasUsed,
-      result.gasPrice,
-      result.dexUsed
+      outputAmount || ethers.formatUnits(quote.buyAmount, buyDecimals),
+      tx.hash,
+      receipt.gasUsed.toString()
     );
-    
-    const response: SwapResponse = {
-      success: true,
-      transactionHash: result.hash,
-      amountOut: outputAmount,
-      gasUsed: result.gasUsed,
-      gasPrice: result.gasPrice,
-      dexUsed: result.dexUsed
-    };
-    
-    // Add fee info to response
+
     return NextResponse.json({
-      ...response,
+      success: true,
+      transactionHash: tx.hash,
+      amountOut: ethers.formatUnits(quote.buyAmount, buyDecimals),
+      gasUsed: receipt.gasUsed.toString(),
+      dexUsed: "0x",
       fees: {
         platformFee: feeResult.platformFee,
         cashback: feeResult.cashback,
@@ -921,36 +601,35 @@ export async function POST(request: Request) {
           : undefined
       }
     });
-    
+
   } catch (error) {
-    console.error("Swap execution error:", error);
-    
+    console.error("❌ Swap error:", error);
+
     let errorMessage = "Swap failed";
     if (error instanceof Error) {
-      if (error.message.includes("insufficient")) {
-        errorMessage = "Insufficient balance";
-      } else if (error.message.includes("slippage")) {
-        errorMessage = "Slippage too high - try increasing slippage tolerance";
-      } else if (error.message.includes("user rejected")) {
-        errorMessage = "Transaction cancelled by user";
-      } else if (error.message.includes("execution reverted") || error.message.includes("transaction execution reverted")) {
-        errorMessage = "Transaction reverted - insufficient liquidity or price impact too high. Try a smaller amount or different token pair.";
-      } else if (error.message.includes("gas")) {
+      const msg = error.message.toLowerCase();
+      
+      if (msg.includes("insufficient") || msg.includes("balance")) {
+        errorMessage = "Insufficient balance for this swap";
+      } else if (msg.includes("slippage") || msg.includes("output amount")) {
+        errorMessage = "Price moved too much - try increasing slippage";
+      } else if (msg.includes("liquidity")) {
+        errorMessage = "Insufficient liquidity - try a smaller amount";
+      } else if (msg.includes("user rejected") || msg.includes("cancelled")) {
+        errorMessage = "Transaction cancelled";
+      } else if (msg.includes("gas")) {
         errorMessage = "Gas estimation failed - try with a smaller amount";
-      } else if (error.message.includes("pool")) {
-        errorMessage = "Pool not found - this token pair may not have sufficient liquidity";
-      } else if (error.message.includes("No DEX has sufficient liquidity")) {
-        errorMessage = "No DEX has sufficient liquidity for this swap. Try a smaller amount or different token pair.";
+      } else if (msg.includes("allowance") || msg.includes("approval")) {
+        errorMessage = "Token approval failed - please try again";
+      } else if (msg.includes("0x api") || msg.includes("quote")) {
+        errorMessage = "Unable to get price quote - try a different token pair or amount";
       } else {
         errorMessage = error.message;
       }
     }
-    
+
     return NextResponse.json(
-      { 
-        success: false,
-        error: errorMessage
-      },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
