@@ -1142,11 +1142,11 @@ export default function TokenScreener() {
     fetchTokens();
   }, [fetchTokens]);
 
-  // Auto-refresh every 30 seconds
+  // Auto-refresh every 60 seconds (matches server cache)
   useEffect(() => {
     const interval = setInterval(() => {
       fetchTokens(true); // Silent refresh
-    }, 30000);
+    }, 60000);
     return () => clearInterval(interval);
   }, [fetchTokens]);
 

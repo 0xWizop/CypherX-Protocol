@@ -8,7 +8,9 @@ interface CachedData {
 }
 
 let tokenCache: CachedData | null = null;
-const CACHE_DURATION = 30 * 1000; // 30 seconds cache
+const CACHE_DURATION = 60 * 1000; // 60 seconds cache (increased to reduce API calls)
+const CONCURRENT_REQUESTS = 3; // Max concurrent API requests
+const DELAY_BETWEEN_BATCHES = 200; // ms delay between batch groups
 
 interface TokenData {
   poolAddress: string;
@@ -111,7 +113,7 @@ export async function GET(request: Request) {
         total: tokenCache.tokens.length
       }, {
         headers: {
-          'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
         }
       });
     }
@@ -153,22 +155,32 @@ export async function GET(request: Request) {
       return NextResponse.json({ tokens: [], total: 0 });
     }
 
-    // Create chunks of 10 tokens for DexScreener API
+    // Create chunks of 10 tokens for price API
     const chunks: string[][] = [];
     for (let i = 0; i < validTokens.length; i += 10) {
       chunks.push(validTokens.slice(i, i + 10).map((t) => t.tokenAddress));
     }
 
-    // Fetch all chunks in PARALLEL (major performance boost)
-    const chunkResults = await Promise.all(chunks.map(fetchDexScreenerChunk));
-    
-    // Flatten results and create lookup map
+    // Fetch chunks with controlled concurrency to avoid rate limits
     const dexDataMap = new Map<string, DexScreenerPair>();
-    chunkResults.flat().forEach((pair) => {
-      if (pair.baseToken?.address) {
-        dexDataMap.set(pair.baseToken.address.toLowerCase(), pair);
+    
+    // Process chunks in batches of CONCURRENT_REQUESTS
+    for (let i = 0; i < chunks.length; i += CONCURRENT_REQUESTS) {
+      const batchChunks = chunks.slice(i, i + CONCURRENT_REQUESTS);
+      const batchResults = await Promise.all(batchChunks.map(fetchDexScreenerChunk));
+      
+      // Add results to map
+      batchResults.flat().forEach((pair) => {
+        if (pair.baseToken?.address) {
+          dexDataMap.set(pair.baseToken.address.toLowerCase(), pair);
+        }
+      });
+      
+      // Add delay between batches to avoid rate limiting (except for last batch)
+      if (i + CONCURRENT_REQUESTS < chunks.length) {
+        await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
       }
-    });
+    }
 
     // Merge Firebase + DexScreener data
     const enrichedTokens: TokenData[] = [];
@@ -206,7 +218,7 @@ export async function GET(request: Request) {
       total: enrichedTokens.length
     }, {
       headers: {
-        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
       }
     });
 
