@@ -9,7 +9,7 @@ import { auth as firebaseAuth, db, storage } from "@/lib/firebase";
 import { useAuth, useWalletSystem, useLoginModal } from "@/app/providers";
 import { useUserSettings } from "@/app/hooks/useUserSettings";
 import { motion, AnimatePresence } from "framer-motion";
-import { FiUser, FiX, FiCheck, FiAlertCircle, FiChevronRight, FiLogOut, FiLogIn, FiCalendar, FiEdit3, FiSettings, FiGift, FiFileText } from "react-icons/fi";
+import { FiUser, FiX, FiCheck, FiAlertCircle, FiChevronRight, FiLogOut, FiLogIn, FiCalendar, FiEdit3, FiSettings, FiGift, FiFileText, FiArrowLeft } from "react-icons/fi";
 
 import Link from "next/link";
 import Image from "next/image";
@@ -628,7 +628,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: '100%' }}
                     transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-                    className="w-full sm:max-w-sm h-[85vh] sm:h-auto sm:max-h-[75vh] bg-gray-950 sm:border sm:border-gray-800/60 shadow-2xl overflow-hidden rounded-t-3xl sm:rounded-2xl flex flex-col sm:mx-4"
+                    className="w-full sm:max-w-sm h-auto max-h-[50vh] sm:h-auto sm:max-h-[75vh] bg-gray-950 sm:border sm:border-gray-800/60 shadow-2xl overflow-hidden rounded-t-3xl sm:rounded-2xl flex flex-col sm:mx-4"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {/* Mobile drag handle */}
@@ -692,35 +692,31 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
               <div className="w-10 h-1 rounded-full bg-gray-600" />
             </div>
             
-            <div className="px-5 py-4 border-b border-gray-800/60">
-              <h3 className="text-white text-lg font-semibold">Set Your Alias</h3>
-              <p className="text-gray-400 text-sm mt-1">
-                Choose a display name for leaderboards and community.
-              </p>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/60">
+              <button
+                onClick={() => setShowAliasModal(false)}
+                className="p-2 text-gray-500 hover:text-white transition-colors -ml-2"
+              >
+                <FiArrowLeft className="w-5 h-5" />
+              </button>
+              <h3 className="text-white text-sm font-medium">Set Alias</h3>
+              <div className="w-9" /> {/* Spacer for centering */}
             </div>
             
-            <div className="px-5 py-4">
-              <label className="block text-gray-300 text-xs font-medium uppercase tracking-wide mb-2">
-                Display Name
-              </label>
+            <div className="px-4 py-4">
+              <label className="block text-xs text-gray-500 mb-1.5">Display Name</label>
               <input
                 type="text"
                 value={alias}
                 onChange={(e) => setAlias(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-900/80 border border-gray-800/60 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 text-sm transition-all duration-200"
-                placeholder="Enter your preferred display name"
+                className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-gray-600 text-sm transition-colors"
+                placeholder="Enter display name"
                 maxLength={20}
               />
-              <p className="text-gray-500 text-xs mt-2">{alias.length}/20 characters</p>
+              <p className="text-gray-600 text-xs mt-1.5">{alias.length}/20 characters</p>
             </div>
 
-            <div className="flex gap-3 px-5 py-4 border-t border-gray-800/60">
-              <button
-                onClick={() => setShowAliasModal(false)}
-                className="flex-1 px-4 py-2.5 bg-gray-900/60 border border-gray-800/60 text-gray-300 hover:bg-gray-800/60 hover:border-gray-700 rounded-xl transition-all duration-200 font-medium text-sm"
-              >
-                Cancel
-              </button>
+            <div className="px-4 py-3 border-t border-gray-800/60">
               <button
                 onClick={async () => {
                   if (alias.trim()) {
@@ -730,9 +726,9 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                   }
                 }}
                 disabled={!alias.trim() || settingsLoading}
-                className="flex-1 px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all duration-200 font-medium text-sm"
+                className="w-full py-2.5 bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg transition-colors text-sm"
               >
-                {settingsLoading ? 'Updating...' : 'Update Alias'}
+                {settingsLoading ? 'Updating...' : 'Save Alias'}
               </button>
             </div>
           </motion.div>
@@ -755,18 +751,18 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
               <div className="w-10 h-1 rounded-full bg-gray-600" />
             </div>
             
-            <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-800/60 bg-gray-950 flex-shrink-0">
-              <div className="text-left">
-                <span className="text-[10px] uppercase tracking-[0.2em] text-blue-400/70 font-medium">Profile</span>
-                <h3 className="text-white text-base sm:text-lg font-semibold mt-0.5">Account Settings</h3>
-              </div>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/60 flex-shrink-0">
               <button
-                onClick={() => setShowAccountSettingsModal(false)}
-                className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-900/60 hover:bg-gray-800/80 border border-gray-800/60 hover:border-gray-700 text-gray-400 hover:text-white transition-all duration-200"
-                aria-label="Close"
+                onClick={() => {
+                  setShowAccountSettingsModal(false);
+                  setShowAccountModal(true);
+                }}
+                className="p-2 text-gray-500 hover:text-white transition-colors -ml-2"
               >
-                <FiX className="w-5 h-5" />
+                <FiArrowLeft className="w-5 h-5" />
               </button>
+              <h3 className="text-white text-sm font-medium">Account Settings</h3>
+              <div className="w-9" /> {/* Spacer for centering */}
             </div>
 
             <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent px-4 sm:px-5 py-4 space-y-4">
