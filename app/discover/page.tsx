@@ -726,8 +726,6 @@ export default function TokenScreener() {
     }
   }, [trendingHistory, lastTrendingUpdate]);
   
-  const pageSize = 25;
-  
   // Missing variables that were removed
   const [_previousPrices, _setPreviousPrices] = useState<{ [symbol: string]: number }>({});
   const [lastAlertTimes, setLastAlertTimes] = useState<{
@@ -1100,8 +1098,6 @@ export default function TokenScreener() {
     pairCreatedAt: number;
     docId: string;
   }>>([]);
-  const [loadedPages, setLoadedPages] = useState<Set<number>>(new Set([1]));
-  const [isLoadingPage, setIsLoadingPage] = useState(false);
   
   // Initial Firebase fetch (just metadata, fast)
   useEffect(() => {
@@ -1129,7 +1125,7 @@ export default function TokenScreener() {
     return () => unsubscribe();
   }, []);
 
-  // Fetch price data for a batch of tokens
+  // Fetch price data for a batch of tokens - only return tokens WITH price data
   const fetchPriceData = useCallback(async (tokensToFetch: typeof allFirebaseTokens) => {
     if (tokensToFetch.length === 0) return [];
     
@@ -1141,7 +1137,7 @@ export default function TokenScreener() {
       chunks.push(tokensToFetch.slice(i, i + 10).map((t) => t.tokenAddress));
     }
     
-    // Fetch all chunks in parallel (only 3 max for 25 tokens)
+    // Fetch all chunks in parallel
     const chunkPromises = chunks.map(async (chunk) => {
       const joinedChunk = chunk.join(",");
       try {
@@ -1182,49 +1178,31 @@ export default function TokenScreener() {
     return results;
   }, []);
 
-  // Load tokens for a specific page
-  const loadPageTokens = useCallback(async (page: number) => {
-    if (loadedPages.has(page) || isLoadingPage || allFirebaseTokens.length === 0) return;
-    
-    setIsLoadingPage(true);
-    const startIndex = (page - 1) * TOKENS_PER_PAGE;
-    const endIndex = startIndex + TOKENS_PER_PAGE;
-    const pageTokens = allFirebaseTokens.slice(startIndex, endIndex);
-    
-    if (pageTokens.length === 0) {
-      setIsLoadingPage(false);
-      return;
-    }
-    
-    try {
-      const priceData = await fetchPriceData(pageTokens);
-      setTokens(prev => {
-        // Merge new tokens, avoiding duplicates
-        const existingAddresses = new Set(prev.map(t => t.tokenAddress.toLowerCase()));
-        const newTokens = priceData.filter(t => !existingAddresses.has(t.tokenAddress.toLowerCase()));
-        return [...prev, ...newTokens];
-      });
-      setLoadedPages(prev => new Set([...prev, page]));
-    } catch (err) {
-      console.error('Error loading page:', err);
-    } finally {
-      setIsLoadingPage(false);
-    }
-  }, [allFirebaseTokens, loadedPages, isLoadingPage, fetchPriceData]);
-
-  // Load first page when Firebase data arrives
+  // Load ALL tokens with price data when Firebase data arrives
   useEffect(() => {
     if (allFirebaseTokens.length === 0) return;
     
-    const loadInitialTokens = async () => {
+    const loadAllTokens = async () => {
       setLoading(true);
       setError("");
       
       try {
-        const firstPageTokens = allFirebaseTokens.slice(0, TOKENS_PER_PAGE);
-        const priceData = await fetchPriceData(firstPageTokens);
-        setTokens(priceData);
-        setLoadedPages(new Set([1]));
+        // Fetch price data for all tokens in batches to avoid rate limits
+        const BATCH_SIZE = 50; // Fetch 50 tokens per batch
+        const allResults: TokenData[] = [];
+        
+        for (let i = 0; i < allFirebaseTokens.length; i += BATCH_SIZE) {
+          const batch = allFirebaseTokens.slice(i, i + BATCH_SIZE);
+          const batchResults = await fetchPriceData(batch);
+          allResults.push(...batchResults);
+          
+          // Small delay between batches to avoid rate limiting
+          if (i + BATCH_SIZE < allFirebaseTokens.length) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
+        
+        setTokens(allResults);
       } catch (err) {
         setError("Unable to load tokens. Please try again later.");
         console.error(err);
@@ -1234,15 +1212,18 @@ export default function TokenScreener() {
       }
     };
     
-    loadInitialTokens();
+    loadAllTokens();
   }, [allFirebaseTokens, fetchPriceData]);
 
-  // Load more pages when user navigates
+  // Reset to last valid page if current page exceeds total pages
   useEffect(() => {
-    if (!loadedPages.has(currentPage) && allFirebaseTokens.length > 0) {
-      loadPageTokens(currentPage);
+    const maxPages = filteredAndSortedTokens.length > 0 
+      ? Math.ceil(filteredAndSortedTokens.length / TOKENS_PER_PAGE) 
+      : 1;
+    if (currentPage > maxPages && maxPages > 0) {
+      setCurrentPage(maxPages);
     }
-  }, [currentPage, loadedPages, allFirebaseTokens.length, loadPageTokens]);
+  }, [filteredAndSortedTokens.length, currentPage]);
 
 
   // Fetch Alerts from Firestore and Clean Up
@@ -1711,14 +1692,20 @@ export default function TokenScreener() {
     [setCurrentPage]
   );
 
-  // Calculate total pages from all Firebase tokens (not just loaded ones)
-  const totalFirebasePages = Math.ceil(allFirebaseTokens.length / TOKENS_PER_PAGE);
-  const totalPages = totalFirebasePages > 0 ? totalFirebasePages : 1;
+  // Calculate total pages from tokens WITH price data (filteredAndSortedTokens)
+  const totalPages = filteredAndSortedTokens.length > 0 
+    ? Math.ceil(filteredAndSortedTokens.length / TOKENS_PER_PAGE) 
+    : 1;
   
-  // Get tokens for current page from loaded tokens
-  const indexOfLastToken = currentPage * pageSize;
-  const indexOfFirstToken = indexOfLastToken - pageSize;
-  const currentTokens = filteredAndSortedTokens.slice(indexOfFirstToken, indexOfLastToken);
+  // Index for ranking display
+  const indexOfFirstToken = (currentPage - 1) * TOKENS_PER_PAGE;
+  
+  // Get exactly 25 tokens for current page from the sorted/filtered list
+  const currentTokens = useMemo(() => {
+    const startIndex = (currentPage - 1) * TOKENS_PER_PAGE;
+    const endIndex = startIndex + TOKENS_PER_PAGE;
+    return filteredAndSortedTokens.slice(startIndex, endIndex);
+  }, [filteredAndSortedTokens, currentPage]);
   
   const rowVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -1732,7 +1719,7 @@ export default function TokenScreener() {
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-        disabled={currentPage === 1 || isLoadingPage}
+        disabled={currentPage === 1}
         className="rounded-full border border-blue-500/30 bg-gray-900/60 px-4 py-1.5 font-sans transition-colors hover:bg-gray-800 disabled:opacity-50"
       >
         Previous
@@ -1749,17 +1736,13 @@ export default function TokenScreener() {
         className="w-16 rounded-full border border-blue-500/30 bg-gray-900/60 px-3 py-1.5 text-center font-sans text-gray-200 uppercase focus:outline-none focus:ring-2 focus:ring-blue-400 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         min={1}
         max={totalPages}
-        disabled={isLoadingPage}
       />
       <span className="font-sans text-gray-400 px-1">of {totalPages}</span>
-      {isLoadingPage && (
-        <span className="text-blue-400 animate-pulse">Loading...</span>
-      )}
       <motion.button
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-        disabled={currentPage === totalPages || isLoadingPage}
+        disabled={currentPage === totalPages}
         className="rounded-full border border-blue-500/30 bg-gray-900/60 px-4 py-1.5 font-sans transition-colors hover:bg-gray-800 disabled:opacity-50"
       >
         Next
@@ -3472,23 +3455,19 @@ export default function TokenScreener() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1 || isLoadingPage}
+                disabled={currentPage === 1}
                 className="flex items-center gap-1 transition-colors hover:text-blue-300 disabled:opacity-40"
               >
                 Prev
               </motion.button>
               <span className="tracking-wide text-gray-300">
-                {isLoadingPage ? (
-                  <span className="text-blue-400 animate-pulse">Loading...</span>
-                ) : (
-                  <>Page {currentPage} of {totalPages}</>
-                )}
+                Page {currentPage} of {totalPages}
               </span>
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages || isLoadingPage}
+                disabled={currentPage === totalPages}
                 className="flex items-center gap-1 transition-colors hover:text-blue-300 disabled:opacity-40"
               >
                 Next
