@@ -3821,8 +3821,8 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                                 <div className="text-sm font-medium text-white">${ethPrice > 0 ? (parseFloat(ethBalance) * ethPrice).toFixed(2) : '0.00'}</div>
                                 <div className="text-xs text-gray-500">${ethPrice > 0 ? ethPrice.toFixed(2) : '—'}</div>
                               </div>
-                              {/* Placeholder to match token row spacing */}
-                              <div className="w-[26px] flex-shrink-0"></div>
+                              {/* Placeholder to match token row hide button spacing */}
+                              <div className="ml-2 p-1.5 w-3.5 flex-shrink-0"></div>
                             </button>
                           )}
 
