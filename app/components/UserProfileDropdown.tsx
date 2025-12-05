@@ -282,18 +282,6 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
     }
   };
 
-  const getTierColor = (tier: string) => {
-    const colors = {
-      normie: '#6B7280',
-      degen: '#EF4444',
-      alpha: '#10B981',
-      mogul: '#F59E0B',
-      titan: '#8B5CF6'
-    };
-    return colors[tier as keyof typeof colors] || '#6B7280';
-  };
-
-
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !user) {

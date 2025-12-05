@@ -2158,7 +2158,6 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
         walletLoadedRef.current = true;
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletData?.address]);
   
   // Separate effect for history tab
@@ -2166,7 +2165,6 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
     if (activeTab === "history" && walletData?.address) {
       fetchTransactions();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, walletData?.address]);
 
   // Fetch transactions when history tab is opened
