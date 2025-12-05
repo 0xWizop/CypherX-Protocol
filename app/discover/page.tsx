@@ -1089,66 +1089,121 @@ export default function TokenScreener() {
     return () => unsubscribe();
   }, []);
 
-  // Fetch Tokens from optimized API with server-side caching
-  const fetchTokens = useCallback(async (isRefresh = false) => {
-    try {
-      if (!isRefresh) setLoading(true);
-      setError("");
+  // Fetch Tokens from Firebase (client-side) + price data - only fetch what we need (25 per page)
+  const TOKENS_PER_PAGE = 25;
+  const [allFirebaseTokens, setAllFirebaseTokens] = useState<Array<{
+    poolAddress: string;
+    tokenAddress: string;
+    symbol: string;
+    name: string;
+    decimals: number;
+    pairCreatedAt: number;
+    docId: string;
+  }>>([]);
+  
+  // Initial Firebase fetch (just metadata, fast)
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "tokens"), (snapshot) => {
+      const tokenList = snapshot.docs.map((doc) => ({
+        poolAddress: doc.data().pool as string || "",
+        tokenAddress: doc.data().address as string || "",
+        symbol: doc.data().symbol as string || "",
+        name: doc.data().name as string || doc.data().symbol || "Unknown",
+        decimals: doc.data().decimals as number || 18,
+        pairCreatedAt: doc.data().createdAt?.toDate().getTime() || 0,
+        docId: doc.id,
+      }));
       
-      const res = await fetch(`/api/discover/tokens${isRefresh ? '?refresh=true' : ''}`, {
-        headers: { Accept: "application/json" },
+      const uniqueTokenMap = new Map<string, typeof tokenList[0]>();
+      tokenList.forEach((token) => {
+        if (token.tokenAddress && /^0x[a-fA-F0-9]{40}$/.test(token.tokenAddress)) {
+          if (!uniqueTokenMap.has(token.tokenAddress)) {
+            uniqueTokenMap.set(token.tokenAddress, token);
+          }
+        }
       });
-      
-      if (!res.ok) {
-        throw new Error('Failed to fetch tokens');
-      }
-      
-      const data = await res.json();
-      
-      if (data.tokens && data.tokens.length > 0) {
-        // Map API response to our TokenData format
-        const mappedTokens: TokenData[] = data.tokens.map((token: any) => ({
-          poolAddress: token.poolAddress || "",
-          tokenAddress: token.tokenAddress || "",
-          symbol: token.symbol || "",
-          name: token.name || token.symbol || "Unknown",
-          decimals: 18,
-          pairCreatedAt: token.pairCreatedAt || 0,
-          priceUsd: token.priceUsd || "0",
-          priceChange: token.priceChange || { m5: 0, h1: 0, h6: 0, h24: 0 },
-          volume: token.volume || { h1: 0, h24: 0 },
-          liquidity: token.liquidity || { usd: 0 },
-          marketCap: token.marketCap || 0,
-          info: token.info,
-          txns: token.txns,
-          dexId: token.dexId || "unknown",
-        }));
-        setTokens(mappedTokens);
-      } else {
-        setTokens([]);
-      }
-    } catch (err) {
-      setError("Unable to load tokens. Please try again later.");
-      console.error(err);
-      setTokens([]);
-    } finally {
-      setLoading(false);
-      setInitialLoad(false);
-    }
+      setAllFirebaseTokens(Array.from(uniqueTokenMap.values()));
+    });
+    return () => unsubscribe();
   }, []);
 
-  // Initial fetch
-  useEffect(() => {
-    fetchTokens();
-  }, [fetchTokens]);
+  // Fetch price data for a batch of tokens
+  const fetchPriceData = useCallback(async (tokensToFetch: typeof allFirebaseTokens) => {
+    if (tokensToFetch.length === 0) return [];
+    
+    const results: TokenData[] = [];
+    
+    // Chunk tokens (10 per API call)
+    const chunks: string[][] = [];
+    for (let i = 0; i < tokensToFetch.length; i += 10) {
+      chunks.push(tokensToFetch.slice(i, i + 10).map((t) => t.tokenAddress));
+    }
+    
+    // Fetch all chunks in parallel (only 3 max for 25 tokens)
+    const chunkPromises = chunks.map(async (chunk) => {
+      const joinedChunk = chunk.join(",");
+      try {
+        const res = await fetch(
+          `https://api.dexscreener.com/tokens/v1/base/${encodeURIComponent(joinedChunk)}`,
+          { headers: { Accept: "application/json" } }
+        );
+        if (!res.ok) return [];
+        return await res.json();
+      } catch {
+        return [];
+      }
+    });
+    
+    const chunkResults = await Promise.all(chunkPromises);
+    
+    chunkResults.flat().forEach((pair: any) => {
+      if (pair && pair.baseToken && pair.baseToken.address) {
+        const firestoreToken = tokensToFetch.find(
+          (t) => t.tokenAddress.toLowerCase() === pair.baseToken?.address.toLowerCase()
+        );
+        if (firestoreToken && !results.some((r) => r.tokenAddress === firestoreToken.tokenAddress)) {
+          results.push({
+            ...firestoreToken,
+            poolAddress: pair.pairAddress,
+            priceUsd: pair.priceUsd || "0",
+            priceChange: pair.priceChange || { m5: 0, h1: 0, h6: 0, h24: 0 },
+            volume: pair.volume || { h1: 0, h24: 0 },
+            liquidity: pair.liquidity || { usd: 0 },
+            marketCap: pair.marketCap || 0,
+            info: pair.info ? { imageUrl: pair.info.imageUrl } : undefined,
+            dexId: pair.dexId || "unknown",
+          });
+        }
+      }
+    });
+    
+    return results;
+  }, []);
 
-  // Auto-refresh every 60 seconds (matches server cache)
+  // Load first page when Firebase data arrives
   useEffect(() => {
-    const interval = setInterval(() => {
-      fetchTokens(true); // Silent refresh
-    }, 60000);
-    return () => clearInterval(interval);
-  }, [fetchTokens]);
+    if (allFirebaseTokens.length === 0) return;
+    
+    const loadInitialTokens = async () => {
+      setLoading(true);
+      setError("");
+      
+      try {
+        const firstPageTokens = allFirebaseTokens.slice(0, TOKENS_PER_PAGE);
+        const priceData = await fetchPriceData(firstPageTokens);
+        setTokens(priceData);
+      } catch (err) {
+        setError("Unable to load tokens. Please try again later.");
+        console.error(err);
+      } finally {
+        setLoading(false);
+        setInitialLoad(false);
+      }
+    };
+    
+    loadInitialTokens();
+  }, [allFirebaseTokens, fetchPriceData]);
+
 
   // Fetch Alerts from Firestore and Clean Up
   // TODO: Reintroduce alert subscription once the new alert system is ready

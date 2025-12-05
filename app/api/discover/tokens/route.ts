@@ -118,13 +118,29 @@ export async function GET(request: Request) {
       });
     }
 
-    // Fetch tokens from Firebase
-    const db = adminDb();
-    if (!db) {
+    // Try to fetch tokens from Firebase Admin
+    let snapshot;
+    try {
+      const db = adminDb();
+      if (!db) {
+        throw new Error('Database not initialized');
+      }
+      snapshot = await db.collection("tokens").get();
+    } catch (dbError) {
+      console.error('Firebase Admin connection failed, returning cached data if available:', dbError);
+      // If we have cached data, return it even if stale
+      if (tokenCache) {
+        return NextResponse.json({
+          tokens: tokenCache.tokens,
+          cached: true,
+          stale: true,
+          cacheAge: Math.round((now - tokenCache.timestamp) / 1000),
+          total: tokenCache.tokens.length
+        });
+      }
       return NextResponse.json({ error: 'Database connection failed', tokens: [] }, { status: 500 });
     }
 
-    const snapshot = await db.collection("tokens").get();
     if (snapshot.empty) {
       return NextResponse.json({ tokens: [], total: 0 });
     }
