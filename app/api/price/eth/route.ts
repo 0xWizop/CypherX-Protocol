@@ -36,7 +36,7 @@ export async function GET() {
       }
     }
       } catch {
-    console.log('DexScreener failed, trying other sources');
+    console.log('Primary source failed, trying other sources');
   }
 
   // Try alternative price APIs with better rate limits

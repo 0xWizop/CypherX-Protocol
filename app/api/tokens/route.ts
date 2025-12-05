@@ -274,8 +274,8 @@ export async function GET(request: Request) {
             }
           });
         } catch (error) {
-          console.error("Error fetching DexScreener data:", error);
-          // Continue with tokens even if DexScreener fails
+          console.error("Error fetching price data:", error);
+          // Continue with tokens even if price API fails
         }
       }
     }

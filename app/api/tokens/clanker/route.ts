@@ -197,7 +197,7 @@ export async function GET(request: Request) {
         }
       } catch (error) {
         // Log error for debugging
-        console.warn(`⚠️ DexScreener fetch failed for ${tokenAddress}:`, error);
+        console.warn(`⚠️ Price data fetch failed for ${tokenAddress}:`, error);
       }
       return null;
     }
@@ -231,7 +231,7 @@ export async function GET(request: Request) {
               console.warn(`⚠️ No DexScreener stats for ${token.symbol} (${tokenAddress})`);
             }
           } catch (error) {
-            console.warn(`⚠️ DexScreener enhancement failed for ${token.symbol}:`, error);
+            console.warn(`⚠️ Price enhancement failed for ${token.symbol}:`, error);
           }
         }
         return token;

@@ -180,8 +180,8 @@ export async function GET(request: Request) {
           }
         }
       } catch (error) {
-        // Silently fail - DexScreener enhancement is optional
-        console.warn(`⚠️ DexScreener fetch failed for ${tokenAddress}:`, error);
+        // Silently fail - price enhancement is optional
+        console.warn(`⚠️ Price data fetch failed for ${tokenAddress}:`, error);
       }
       return null;
     }

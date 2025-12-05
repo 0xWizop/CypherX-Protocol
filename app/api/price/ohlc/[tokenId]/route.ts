@@ -123,7 +123,7 @@ export async function GET(
         }
       }
     } catch (error) {
-      console.error('Error fetching current price from DexScreener:', error);
+      console.error('Error fetching current price:', error);
     }
 
     // Try CoinGecko current price as final fallback

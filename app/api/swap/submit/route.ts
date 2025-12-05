@@ -47,7 +47,7 @@ async function getEthPrice(): Promise<number> {
       }
     }
   } catch (dexError) {
-    console.error("DexScreener ETH price fetch failed:", dexError);
+    console.error("Primary ETH price fetch failed:", dexError);
   }
 
   // Try alternative price APIs with better rate limits

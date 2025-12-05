@@ -168,13 +168,13 @@ export async function GET() {
         { headers: { Accept: 'application/json' } }
       );
       if (!res.ok) {
-        console.error(`DexScreener failed chunk ${joined}: ${res.status}`);
+        console.error(`Price API failed for chunk: ${res.status}`);
         continue;
       }
 
       const raw = await res.json();
       if (!Array.isArray(raw)) {
-        console.error('DexScreener returned non-array', raw);
+        console.error('Price API returned invalid data');
         continue;
       }
 

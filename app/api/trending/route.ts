@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 
   const baseURL = process.env.NEXT_PUBLIC_DEXSCREENER_API_URL;
   if (typeof baseURL !== 'string' || !baseURL) {
-    console.error('Environment variable NEXT_PUBLIC_DEXSCREENER_API_URL is not set.');
+    console.error('Environment variable for price API URL is not set.');
     return NextResponse.json(
       { error: 'Service temporarily unavailable. Please try again later.' },
       { status: 500 }

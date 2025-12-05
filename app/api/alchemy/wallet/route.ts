@@ -187,7 +187,7 @@ export async function POST(request: Request) {
                         }
                       }
                     } catch (error) {
-                      console.log(`Error fetching DexScreener data for ${token.contractAddress}:`, error);
+                      console.log(`Error fetching price data for ${token.contractAddress}:`, error);
                     }
                     
                     // Calculate USD value

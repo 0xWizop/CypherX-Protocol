@@ -471,7 +471,7 @@ async function searchTokens(query: string, baseUrl: string): Promise<TokenSearch
         }
       }
     } catch (dexError) {
-      console.error('[Search API] DexScreener fallback failed:', dexError);
+      console.error('[Search API] External search fallback failed:', dexError);
     }
   }
 
