@@ -820,19 +820,33 @@ const Header: React.FC = () => {
       {/* Full Page Search Overlay for Mobile */}
       {showFullPageSearch && typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
+          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[10002] bg-gray-950 lg:hidden flex flex-col"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[10001] lg:hidden"
+            onClick={() => setShowFullPageSearch(false)}
+          />
+          {/* Modal */}
+          <motion.div
+            initial={{ opacity: 0, y: '100%' }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className="fixed left-0 right-0 bottom-0 z-[10002] bg-gray-950 border-t border-gray-800/60 lg:hidden flex flex-col h-[70vh] max-h-[680px] rounded-t-[28px] overflow-hidden"
           >
+            {/* Mobile drag handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-gray-600" />
+            </div>
+            
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
-              <h3 className="text-white text-base font-semibold">Search</h3>
+            <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800/40 flex-shrink-0">
+              <h3 className="text-white text-sm font-medium">Search</h3>
               <button
                 onClick={() => setShowFullPageSearch(false)}
-                className="text-gray-400 hover:text-white transition-colors p-1.5"
+                className="p-2 text-gray-500 hover:text-white transition-colors -mr-2"
                 aria-label="Close search"
               >
                 <FiX className="w-5 h-5" />

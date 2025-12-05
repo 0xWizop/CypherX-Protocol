@@ -557,7 +557,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
           )}
         </div>
         {/* Bottom spacing for mobile */}
-        <div className="h-4 sm:h-0" />
+        <div className="h-10 sm:h-0" />
       </div>
     </>
   );
