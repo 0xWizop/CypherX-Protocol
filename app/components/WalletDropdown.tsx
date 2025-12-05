@@ -3821,8 +3821,6 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                                 <div className="text-sm font-medium text-white">${ethPrice > 0 ? (parseFloat(ethBalance) * ethPrice).toFixed(2) : '0.00'}</div>
                                 <div className="text-xs text-gray-500">${ethPrice > 0 ? ethPrice.toFixed(2) : '—'}</div>
                               </div>
-                              {/* Placeholder to match token row hide button spacing */}
-                              <div className="ml-2 p-1.5 w-3.5 flex-shrink-0"></div>
                             </button>
                           )}
 
@@ -3851,7 +3849,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                             <button 
                               key={token.contractAddress || index} 
                               onClick={() => handleTokenClick(token)}
-                              className="w-full flex items-center py-3.5 px-4 hover:bg-gray-800/30 transition-colors border-b border-gray-800/40 group"
+                              className="w-full flex items-center py-3.5 px-4 hover:bg-gray-800/30 transition-colors border-b border-gray-800/40 group relative"
                             >
                               <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-800 flex items-center justify-center flex-shrink-0 mr-3">
                                 {token.logo ? (
@@ -3883,7 +3881,7 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
                                   e.stopPropagation();
                                   toggleTokenVisibility(token.contractAddress);
                                 }}
-                                className="opacity-0 group-hover:opacity-100 ml-2 p-1.5 text-gray-500 hover:text-gray-300 transition-all"
+                                className="absolute right-4 opacity-0 group-hover:opacity-100 p-1.5 text-gray-500 hover:text-gray-300 transition-all"
                                 title="Hide token"
                               >
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
