@@ -126,8 +126,8 @@ const SiteBanner: React.FC = () => {
 
   // Desktop: Bottom-left toast notification
   if (!isMobile) {
-    return (
-      <div
+  return (
+    <div
         className={`
           fixed bottom-4 left-4 z-[9999]
           w-[280px] md:w-[320px]
@@ -159,28 +159,28 @@ const SiteBanner: React.FC = () => {
         {/* Content */}
         <div className="px-3 py-3">
           <p className="text-sm leading-relaxed mb-2" style={{ color: textColor }}>
-            {bannerData.message}
+          {bannerData.message}
           </p>
           
           {/* Asset links */}
           {bannerData.assets && bannerData.assets.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 mt-2">
               {bannerData.assets.map((asset) => {
-                if (!asset.poolAddress) return null;
-                return (
-                  <Link
+            if (!asset.poolAddress) return null;
+            return (
+                <Link
                     key={asset.symbol}
-                    href={`/discover/${asset.poolAddress}/chart`}
+                  href={`/discover/${asset.poolAddress}/chart`}
                     className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold transition-all hover:brightness-110"
                     style={{ 
                       backgroundColor: `${linkColor}20`,
                       color: linkColor 
-                    }}
-                  >
-                    {asset.symbol}
-                  </Link>
-                );
-              })}
+                  }}
+                >
+                  {asset.symbol}
+                </Link>
+            );
+          })}
             </div>
           )}
         </div>

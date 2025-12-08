@@ -61,6 +61,7 @@ interface WalletSearchResult {
   balance?: string;
   transactionCount?: number;
   lastActivity?: string;
+  isContract?: boolean;
 }
 
 interface TransactionSearchResult {
@@ -212,7 +213,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!showResults) return;
 
-      const totalResults = results.tokens.length;
+      const totalResults = results.tokens.length + results.wallets.length + results.transactions.length + results.blocks.length + (results.news?.length || 0);
       
       switch (e.key) {
         case "ArrowDown":
@@ -545,7 +546,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
   };
 
   // Get total results count (only tokens)
-  const totalResults = results.tokens.length;
+  const totalResults = results.tokens.length + results.wallets.length + results.transactions.length + results.blocks.length + (results.news?.length || 0);
 
   // Format number for display
   const formatNumber = (num: number | undefined) => {
@@ -585,11 +586,9 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
 
       {/* Results Summary */}
       {!isLoading && !error && totalResults > 0 && (
-        <div className={`${fullScreenMobile ? 'w-full py-3' : 'px-4 py-2'} bg-gray-950 border-b border-gray-800/30 sticky top-0 z-20 flex-shrink-0`}>
-          <div className={`${fullScreenMobile ? 'text-[11px] px-4' : 'text-xs'} text-gray-400`}>
-            Found {totalResults} token{totalResults !== 1 ? 's' : ''} for "{query}"
-          </div>
-        </div>
+        <div className="px-4 py-2 bg-gray-900/30 border-b border-gray-800/20 sticky top-0 z-20">
+           <span className="text-sm text-gray-400">{totalResults} result{totalResults !== 1 ? 's' : ''}</span>
+         </div>
       )}
 
       {/* Results Container - Always show when searching */}
@@ -613,138 +612,167 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
           <div className="pt-0 pb-2 w-full">
            {/* Tokens */}
            {results.tokens.length > 0 && (
-             <div className="mb-0 w-full">
-               <div className="w-full">
-                 {results.tokens.map((token, index) => {
-                   const globalIndex = index;
-                   const isSelected = selectedIndex === globalIndex;
-                   
-                   return (
-                     <motion.div
-                       key={`${token.address}-${token.poolAddress || 'nopool'}`}
-                       initial={{ opacity: 0, x: -20 }}
-                       animate={{ opacity: 1, x: 0 }}
-                       transition={{ delay: index * 0.05 }}
-                      className={`${fullScreenMobile ? 'p-2.5 w-full' : 'p-3 w-full'} hover:bg-gray-800/50 cursor-pointer border-b border-gray-800/30 last:border-b-0 transition-all duration-200 ${
-                         isSelected ? "bg-gray-800/50" : "bg-gray-950"
-                       }`}
-                      style={{ width: '100%' }}
-                       onClick={() => handleResultClick({ type: "token", result: token })}
-                     >
-                       <div className={`flex items-center ${fullScreenMobile ? 'gap-2.5' : 'space-x-3'}`}>
-                         {/* Token Icon */}
-                         <div className="relative flex-shrink-0">
-                           {token.imageUrl ? (
-                             <img
-                               src={token.imageUrl}
-                               alt={token.name}
-                               className={`${fullScreenMobile ? 'w-9 h-9' : 'w-10 h-10'} rounded-full border border-gray-600`}
-                               onError={(e) => {
-                                 e.currentTarget.src = `https://ui-avatars.com/api/?name=${token.symbol}&background=1f2937&color=60a5fa&size=40`;
-                               }}
-                             />
-                           ) : (
-                             <img
-                               src={`https://ui-avatars.com/api/?name=${token.symbol}&background=1f2937&color=60a5fa&size=40`}
-                               alt={token.name}
-                               className={`${fullScreenMobile ? 'w-9 h-9' : 'w-10 h-10'} rounded-full border border-gray-600`}
-                             />
-                           )}
-                           {!fullScreenMobile && (
-                             <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-gray-800"></div>
+             <div className="w-full">
+               {results.tokens.map((token, index) => {
+                 const globalIndex = index;
+                 const isSelected = selectedIndex === globalIndex;
+                 return (
+                   <div
+                     key={`${token.address}-${token.poolAddress || 'nopool'}`}
+                     className={`px-4 py-2 hover:bg-gray-800/40 cursor-pointer border-b border-gray-800/20 ${isSelected ? "bg-gray-800/40" : ""}`}
+                     onClick={() => handleResultClick({ type: "token", result: token })}
+                   >
+                     <div className="flex items-center gap-3">
+                       {/* Token Icon */}
+                       <div className="relative flex-shrink-0">
+                         <img
+                           src={token.imageUrl || `https://ui-avatars.com/api/?name=${token.symbol}&background=1f2937&color=60a5fa&size=32`}
+                           alt={token.name}
+                           className="w-8 h-8 rounded-full border border-gray-700"
+                           onError={(e) => {
+                             e.currentTarget.src = `https://ui-avatars.com/api/?name=${token.symbol}&background=1f2937&color=60a5fa&size=32`;
+                           }}
+                         />
+                       </div>
+                       {/* Token Info */}
+                       <div className="flex-1 min-w-0">
+                         <div className="flex items-center gap-2">
+                           <span className="text-[15px] font-medium text-gray-200">{token.symbol}</span>
+                           <span className="text-[13px] text-gray-500">{token.name.length > 20 ? token.name.substring(0, 20) + '...' : token.name}</span>
+                           {token.priceChange?.h24 && (
+                             <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                               parseFloat(token.priceChange.h24.toString()) > 0 
+                                 ? 'bg-green-500/10 text-green-400' 
+                                 : 'bg-red-500/10 text-red-400'
+                             }`}>
+                               {parseFloat(token.priceChange.h24.toString()) > 0 ? '+' : ''}{parseFloat(token.priceChange.h24.toString()).toFixed(1)}%
+                             </span>
                            )}
                          </div>
-                         
-                         {/* Token Info - Mobile Optimized */}
-                         <div className="flex-1 min-w-0">
-                           {fullScreenMobile ? (
-                             /* Mobile Layout - Simplified */
-                             <>
-                               <div className="flex items-center justify-between mb-1">
-                                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                   <span className="font-semibold text-sm text-white truncate">{token.symbol}</span>
-                                   {token.priceChange?.h24 && (
-                                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
-                                       parseFloat(token.priceChange.h24.toString()) > 0 
-                                         ? 'bg-green-500/20 text-green-400' 
-                                         : 'bg-red-500/20 text-red-400'
-                                     }`}>
-                                       {parseFloat(token.priceChange.h24.toString()) > 0 ? '+' : ''}{parseFloat(token.priceChange.h24.toString()).toFixed(1)}%
-                                     </span>
-                                   )}
-                                 </div>
-                               </div>
-                               <div className="flex items-center gap-2 text-[11px] text-gray-400">
-                                 <span className="truncate">{token.name.length > 25 ? token.name.substring(0, 25) + '...' : token.name}</span>
-                                 {token.priceUsd && (
-                                   <span className="text-gray-300 flex-shrink-0">${parseFloat(token.priceUsd).toFixed(6)}</span>
-                                 )}
-                               </div>
-                             </>
-                           ) : (
-                             /* Desktop Layout - Full Details */
-                             <>
-                               <div className="flex items-center justify-between mb-2">
-                                 <div className="flex items-center space-x-2 min-w-0">
-                                   <span className="font-bold text-gray-200 truncate">{token.symbol}</span>
-                                   <span className="text-sm text-gray-400 truncate max-w-[120px]">
-                                     ({token.name.length > 20 ? token.name.substring(0, 20) + '...' : token.name})
-                                   </span>
-                                 </div>
-                                 <div className="flex items-center space-x-2 flex-wrap">
-                                   {token.priceChange?.h24 && (
-                                     <span className={`text-xs px-2 py-1 rounded-md font-medium ${
-                                       parseFloat(token.priceChange.h24.toString()) > 0 
-                                         ? 'bg-green-500/20 text-green-400' 
-                                         : 'bg-red-500/20 text-red-400'
-                                     }`}>
-                                       {parseFloat(token.priceChange.h24.toString()) > 0 ? '+' : ''}{parseFloat(token.priceChange.h24.toString()).toFixed(2)}%
-                                     </span>
-                                   )}
-                                   {token.dexId && (
-                                     <span
-                                       className={`text-xs px-2 py-1 rounded-md font-medium border uppercase ${
-                                         token.dexId?.toLowerCase() === 'aerodrome'
-                                           ? 'bg-blue-500/40 text-white border-blue-400/50'
-                                           : (token.dexId?.toLowerCase() === 'uniswap' || token.dexId?.toLowerCase() === 'uniswap_v3')
-                                             ? 'bg-pink-500/40 text-white border-pink-400/50'
-                                             : 'bg-gray-500/20 text-gray-300 border-gray-500/30'
-                                       }`}
-                                     >
-                                       {token.dexId}
-                                     </span>
-                                   )}
-                                   {token.metrics && token.metrics.volumeChange24h !== 0 && (
-                                     <span className={`text-xs px-2 py-1 rounded-md font-medium ${
-                                       token.metrics.volumeChange24h > 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'
-                                     }`}>
-                                       Vol: {token.metrics.volumeChange24h > 0 ? '+' : ''}{token.metrics.volumeChange24h.toFixed(1)}%
-                                     </span>
-                                   )}
-                                 </div>
-                               </div>
-                               <div className="flex items-center justify-between">
-                                 <div className="flex items-center space-x-4 text-xs text-gray-400">
-                                   <span>MC: ${formatNumber(token.marketCap)}</span>
-                                   {token.volume?.h24 && (
-                                     <span>Vol: ${formatNumber(token.volume.h24)}</span>
-                                   )}
-                                   {token.liquidity?.usd !== undefined && (
-                                     <span>Liq: ${formatNumber(token.liquidity.usd)}</span>
-                                   )}
-                                   {token.txns?.h24 && (
-                                     <span>{token.txns.h24.buys + token.txns.h24.sells} txns</span>
-                                   )}
-                                 </div>
-                               </div>
-                             </>
-                           )}
+                         <div className="text-[13px] text-gray-500 mt-0.5">
+                           {token.priceUsd && <span>${parseFloat(token.priceUsd).toFixed(6)}</span>}
+                           {token.marketCap && <span className="ml-3">MC: ${formatNumber(token.marketCap)}</span>}
+                           {token.volume?.h24 && <span className="ml-3">Vol: ${formatNumber(token.volume.h24)}</span>}
                          </div>
                        </div>
-                     </motion.div>
-                   );
-                 })}
-               </div>
+                     </div>
+                   </div>
+                 );
+               })}
+             </div>
+           )}
+
+           {/* Wallets */}
+           {results.wallets.length > 0 && (
+             <div className="w-full">
+               {results.wallets.map((wallet, index) => {
+                 const globalIndex = results.tokens.length + index;
+                 const isSelected = selectedIndex === globalIndex;
+                 return (
+                   <div
+                     key={wallet.address}
+                     className={`px-4 py-2 hover:bg-gray-800/40 cursor-pointer border-b border-gray-800/20 ${isSelected ? "bg-gray-800/40" : ""}`}
+                     onClick={() => handleResultClick({ type: "wallet", result: wallet })}
+                   >
+                     <div className="flex items-center gap-3">
+                       <div className="w-7 h-7 rounded bg-green-500/20 flex items-center justify-center">
+                         <svg className="w-3.5 h-3.5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                         </svg>
+                       </div>
+                       <div className="flex-1 min-w-0">
+                         <div className="flex items-center gap-2">
+                           <span className="text-[15px] text-gray-200 font-mono">{wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400">ADDRESS</span>
+                            {wallet.isContract && <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">CONTRACT</span>}
+                          </div>
+                          <div className="text-[13px] text-gray-500 mt-0.5">
+                            {wallet.balance && <span>{parseFloat(wallet.balance).toFixed(4)} ETH</span>}
+                            {wallet.transactionCount !== undefined && <span className="ml-3">{wallet.transactionCount.toLocaleString()} txns</span>}
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+                 );
+               })}
+             </div>
+           )}
+
+           {/* Transactions */}
+           {results.transactions.length > 0 && (
+             <div className="w-full">
+               {results.transactions.map((tx, index) => {
+                 const globalIndex = results.tokens.length + results.wallets.length + index;
+                 const isSelected = selectedIndex === globalIndex;
+                 return (
+                   <div
+                     key={tx.hash}
+                     className={`px-4 py-2 hover:bg-gray-800/40 cursor-pointer border-b border-gray-800/20 ${isSelected ? "bg-gray-800/40" : ""}`}
+                     onClick={() => handleResultClick({ type: "transaction", result: tx })}
+                   >
+                     <div className="flex items-center gap-3">
+                       <div className="w-7 h-7 rounded bg-purple-500/20 flex items-center justify-center">
+                         <svg className="w-3.5 h-3.5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                         </svg>
+                       </div>
+                       <div className="flex-1 min-w-0">
+                         <div className="flex items-center gap-2">
+                           <span className="text-[15px] text-gray-200 font-mono">{tx.hash.slice(0, 8)}...{tx.hash.slice(-6)}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">TX</span>
+                            {tx.status !== undefined && (
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${tx.status === 1 ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                                {tx.status === 1 ? 'SUCCESS' : 'FAILED'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[13px] text-gray-500 mt-0.5">
+                            {tx.blockNumber && <span>Block {tx.blockNumber.toLocaleString()}</span>}
+                            {tx.value && parseFloat(tx.value) > 0 && <span className="ml-3">{parseFloat(tx.value).toFixed(4)} ETH</span>}
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+                 );
+               })}
+             </div>
+           )}
+
+           {/* Blocks */}
+           {results.blocks.length > 0 && (
+             <div className="w-full">
+               {results.blocks.map((block, index) => {
+                 const globalIndex = results.tokens.length + results.wallets.length + results.transactions.length + index;
+                 const isSelected = selectedIndex === globalIndex;
+                 return (
+                   <div
+                     key={block.number}
+                     className={`px-4 py-2 hover:bg-gray-800/40 cursor-pointer border-b border-gray-800/20 ${isSelected ? "bg-gray-800/40" : ""}`}
+                     onClick={() => handleResultClick({ type: "block", result: block })}
+                   >
+                     <div className="flex items-center gap-3">
+                       <div className="w-7 h-7 rounded bg-orange-500/20 flex items-center justify-center">
+                         <svg className="w-3.5 h-3.5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                         </svg>
+                       </div>
+                       <div className="flex-1 min-w-0">
+                         <div className="flex items-center gap-2">
+                           <span className="text-[15px] text-gray-200">Block #{block.number.toLocaleString()}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400">BLOCK</span>
+                            {block.transactions !== undefined && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-500/10 text-gray-400">{block.transactions} txs</span>
+                            )}
+                          </div>
+                          <div className="text-[13px] text-gray-500 mt-0.5">
+                            {block.hash && <span className="font-mono">{block.hash.slice(0, 10)}...{block.hash.slice(-6)}</span>}
+                            {block.timestamp && <span className="ml-3">{new Date(block.timestamp).toLocaleString()}</span>}
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+                 );
+               })}
              </div>
            )}
 

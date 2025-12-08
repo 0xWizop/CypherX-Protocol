@@ -729,14 +729,14 @@ const Header: React.FC = () => {
                   ) : (
                     <div>
                       {(expandedFavorites ? favorites : favorites.slice(0, 3)).map((poolAddress) => (
-                        <FavoriteTokenItem 
-                          key={poolAddress} 
-                          poolAddress={poolAddress} 
-                          onRemove={() => toggleFavorite(poolAddress)}
-                        />
-                      ))}
-                      {favorites.length > 3 && (
-                        <button
+                            <FavoriteTokenItem 
+                              key={poolAddress} 
+                              poolAddress={poolAddress} 
+                              onRemove={() => toggleFavorite(poolAddress)}
+                            />
+                          ))}
+                          {favorites.length > 3 && (
+                            <button
                           onClick={() => setExpandedFavorites(!expandedFavorites)}
                           className="w-full text-xs text-gray-500 hover:text-gray-400 transition-colors py-2 text-center"
                         >
@@ -751,37 +751,37 @@ const Header: React.FC = () => {
                 {watchlists.length > 0 && watchlists.map((watchlist) => (
                   <div key={watchlist.id} className="mb-4">
                     <div className="flex items-center justify-between py-2 border-b border-gray-800/40">
-                      <button
-                        onClick={() => setExpandedWatchlist(expandedWatchlist === watchlist.id ? null : watchlist.id)}
+                          <button
+                            onClick={() => setExpandedWatchlist(expandedWatchlist === watchlist.id ? null : watchlist.id)}
                         className="text-sm text-gray-300 hover:text-white transition-colors"
-                      >
-                        {watchlist.name}
-                      </button>
+                          >
+                            {watchlist.name}
+                          </button>
                       <span className="text-xs text-gray-500">{watchlist.tokens.length}</span>
-                    </div>
+                        </div>
                     <div>
                       {(expandedWatchlist === watchlist.id ? watchlist.tokens : watchlist.tokens.slice(0, 3)).map((poolAddress) => (
                         <div key={poolAddress} className="flex items-center justify-between py-2.5 border-b border-gray-800/30">
                           <span className="text-xs text-gray-400 font-mono">{poolAddress.slice(0, 8)}...{poolAddress.slice(-6)}</span>
-                          <button
-                            onClick={() => removeFromWatchlist(watchlist.id, poolAddress)}
+                                  <button
+                                    onClick={() => removeFromWatchlist(watchlist.id, poolAddress)}
                             className="text-gray-600 hover:text-red-400 transition-colors p-1"
                           >
                             <FiTrash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                      {watchlist.tokens.length > 3 && (
-                        <button
+                                  </button>
+                                </div>
+                              ))}
+                              {watchlist.tokens.length > 3 && (
+                                <button
                           onClick={() => setExpandedWatchlist(expandedWatchlist === watchlist.id ? null : watchlist.id)}
                           className="w-full text-xs text-gray-500 hover:text-gray-400 transition-colors py-2 text-center"
-                        >
+                                >
                           {expandedWatchlist === watchlist.id ? 'Show less' : `Show ${watchlist.tokens.length - 3} more`}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                                </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                 
                 {/* Empty state */}
                 {watchlists.length === 0 && favorites.length === 0 && (
@@ -1273,7 +1273,7 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
           {/* Mobile drag handle */}
           <div className="sm:hidden flex justify-center pt-3 pb-1">
             <div className="w-10 h-1 rounded-full bg-gray-600" />
-          </div>
+            </div>
           
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/40 flex-shrink-0">
             <h3 className="text-sm text-white">Settings</h3>
@@ -1293,59 +1293,59 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
               <div className="flex items-center gap-3 py-3 border-b border-gray-800/40">
                 <div className="relative">
                   <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-800">
-                    {profilePicture ? (
-                      <Image
-                        src={profilePicture}
-                        alt="Profile"
+                      {profilePicture ? (
+                        <Image
+                          src={profilePicture}
+                          alt="Profile"
                         width={48}
                         height={48}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <FiUser className="w-5 h-5 text-gray-500" />
-                      </div>
-                    )}
-                    {uploadingImage && (
-                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                        </div>
+                      )}
+                      {uploadingImage && (
+                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                         <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent" />
-                      </div>
-                    )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
                 <div className="flex-1">
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingImage}
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingImage}
                     className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
-                  >
+                    >
                     Change photo
-                  </button>
-                  {uploadStatus !== 'idle' && uploadMessage && (
+                    </button>
+                    {uploadStatus !== 'idle' && uploadMessage && (
                     <p className={`text-xs mt-1 ${uploadStatus === 'success' ? 'text-green-400' : 'text-red-400'}`}>
                       {uploadMessage}
                     </p>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-              />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
 
               <div className="py-3 border-b border-gray-800/40">
                 <label className="block text-xs text-gray-500 mb-1.5">Display Name</label>
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
+                    <input
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
                   className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-gray-600 transition-colors"
                   placeholder="Enter display name"
-                />
+                    />
               </div>
             </div>
 
@@ -1360,22 +1360,22 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
               ].map(({ key, label }) => (
                 <label key={key} className="flex items-center justify-between py-3 border-b border-gray-800/40 cursor-pointer">
                   <span className="text-sm text-gray-400">{label}</span>
-                  <div className="relative">
-                    <input
-                      type="checkbox"
+                      <div className="relative">
+                        <input
+                          type="checkbox"
                       checked={notifications[key as keyof typeof notifications]}
-                      onChange={(e) => setNotifications(prev => ({ ...prev, [key]: e.target.checked }))}
-                      className="sr-only"
-                    />
+                          onChange={(e) => setNotifications(prev => ({ ...prev, [key]: e.target.checked }))}
+                          className="sr-only"
+                        />
                     <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 ${
                       notifications[key as keyof typeof notifications] ? 'bg-blue-500' : 'bg-gray-700'
-                    }`}>
+                        }`}>
                       <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${
                         notifications[key as keyof typeof notifications] ? 'translate-x-4' : ''
                       }`} />
-                    </div>
-                  </div>
-                </label>
+                        </div>
+                      </div>
+                    </label>
               ))}
             </div>
 
@@ -1389,22 +1389,22 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
               ].map(({ key, label }) => (
                 <label key={key} className="flex items-center justify-between py-3 border-b border-gray-800/40 cursor-pointer">
                   <span className="text-sm text-gray-400">{label}</span>
-                  <div className="relative">
-                    <input
-                      type="checkbox"
+                      <div className="relative">
+                        <input
+                          type="checkbox"
                       checked={privacy[key as keyof typeof privacy]}
-                      onChange={(e) => setPrivacy(prev => ({ ...prev, [key]: e.target.checked }))}
-                      className="sr-only"
-                    />
+                          onChange={(e) => setPrivacy(prev => ({ ...prev, [key]: e.target.checked }))}
+                          className="sr-only"
+                        />
                     <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 ${
                       privacy[key as keyof typeof privacy] ? 'bg-blue-500' : 'bg-gray-700'
-                    }`}>
+                        }`}>
                       <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${
                         privacy[key as keyof typeof privacy] ? 'translate-x-4' : ''
                       }`} />
-                    </div>
-                  </div>
-                </label>
+                        </div>
+                      </div>
+                    </label>
               ))}
             </div>
 
@@ -1412,56 +1412,56 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
             <div className="mb-4">
               <h4 className="text-xs text-gray-500 uppercase tracking-wide mb-3">Trading</h4>
               
-              {/* Quick Buy Amounts */}
+                {/* Quick Buy Amounts */}
               <div className="py-3 border-b border-gray-800/40">
                 <label className="block text-xs text-gray-500 mb-2">Quick Buy Amounts (ETH)</label>
-                <div className="space-y-2">
-                  {quickBuyAmounts.map((amount, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        step="0.001"
-                        min="0"
-                        value={amount}
-                        onChange={(e) => handleUpdateAmount(index, e.target.value)}
+                  <div className="space-y-2">
+                    {quickBuyAmounts.map((amount, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          step="0.001"
+                          min="0"
+                          value={amount}
+                          onChange={(e) => handleUpdateAmount(index, e.target.value)}
                         className="flex-1 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-gray-600 transition-colors"
-                        placeholder="0.01"
-                      />
-                      {quickBuyAmounts.length > 1 && (
-                        <button
-                          onClick={() => handleRemoveAmount(index)}
+                          placeholder="0.01"
+                        />
+                        {quickBuyAmounts.length > 1 && (
+                          <button
+                            onClick={() => handleRemoveAmount(index)}
                           className="p-2 text-gray-500 hover:text-red-400 transition-colors"
-                        >
-                          <FiX className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  {quickBuyAmounts.length < 6 && (
-                    <button
-                      onClick={handleAddAmount}
+                          >
+                            <FiX className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {quickBuyAmounts.length < 6 && (
+                      <button
+                        onClick={handleAddAmount}
                       className="w-full py-2 text-xs text-gray-500 hover:text-gray-400 transition-colors"
-                    >
+                      >
                       + Add amount
-                    </button>
-                  )}
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              {/* Default Slippage */}
+                {/* Default Slippage */}
               <div className="py-3 border-b border-gray-800/40">
                 <label className="block text-xs text-gray-500 mb-1.5">Default Slippage (%)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0.1"
-                  max="50"
-                  value={defaultSlippage}
-                  onChange={(e) => setDefaultSlippage(parseFloat(e.target.value) || 1)}
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    max="50"
+                    value={defaultSlippage}
+                    onChange={(e) => setDefaultSlippage(parseFloat(e.target.value) || 1)}
                   className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-gray-600 transition-colors"
-                  placeholder="1"
-                />
-              </div>
+                    placeholder="1"
+                  />
+                </div>
 
               {/* Preferred DEX */}
               <div className="py-3 border-b border-gray-800/40">
@@ -1476,27 +1476,27 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                   <option value="sushiswap">SushiSwap</option>
                   <option value="0x">0x Protocol</option>
                 </select>
-              </div>
+                  </div>
 
               {/* Auto Approve */}
               <label className="flex items-center justify-between py-3 border-b border-gray-800/40 cursor-pointer">
                 <span className="text-sm text-gray-400">Auto approve tokens</span>
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={autoApprove}
-                    onChange={(e) => setAutoApprove(e.target.checked)}
-                    className="sr-only"
-                  />
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={autoApprove}
+                      onChange={(e) => setAutoApprove(e.target.checked)}
+                      className="sr-only"
+                    />
                   <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 ${
-                    autoApprove ? 'bg-blue-500' : 'bg-gray-700'
-                  }`}>
+                      autoApprove ? 'bg-blue-500' : 'bg-gray-700'
+                    }`}>
                     <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${
                       autoApprove ? 'translate-x-4' : ''
                     }`} />
+                    </div>
                   </div>
-                </div>
-              </label>
+                </label>
 
               {/* Auto Profit DCA */}
               <label className="flex items-center justify-between py-3 border-b border-gray-800/40 cursor-pointer">
@@ -1522,7 +1522,7 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                     }`} />
                   </div>
                 </div>
-              </label>
+                  </label>
 
               {/* DCA Options - Show when enabled */}
               {autoDcaEnabled && (
@@ -1551,7 +1551,7 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                         </button>
                       ))}
                     </div>
-                  </div>
+                </div>
 
                   {/* Asset Selection */}
                   <div>
@@ -1606,29 +1606,29 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
               </motion.div>
             )}
           </div>
-          
+
           {/* Footer Actions */}
           <div className="flex gap-3 px-4 sm:px-5 py-4 border-t border-gray-800/60 flex-shrink-0">
-            <button
-              onClick={onClose}
+              <button
+                onClick={onClose}
               className="flex-1 px-4 py-2.5 bg-gray-900/60 border border-gray-800/60 text-gray-300 hover:bg-gray-800/60 hover:border-gray-700 rounded-xl transition-all duration-200 font-medium text-sm"
-            >
-              Cancel
+              >
+                Cancel
               </button>
-            <button
-              onClick={handleSaveSettings}
-              disabled={savingSettings}
+              <button
+                onClick={handleSaveSettings}
+                disabled={savingSettings}
               className="flex-1 px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-medium text-sm"
-            >
-              {savingSettings ? (
-                <>
+              >
+                {savingSettings ? (
+                  <>
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <span>Save Changes</span>
-              )}
-            </button>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Changes</span>
+                )}
+              </button>
           </div>
         </motion.div>
       </motion.div>

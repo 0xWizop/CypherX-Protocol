@@ -1102,24 +1102,24 @@ export default function TokenScreener() {
   // Initial Firebase fetch (just metadata, fast)
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "tokens"), (snapshot) => {
-      const tokenList = snapshot.docs.map((doc) => ({
-        poolAddress: doc.data().pool as string || "",
-        tokenAddress: doc.data().address as string || "",
-        symbol: doc.data().symbol as string || "",
-        name: doc.data().name as string || doc.data().symbol || "Unknown",
-        decimals: doc.data().decimals as number || 18,
-        pairCreatedAt: doc.data().createdAt?.toDate().getTime() || 0,
-        docId: doc.id,
-      }));
+        const tokenList = snapshot.docs.map((doc) => ({
+          poolAddress: doc.data().pool as string || "",
+          tokenAddress: doc.data().address as string || "",
+          symbol: doc.data().symbol as string || "",
+          name: doc.data().name as string || doc.data().symbol || "Unknown",
+          decimals: doc.data().decimals as number || 18,
+          pairCreatedAt: doc.data().createdAt?.toDate().getTime() || 0,
+          docId: doc.id,
+        }));
       
-      const uniqueTokenMap = new Map<string, typeof tokenList[0]>();
-      tokenList.forEach((token) => {
+        const uniqueTokenMap = new Map<string, typeof tokenList[0]>();
+        tokenList.forEach((token) => {
         if (token.tokenAddress && /^0x[a-fA-F0-9]{40}$/.test(token.tokenAddress)) {
           if (!uniqueTokenMap.has(token.tokenAddress)) {
             uniqueTokenMap.set(token.tokenAddress, token);
           }
         }
-      });
+        });
       setAllFirebaseTokens(Array.from(uniqueTokenMap.values()));
     });
     return () => unsubscribe();
@@ -1135,16 +1135,16 @@ export default function TokenScreener() {
     const chunks: string[][] = [];
     for (let i = 0; i < tokensToFetch.length; i += 10) {
       chunks.push(tokensToFetch.slice(i, i + 10).map((t) => t.tokenAddress));
-    }
+        }
     
     // Fetch all chunks in parallel
     const chunkPromises = chunks.map(async (chunk) => {
-      const joinedChunk = chunk.join(",");
+          const joinedChunk = chunk.join(",");
       try {
-        const res = await fetch(
-          `https://api.dexscreener.com/tokens/v1/base/${encodeURIComponent(joinedChunk)}`,
+          const res = await fetch(
+            `https://api.dexscreener.com/tokens/v1/base/${encodeURIComponent(joinedChunk)}`,
           { headers: { Accept: "application/json" } }
-        );
+          );
         if (!res.ok) return [];
         return await res.json();
       } catch {
@@ -1155,25 +1155,25 @@ export default function TokenScreener() {
     const chunkResults = await Promise.all(chunkPromises);
     
     chunkResults.flat().forEach((pair: any) => {
-      if (pair && pair.baseToken && pair.baseToken.address) {
+            if (pair && pair.baseToken && pair.baseToken.address) {
         const firestoreToken = tokensToFetch.find(
-          (t) => t.tokenAddress.toLowerCase() === pair.baseToken?.address.toLowerCase()
-        );
+                (t) => t.tokenAddress.toLowerCase() === pair.baseToken?.address.toLowerCase()
+              );
         if (firestoreToken && !results.some((r) => r.tokenAddress === firestoreToken.tokenAddress)) {
           results.push({
-            ...firestoreToken,
-            poolAddress: pair.pairAddress,
-            priceUsd: pair.priceUsd || "0",
-            priceChange: pair.priceChange || { m5: 0, h1: 0, h6: 0, h24: 0 },
-            volume: pair.volume || { h1: 0, h24: 0 },
-            liquidity: pair.liquidity || { usd: 0 },
-            marketCap: pair.marketCap || 0,
-            info: pair.info ? { imageUrl: pair.info.imageUrl } : undefined,
+                  ...firestoreToken,
+                  poolAddress: pair.pairAddress,
+                  priceUsd: pair.priceUsd || "0",
+                  priceChange: pair.priceChange || { m5: 0, h1: 0, h6: 0, h24: 0 },
+                  volume: pair.volume || { h1: 0, h24: 0 },
+                  liquidity: pair.liquidity || { usd: 0 },
+                  marketCap: pair.marketCap || 0,
+                  info: pair.info ? { imageUrl: pair.info.imageUrl } : undefined,
             dexId: pair.dexId || "unknown",
+                });
+              }
+            }
           });
-        }
-      }
-    });
     
     return results;
   }, []);
@@ -1199,17 +1199,17 @@ export default function TokenScreener() {
           // Small delay between batches to avoid rate limiting
           if (i + BATCH_SIZE < allFirebaseTokens.length) {
             await new Promise(resolve => setTimeout(resolve, 100));
-          }
+        }
         }
         
         setTokens(allResults);
       } catch (err) {
         setError("Unable to load tokens. Please try again later.");
         console.error(err);
-      } finally {
-        setLoading(false);
-        setInitialLoad(false);
-      }
+              } finally {
+          setLoading(false);
+          setInitialLoad(false);
+        }
     };
     
     loadAllTokens();

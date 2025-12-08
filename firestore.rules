@@ -658,11 +658,72 @@ service cloud.firestore {
       allow read: if isOwnUser(userId) || isAdmin() || 
         // Allow reading by wallet address for API routes
         (request.auth == null && resource.data.walletAddress is string);
-      allow create: if isAuthenticated() && request.auth.uid == userId;
-      allow update: if isOwnUser(userId) || isAdmin() || 
+      allow create: if isAuthenticated() && request.auth.uid == userId && validateUser();
+      allow update: if (isOwnUser(userId) && (validateUserUpdate() || validatePartialUserUpdate())) || isAdmin() || 
         // Allow updates by wallet address for API routes
         (request.auth == null && resource.data.walletAddress is string);
       allow delete: if isAdmin();
+
+      function validateUser() {
+        let data = request.resource.data;
+        return data.email is string &&
+          data.email.size() > 0 &&
+          data.createdAt is timestamp &&
+          isValidTimestamp(data.createdAt);
+      }
+
+      function validateUserUpdate() {
+        let data = request.resource.data;
+        return (data.alias == null || isValidUsername(data.alias, 3, 20)) &&
+          (data.displayName == null || isValidString(data.displayName, 1, 50)) &&
+          (data.bio == null || isValidString(data.bio, 0, 500)) &&
+          (data.referralCode == null || isValidReferralCode(data.referralCode)) &&
+          (data.referredBy == null || isValidReferralCode(data.referredBy)) &&
+          (data.swapFeeDiscount == null || (data.swapFeeDiscount is number && data.swapFeeDiscount >= 0 && data.swapFeeDiscount <= 100)) &&
+          (data.totalReferrals == null || (data.totalReferrals is number && data.totalReferrals >= 0)) &&
+          (data.totalReferralEarnings == null || (data.totalReferralEarnings is number && data.totalReferralEarnings >= 0)) &&
+          (data.theme == null || data.theme in ['light', 'dark', 'auto']) &&
+          (data.notifications == null || (data.notifications is map && 
+            (data.notifications.email == null || data.notifications.email is bool) &&
+            (data.notifications.push == null || data.notifications.push is bool) &&
+            (data.notifications.trading == null || data.notifications.trading is bool) &&
+            (data.notifications.news == null || data.notifications.news is bool))) &&
+          (data.privacy == null || (data.privacy is map && 
+            (data.privacy.showProfile == null || data.privacy.showProfile is bool) &&
+            (data.privacy.showTrades == null || data.privacy.showTrades is bool) &&
+            (data.privacy.showBalance == null || data.privacy.showBalance is bool))) &&
+          (data.security == null || (data.security is map && 
+            (data.security.twoFactorEnabled == null || data.security.twoFactorEnabled is bool) &&
+            (data.security.sessionTimeout == null || (data.security.sessionTimeout is number && data.security.sessionTimeout >= 0)))) &&
+          (data.profilePicture == null || isValidString(data.profilePicture, 0, 500)) &&
+          (data.updatedAt == null || isValidTimestamp(data.updatedAt));
+      }
+
+      function isValidReferralCode(code) {
+        return code is string && 
+          code.size() == 6 && 
+          code.matches('^[A-Z0-9]{6}$');
+      }
+
+      function validatePartialUserUpdate() {
+        let data = request.resource.data;
+        
+        // Allow partial updates for specific fields
+        return (data.alias == null || isValidUsername(data.alias, 3, 20)) &&
+          (data.displayName == null || isValidString(data.displayName, 1, 50)) &&
+          (data.bio == null || isValidString(data.bio, 0, 500)) &&
+          (data.referralCode == null || isValidReferralCode(data.referralCode)) &&
+          (data.referredBy == null || isValidReferralCode(data.referredBy)) &&
+          (data.swapFeeDiscount == null || (data.swapFeeDiscount is number && data.swapFeeDiscount >= 0 && data.swapFeeDiscount <= 100)) &&
+          (data.totalReferrals == null || (data.totalReferrals is number && data.totalReferrals >= 0)) &&
+          (data.totalReferralEarnings == null || (data.totalReferralEarnings is number && data.totalReferralEarnings >= 0)) &&
+          (data.theme == null || data.theme in ['light', 'dark', 'auto']) &&
+          (data.notifications == null || (data.notifications is map)) &&
+          (data.privacy == null || (data.privacy is map)) &&
+          (data.security == null || (data.security is map)) &&
+          (data.profilePicture == null || isValidString(data.profilePicture, 0, 500)) &&
+          (data.updatedAt == null || isValidTimestamp(data.updatedAt));
+      }
 
       match /settings/{settingId} {
         allow read, write: if isOwnUser(userId) || isAdmin();
@@ -792,126 +853,6 @@ service cloud.firestore {
       match /{document=**} {
         allow read: if isOwnUser(userId) || isAdmin();
         allow write: if isAdmin();
-      }
-
-      function validateUser() {
-        let data = request.resource.data;
-        return (
-          (data.email == null || (data.email is string && data.email.size() > 0)) &&
-          (data.uid == null || data.uid == userId) &&
-          (data.interests == null || (
-            data.interests is list &&
-            data.interests.all(interest, interest is string)
-          )) &&
-          (data.followedProjects == null || (
-            data.followedProjects is list &&
-            data.followedProjects.all(projectId, projectId is string)
-          )) &&
-          (data.followedKOLs == null || (
-            data.followedKOLs is list &&
-            data.followedKOLs.all(kolId, kolId is string)
-          )) &&
-          (data.reputation == null || (
-            data.reputation is map &&
-            (data.reputation.totalScore == null || data.reputation.totalScore is number) &&
-            (data.reputation.votingPower == null || data.reputation.votingPower is number) &&
-            (data.reputation.canVoteOnEvents == null || data.reputation.canVoteOnEvents is bool)
-          )) &&
-          (data.votingHistory == null || data.votingHistory is map)
-        );
-      }
-
-      function validateUserUpdate() {
-        let data = request.resource.data;
-        let prevData = resource.data;
-        return (data.email == null || (data.email is string && data.email.size() > 0)) &&
-          (data.username == null || isValidUsername(data.username, 3, 50)) &&
-          (data.displayName == null || isValidString(data.displayName, 1, 50)) &&
-          (data.bio == null || isValidString(data.bio, 0, 500)) &&
-          (data.createdAt == null || (prevData.createdAt != null && data.createdAt == prevData.createdAt)) &&
-          (data.updatedAt == null || data.updatedAt is timestamp) &&
-          (data.photoURL == null || data.photoURL is string) &&
-          (data.profilePicture == null || data.profilePicture is string) &&
-          (data.alias == null || isValidUsername(data.alias, 3, 20)) &&
-          (data.theme == null || data.theme in ['light', 'dark', 'auto']) &&
-          (data.notifications == null || (
-            data.notifications is map &&
-            (data.notifications.email == null || data.notifications.email is bool) &&
-            (data.notifications.push == null || data.notifications.push is bool) &&
-            (data.notifications.trading == null || data.notifications.trading is bool) &&
-            (data.notifications.news == null || data.notifications.news is bool)
-          )) &&
-          (data.privacy == null || (
-            data.privacy is map &&
-            (data.privacy.showProfile == null || data.privacy.showProfile is bool) &&
-            (data.privacy.showTrades == null || data.privacy.showTrades is bool) &&
-            (data.privacy.showBalance == null || data.privacy.showBalance is bool)
-          )) &&
-          (data.security == null || (
-            data.security is map &&
-            (data.security.twoFactorEnabled == null || data.security.twoFactorEnabled is bool) &&
-            (data.security.sessionTimeout == null || (data.security.sessionTimeout is number && data.security.sessionTimeout >= 0))
-          )) &&
-          (data.referralCode == null || isValidReferralCode(data.referralCode)) &&
-          (data.referredBy == null || isValidReferralCode(data.referredBy)) &&
-          (data.swapFeeDiscount == null || (data.swapFeeDiscount is number && data.swapFeeDiscount >= 0 && data.swapFeeDiscount <= 100)) &&
-          (data.totalReferrals == null || (data.totalReferrals is number && data.totalReferrals >= 0)) &&
-          (data.totalReferralEarnings == null || (data.totalReferralEarnings is number && data.totalReferralEarnings >= 0)) &&
-          (data.roles == null || (
-            data.roles is map &&
-            (data.roles.admin == null || data.roles.admin == prevData.roles.admin) &&
-            (data.roles.moderator == null || data.roles.moderator == prevData.roles.moderator)
-          )) &&
-          (data.hasSeenTutorial == null || data.hasSeenTutorial is bool) &&
-          (data.uid == null || data.uid == prevData.uid) &&
-          (data.walletAddress == null || isValidAddress(data.walletAddress)) &&
-          (data.interests == null || (
-            data.interests is list &&
-            data.interests.all(interest, interest is string)
-          )) &&
-          (data.followedProjects == null || (
-            data.followedProjects is list &&
-            data.followedProjects.all(projectId, projectId is string)
-          )) &&
-          (data.followedKOLs == null || (
-            data.followedKOLs is list &&
-            data.followedKOLs.all(kolId, kolId is string)
-          )) &&
-          (data.reputation == null || (
-            data.reputation is map &&
-            (data.reputation.totalScore == null || data.reputation.totalScore is number) &&
-            (data.reputation.votingPower == null || data.reputation.votingPower is number) &&
-            (data.reputation.canVoteOnEvents == null || data.reputation.canVoteOnEvents is bool)
-          )) &&
-          (data.votingHistory == null || data.votingHistory is map) &&
-          (data.preferences == null || (
-            data.preferences is map &&
-            (data.preferences.favorites == null || (
-              data.preferences.favorites is list &&
-              data.preferences.favorites.all(addr, isValidAddress(addr))
-            )) &&
-            (data.preferences.notificationFilter == null || (
-              data.preferences.notificationFilter is map &&
-              (data.preferences.notificationFilter.excludeTypes == null || (
-                data.preferences.notificationFilter.excludeTypes is list &&
-                data.preferences.notificationFilter.excludeTypes.all(type, type is string)
-              )) &&
-              (data.preferences.notificationFilter.type == null || data.preferences.notificationFilter.type is string)
-            )) &&
-            (data.preferences.notifications == null || (
-              data.preferences.notifications is map &&
-              (data.preferences.notifications.ai_index == null || data.preferences.notifications.ai_index is bool) &&
-              (data.preferences.notifications.eth_stats == null || data.preferences.notifications.eth_stats is bool) &&
-              (data.preferences.notifications.loser == null || data.preferences.notifications.loser is bool) &&
-              (data.preferences.notifications.mover == null || data.preferences.notifications.mover is bool) &&
-              (data.preferences.notifications.new_token == null || data.preferences.notifications.new_token is bool) &&
-              (data.preferences.notifications.news == null || data.preferences.notifications.news is bool) &&
-              (data.preferences.notifications.price_spike == null || data.preferences.notifications.price_spike is bool) &&
-              (data.preferences.notifications.volume_spike == null || data.preferences.notifications.volume_spike is bool)
-            )) &&
-            (data.preferences.prioritizeNotifications == null || data.preferences.prioritizeNotifications is bool) &&
-            (data.preferences.terminalStyle == null || isValidString(data.preferences.terminalStyle, 1, 50))
-          ));
       }
     }
 

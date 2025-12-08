@@ -12,6 +12,7 @@ import { ethers } from "ethers";
 import { OverviewIcon, PerformanceIcon, SwapArrowsIcon, TradesIcon } from "../../../components/icons";
 import { FiX, FiCheck, FiChevronDown, FiCopy, FiStar, FiBell } from "react-icons/fi";
 import OrderManagement from "../../../components/OrderManagement";
+import OrdersPositionsPanel from "../../../components/OrdersPositionsPanel";
 import { useWalletSystem } from "@/app/providers";
 import { useWatchlists } from "@/app/hooks/useWatchlists";
 import { usePriceAlerts } from "@/app/hooks/usePriceAlerts";
@@ -134,6 +135,13 @@ export default function ChartV2Page() {
     tokenSymbol: string;
     txHash: string;
     received: string;
+    rewards?: {
+      cashbackAmount: number;
+      cashbackPercent: string;
+      points: number;
+      treasuryFee: number;
+      affiliateFee: number;
+    };
   } | null>(null);
   const [tokenInfo, setTokenInfo] = useState<{
     website?: string;
@@ -294,14 +302,6 @@ export default function ChartV2Page() {
     return 24;
   }, [isMobile, viewportWidth]);
 
-  const formatTimeAgo = useCallback((timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return `${Math.max(seconds, 1)}s ago`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    return `${Math.floor(seconds / 86400)}d ago`;
-  }, []);
-
   const chartHeight = isMobile ? 380 : 480;
   const mobileBottomOffset = isMobile
     ? `calc(${footerHeight}px + ${MOBILE_TAB_HEIGHT}px + env(safe-area-inset-bottom, 0px))`
@@ -310,7 +310,6 @@ export default function ChartV2Page() {
   const swapSectionSpacing = isMobile ? "mb-2" : "mb-3";
   const swapFieldPadding = isMobile ? "p-2.5" : "p-3";
   const quickButtonClass = isMobile ? "px-2 py-1 text-[10px]" : "px-2 py-1 text-[11px]";
-  const desktopScrollable = "";
   const visibleOrders = isMobile ? orders.slice(0, 4) : orders;
   const visiblePositions = isMobile ? positions.slice(0, 4) : positions;
 
@@ -1495,11 +1494,16 @@ export default function ChartV2Page() {
           console.log('✅ Order and position saved to Firebase');
           
           // Log rewards info if processed
+          let rewardsData = null;
           if (saveData.rewards?.processed) {
-            console.log('💰 Rewards processed:', {
-              cashback: saveData.rewards.cashbackAmount,
-              referralReward: saveData.rewards.referralReward
-            });
+            rewardsData = {
+              cashbackAmount: saveData.rewards.cashbackAmount || 0,
+              cashbackPercent: saveData.rewards.cashbackPercent || '0',
+              points: saveData.rewards.points || 0,
+              treasuryFee: saveData.rewards.treasuryFee || 0,
+              affiliateFee: saveData.rewards.affiliateFee || 0
+            };
+            console.log('💰 Rewards processed:', rewardsData);
           } else {
             console.log('ℹ️  Rewards not processed:', saveData.rewards?.message);
           }
@@ -1511,24 +1515,46 @@ export default function ChartV2Page() {
             if (activeDataTab === 'orders') fetchOrders();
             if (activeDataTab === 'positions') fetchPositions();
           }, 1000);
+
+          // Set success banner data with rewards
+          const quoteTokenSymbol = pair?.quoteToken?.symbol || 'WETH';
+          const tokenSymbol = isBuy ? (pair?.baseToken?.symbol || 'TOKEN') : quoteTokenSymbol;
+          setSwapSuccess({
+            type: isBuy ? 'buy' : 'sell',
+            amount: receiveAmount,
+            tokenSymbol: tokenSymbol,
+            txHash: receipt.hash,
+            received: receiveAmount,
+            rewards: rewardsData || undefined
+          });
         } else {
           console.error('❌ Failed to save order:', await saveResponse.text());
+          
+          // Still show success banner even if save fails
+          const quoteTokenSymbol = pair?.quoteToken?.symbol || 'WETH';
+          const tokenSymbol = isBuy ? (pair?.baseToken?.symbol || 'TOKEN') : quoteTokenSymbol;
+          setSwapSuccess({
+            type: isBuy ? 'buy' : 'sell',
+            amount: receiveAmount,
+            tokenSymbol: tokenSymbol,
+            txHash: receipt.hash,
+            received: receiveAmount
+          });
         }
       } catch (error) {
         console.error('❌ Error saving order to Firebase:', error);
         // Don't block the success flow if saving fails
+        // Still show success banner
+        const quoteTokenSymbol = pair?.quoteToken?.symbol || 'WETH';
+        const tokenSymbol = isBuy ? (pair?.baseToken?.symbol || 'TOKEN') : quoteTokenSymbol;
+        setSwapSuccess({
+          type: isBuy ? 'buy' : 'sell',
+          amount: receiveAmount,
+          tokenSymbol: tokenSymbol,
+          txHash: receipt.hash,
+          received: receiveAmount
+        });
       }
-
-      // Set success banner data
-      const quoteTokenSymbol = pair?.quoteToken?.symbol || 'WETH';
-      const tokenSymbol = isBuy ? (pair?.baseToken?.symbol || 'TOKEN') : quoteTokenSymbol;
-      setSwapSuccess({
-        type: isBuy ? 'buy' : 'sell',
-        amount: receiveAmount,
-        tokenSymbol: tokenSymbol,
-        txHash: receipt.hash,
-        received: receiveAmount
-      });
 
       // Clear amounts after successful swap
       setPayAmount("");
@@ -2681,186 +2707,27 @@ export default function ChartV2Page() {
 
           </div>
 
-          {/* Data sections below chart */}
-          <div className={`${isMobile ? (activeMobileTab === "pnl" ? "flex" : "hidden") : "flex"} flex-col min-h-0 flex-shrink-0`} style={{ minHeight: '300px' }}>
-            <div className="w-full px-4 flex gap-4 text-sm border-b border-gray-800/50 flex-shrink-0" style={{ paddingTop: '10px', paddingBottom: '10px' }}>
-              <button onClick={() => setActiveDataTab("orders")} className={`pb-2 transition-colors ${activeDataTab==='orders' ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-300'}`}>Orders</button>
-              <button onClick={() => setActiveDataTab("positions")} className={`pb-2 transition-colors ${activeDataTab==='positions' ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-300'}`}>Positions</button>
-            </div>
-            <div className="px-4 pt-6 text-sm text-white bg-gray-950 min-h-[160px] flex-1 min-h-0 overflow-hidden flex flex-col">
-              {activeDataTab === 'orders' && (
-                <div className="w-full flex-1 flex flex-col">
-                  {ordersLoading ? (
-                    <div className="p-6 text-center text-gray-400 flex-1 flex flex-col items-center justify-center">
-                      <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-                      <p className="text-sm">Loading orders...</p>
-                    </div>
-                  ) : orders.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center" style={{ paddingBottom: !isMobile && footerHeight > 0 ? `${footerHeight + 20}px` : '20px' }}>
-                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-800/50 flex items-center justify-center">
-                        <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                      </div>
-                      <p className="text-sm font-medium text-gray-300 mb-1">No orders available</p>
-                      <p className="text-xs text-gray-500">Your order history will appear here once you place trades</p>
-                    </div>
-                  ) : (
-                    <div className="w-full -mx-4 flex-1 min-h-0 flex flex-col overflow-hidden">
-                      <div className="w-full border-b border-gray-700/50 mb-3 flex-shrink-0">
-                        <div className="grid grid-cols-5 gap-4 px-4 py-2.5 text-xs text-gray-400">
-                          <div>Time</div>
-                          <div>Type</div>
-                          <div>Amount</div>
-                          <div>Price</div>
-                          <div>Status</div>
-                        </div>
-                      </div>
-                      <div className={`space-y-0 flex-1 min-h-0 ${isMobile ? (visibleOrders.length > 3 ? 'overflow-y-auto' : 'overflow-hidden') : (visibleOrders.length > 5 ? 'overflow-y-auto' : 'overflow-hidden')} ${desktopScrollable}`} style={{ paddingBottom: !isMobile && footerHeight > 0 ? `${footerHeight + 8}px` : '8px', overscrollBehavior: 'contain' }}>
-                        {visibleOrders.map((order, idx) => {
-                          const orderColor = order.type === 'buy' ? "text-green-400" : "text-red-400";
-                          const orderLabel = order.type === 'buy' ? "BUY" : "SELL";
-                          
-                          // Calculate display amount - use outputAmount for buys, inputAmount for sells
-                          const displayAmount = parseFloat(order.amount || '0');
-                          const amountStr = displayAmount > 0 
-                            ? displayAmount.toLocaleString(undefined, { maximumFractionDigits: 6, minimumFractionDigits: 0 })
-                            : '0';
-                          
-                          return (
-                            <div 
-                              key={`order-${order.id}-${order.transactionHash || order.timestamp || idx}`} 
-                              className={`w-full grid grid-cols-5 gap-4 px-4 py-3 ${idx < visibleOrders.length - 1 ? 'border-b border-gray-800/30' : ''} hover:bg-gray-800/20 transition-colors`}
-                            >
-                              <div className="text-gray-300 text-sm">
-                                {formatTimeAgo(order.timestamp)}
-                              </div>
-                              <div>
-                                <span className={`font-medium ${orderColor} text-sm`}>
-                                  {orderLabel}
-                                </span>
-                              </div>
-                              <div className="text-gray-300 text-sm">
-                                {amountStr}
-                              </div>
-                              <div className="text-gray-300 text-sm">
-                                ${parseFloat(order.price || '0').toFixed(6)}
-                              </div>
-                              <div>
-                                <span className={`px-2 py-1 text-xs rounded ${
-                                  (order.status === 'completed' || order.status === 'confirmed') ? 'bg-green-500/20 text-green-400' :
-                                  order.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
-                                  'bg-gray-500/20 text-gray-400'
-                                }`}>
-                                  {(order.status === 'completed' || order.status === 'confirmed') ? 'filled' : order.status}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-              {activeDataTab === 'positions' && (
-                <div className="w-full flex-1 flex flex-col">
-                  {positionsLoading ? (
-                    <div className="p-6 text-center text-gray-400 flex-1 flex flex-col items-center justify-center">
-                      <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-                      <p className="text-sm">Loading positions...</p>
-                    </div>
-                  ) : positions.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center" style={{ paddingBottom: !isMobile && footerHeight > 0 ? `${footerHeight + 20}px` : '20px' }}>
-                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-800/50 flex items-center justify-center">
-                        <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                      </div>
-                      <p className="text-sm font-medium text-gray-300 mb-1">No active positions</p>
-                      <p className="text-xs text-gray-500">Your open positions for this token will appear here</p>
-                    </div>
-                  ) : (
-                    <div className="w-full -mx-4 flex-1 min-h-0 flex flex-col overflow-hidden">
-                      <div className="w-full border-b border-gray-700/50 mb-3 flex-shrink-0">
-                        <div className="grid grid-cols-5 gap-4 px-4 py-2.5 text-xs text-gray-400">
-                          <div>Token</div>
-                          <div>Amount</div>
-                          <div>Avg Price</div>
-                          <div>Current</div>
-                          <div>P&L</div>
-                        </div>
-                      </div>
-                      <div className={`space-y-0 flex-1 min-h-0 ${isMobile ? (visiblePositions.length > 3 ? 'overflow-y-auto' : 'overflow-hidden') : (visiblePositions.length > 4 ? 'overflow-y-auto max-h-[400px]' : 'overflow-hidden')}`} style={{ overscrollBehavior: 'contain' }}>
-                        {visiblePositions.map((position, idx) => {
-                          const pnlColor = position.pnlPercentage !== undefined ? 
-                            (position.pnlPercentage >= 0 ? "text-green-400" : "text-red-400") :
-                            (position.pnl?.startsWith('+') ? "text-green-400" : "text-red-400");
-                          
-                          // Ensure amount displays correctly
-                          const displayAmount = parseFloat(position.amount || position.remainingAmount?.toString() || '0');
-                          const amountStr = displayAmount > 0 
-                            ? displayAmount.toLocaleString(undefined, { maximumFractionDigits: 6, minimumFractionDigits: 0 })
-                            : '0';
-                          
-                          return (
-                            <div 
-                              key={`position-${position.id}-${position.tokenAddress}-${position.entryDate || idx}`} 
-                              className={`w-full grid grid-cols-5 gap-4 px-4 py-3 ${idx < visiblePositions.length - 1 ? 'border-b border-gray-800/30' : ''} hover:bg-gray-800/20 transition-colors`}
-                            >
-                              <div className="flex items-center space-x-3">
-                                <div className="w-8 h-8 rounded-full flex items-center justify-center border border-gray-600 flex-shrink-0 overflow-hidden">
-                                  {pair?.info?.imageUrl ? (
-                                    <img 
-                                      src={pair.info.imageUrl} 
-                                      alt={position.tokenSymbol || 'Token'}
-                                      className="w-full h-full object-cover"
-                                      onError={(e) => {
-                                        const target = e.target as HTMLImageElement;
-                                        target.style.display = 'none';
-                                      }}
-                                    />
-                                  ) : null}
-                                  <div className={`w-8 h-8 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-full flex items-center justify-center border border-blue-500/30 ${pair?.info?.imageUrl ? 'hidden' : ''}`}>
-                                    <span className="text-blue-400 font-bold text-sm">
-                                      {position.tokenSymbol?.charAt(0) || 'T'}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="text-gray-300 font-medium text-sm">
-                                  {position.tokenSymbol || 'Unknown'}
-                                </div>
-                              </div>
-                              <div className="text-gray-300 text-sm flex items-center">
-                                {amountStr}
-                              </div>
-                              <div className="text-gray-300 text-sm flex items-center">
-                                ${parseFloat(position.avgPrice || '0').toFixed(6)}
-                              </div>
-                              <div className="text-gray-300 text-sm flex items-center">
-                                ${parseFloat(position.currentPrice || '0').toFixed(6)}
-                              </div>
-                              <div className={`font-medium text-sm flex items-center ${pnlColor}`}>
-                                {position.pnl || position.pnlValue || (
-                                  position.pnlPercentage !== undefined ? (
-                                    `${position.pnlPercentage >= 0 ? '+' : ''}$${Math.abs(position.pnlPercentage || 0).toFixed(2)}`
-                                  ) : 'N/A'
-                                )}
-                                {position.pnlPercentage !== undefined && (
-                                  <span className="ml-1.5 text-xs">
-                                    ({position.pnlPercentage >= 0 ? '+' : ''}{position.pnlPercentage.toFixed(2)}%)
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+          {/* Data sections below chart - Orders & Positions Panel */}
+          <div className={`${isMobile ? (activeMobileTab === "pnl" ? "flex" : "hidden") : "flex"} flex-col min-h-0 flex-shrink-0 bg-gray-950/80 border-t border-gray-800/50 rounded-t-xl`} style={{ minHeight: '300px' }}>
+            <OrdersPositionsPanel
+              activeTab={activeDataTab}
+              onTabChange={(tab) => setActiveDataTab(tab)}
+              orders={visibleOrders}
+              positions={visiblePositions}
+              ordersLoading={ordersLoading}
+              positionsLoading={positionsLoading}
+              currentPrice={currentPrice}
+              tokenSymbol={pair?.baseToken?.symbol || 'TOKEN'}
+              tokenImageUrl={pair?.info?.imageUrl}
+              onRefresh={() => {
+                setOrdersInitialized(false);
+                setPositionsInitialized(false);
+                if (activeDataTab === 'orders') fetchOrders();
+                if (activeDataTab === 'positions') fetchPositions();
+              }}
+              isMobile={isMobile}
+              footerHeight={footerHeight}
+            />
           </div>
         </div>
 
@@ -3804,6 +3671,21 @@ export default function ChartV2Page() {
                   <p className="text-xs text-gray-300 leading-tight mt-0.5">
                     Received <span className="font-semibold">{swapSuccess.received} {swapSuccess.tokenSymbol}</span>
                   </p>
+                  {swapSuccess.rewards && swapSuccess.rewards.cashbackAmount > 0 && (
+                    <div className="mt-1.5 pt-1.5 border-t border-white/10">
+                      <p className="text-xs text-emerald-400 leading-tight">
+                        🎁 Earned {swapSuccess.rewards.cashbackAmount.toFixed(6)} ETH cashback
+                        {swapSuccess.rewards.cashbackPercent && parseFloat(swapSuccess.rewards.cashbackPercent) > 0 && (
+                          <span className="text-emerald-300"> (+{swapSuccess.rewards.cashbackPercent}%)</span>
+                        )}
+                      </p>
+                      {swapSuccess.rewards.points > 0 && (
+                        <p className="text-xs text-blue-400 leading-tight mt-0.5">
+                          +{swapSuccess.rewards.points} points
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => {

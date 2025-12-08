@@ -785,7 +785,7 @@ const AdvancedSwapInterface: React.FC<AdvancedSwapInterfaceProps> = ({
                   <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
                     <FaExchangeAlt className="w-4 h-4 text-blue-400" />
                   </div>
-                  <h3 className="text-lg font-semibold text-white">Confirm Swap</h3>
+                <h3 className="text-lg font-semibold text-white">Confirm Swap</h3>
                 </div>
                 <button
                   onClick={() => setShowSwapConfirmation(false)}
@@ -806,8 +806,8 @@ const AdvancedSwapInterface: React.FC<AdvancedSwapInterfaceProps> = ({
                     <span className="text-2xl font-bold text-white">{pendingSwapData.amountIn}</span>
                     <div className="flex items-center gap-2 bg-slate-700/50 px-3 py-1.5 rounded-lg border border-slate-600/30">
                       <span className="text-sm font-medium text-gray-200">{pendingSwapData.tokenIn}</span>
-                    </div>
                   </div>
+                </div>
                 </div>
                 
                 {/* Swap Arrow */}
@@ -815,8 +815,8 @@ const AdvancedSwapInterface: React.FC<AdvancedSwapInterfaceProps> = ({
                   <div className="w-10 h-10 bg-slate-700 border-2 border-slate-600 rounded-full flex items-center justify-center shadow-lg">
                     <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                    </svg>
-                  </div>
+                  </svg>
+                </div>
                 </div>
                 
                 {/* You Receive */}
@@ -826,8 +826,8 @@ const AdvancedSwapInterface: React.FC<AdvancedSwapInterfaceProps> = ({
                     <span className="text-2xl font-bold text-green-400">{pendingSwapData.amountOut}</span>
                     <div className="flex items-center gap-2 bg-green-500/20 px-3 py-1.5 rounded-lg border border-green-500/30">
                       <span className="text-sm font-medium text-green-300">{pendingSwapData.tokenOut}</span>
-                    </div>
                   </div>
+                </div>
                 </div>
                 
                 {/* Insufficient Funds Warning */}
@@ -839,9 +839,9 @@ const AdvancedSwapInterface: React.FC<AdvancedSwapInterfaceProps> = ({
                   >
                     <div className="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
                       <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
                     <div>
                       <div className="text-sm font-medium text-red-400">Insufficient Balance</div>
                       <div className="text-xs text-red-400/70">You have {tokenInBalance} {pendingSwapData.tokenIn}</div>

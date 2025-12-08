@@ -135,89 +135,90 @@ export async function POST(request: Request) {
           throw new Error(`Alchemy error: ${tokenData.error.message}`);
         }
 
-        // Get metadata for tokens with non-zero balances
-        const tokenBalances = [];
-        if (tokenData.result && tokenData.result.tokenBalances) {
-          for (const token of tokenData.result.tokenBalances) {
-            if (parseInt(token.tokenBalance, 16) > 0) {
-              try {
-                // Get token metadata
-                const metadataRequest = {
-                  jsonrpc: "2.0",
-                  method: "alchemy_getTokenMetadata",
-                  params: [token.contractAddress],
-                  id: 2
-                };
+        // Filter tokens with non-zero balances first
+        const nonZeroTokens = (tokenData.result?.tokenBalances || [])
+          .filter((token: any) => parseInt(token.tokenBalance, 16) > 0)
+          .slice(0, 30); // Limit to 30 tokens for performance
 
-                const metadataResp = await fetch(alchemyUrl, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(metadataRequest),
-                });
+        console.log(`Found ${nonZeroTokens.length} non-zero token balances`);
 
-                if (metadataResp.ok) {
-                  const metadataData = await metadataResp.json();
-                  if (metadataData.result) {
-                    const metadata = metadataData.result;
-                    const balance = parseInt(token.tokenBalance, 16) / Math.pow(10, metadata.decimals || 18);
-                    
-                    // Get token price and USD value from DexScreener
-                    let priceUsd = 0;
-                    let logo = metadata.logo;
-                    
-                    try {
-                      const dexScreenerResp = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${token.contractAddress}`);
-                      if (dexScreenerResp.ok) {
-                        const dexData = await dexScreenerResp.json();
-                        const pair = dexData.pairs?.[0];
-                        if (pair) {
-                          // Get price from DexScreener
-                          if (pair.priceUsd) {
-                            priceUsd = parseFloat(pair.priceUsd);
-                          }
-                          
-                          // Get logo from DexScreener using the same pattern as other parts of the app
-                          if (!logo) {
-                            logo = pair.info?.imageUrl || 
-                                   pair.mediaContent?.previewImage?.small || 
-                                   pair.baseToken?.image ||
-                                   pair.baseToken?.logoURI ||
-                                   pair.quoteToken?.logoURI;
-                          }
-                        }
-                      }
-                    } catch (error) {
-                      console.log(`Error fetching price data for ${token.contractAddress}:`, error);
-                    }
-                    
-                    // Calculate USD value
-                    const usdValue = balance * priceUsd;
-                    
-                    tokenBalances.push({
-                      contractAddress: token.contractAddress,
-                      name: metadata.name || 'Unknown Token',
-                      symbol: metadata.symbol || 'UNK',
-                      tokenBalance: balance.toString(),
-                      decimals: (metadata.decimals || 18).toString(),
-                      logo: logo || `https://dexscreener.com/base/${token.contractAddress}/logo.png`,
-                      priceUsd: priceUsd,
-                      usdValue: usdValue,
-                      priceChange24h: 0 // We can add this later if needed
-                    });
-                  }
-                }
-              } catch (error) {
-                console.log(`Error fetching metadata for token ${token.contractAddress}:`, error);
-              }
-            }
+        // OPTIMIZATION: Batch all metadata requests in a single call
+        const metadataBatchRequest = nonZeroTokens.map((token: any, index: number) => ({
+          jsonrpc: "2.0",
+          method: "alchemy_getTokenMetadata",
+          params: [token.contractAddress],
+          id: index + 1
+        }));
+
+        const metadataBatchResp = await fetch(alchemyUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(metadataBatchRequest),
+        });
+
+        const metadataBatchData = metadataBatchResp.ok ? await metadataBatchResp.json() : [];
+        
+        // Create a map of contract address to metadata
+        const metadataMap = new Map();
+        (Array.isArray(metadataBatchData) ? metadataBatchData : []).forEach((resp: any, index: number) => {
+          if (resp.result) {
+            metadataMap.set(nonZeroTokens[index].contractAddress, resp.result);
           }
-        }
+        });
+
+        // OPTIMIZATION: Fetch DexScreener data in parallel (limit concurrency)
+        const dexDataPromises = nonZeroTokens.map(async (token: any) => {
+          try {
+            const dexResp = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${token.contractAddress}`, {
+              signal: AbortSignal.timeout(5000) // 5s timeout per request
+            });
+            if (dexResp.ok) {
+              const dexData = await dexResp.json();
+              return { contractAddress: token.contractAddress, dexData };
+            }
+          } catch {
+            // Silently fail individual requests
+          }
+          return { contractAddress: token.contractAddress, dexData: null };
+        });
+
+        const dexResults = await Promise.all(dexDataPromises);
+        const dexDataMap = new Map();
+        dexResults.forEach(r => {
+          if (r.dexData) dexDataMap.set(r.contractAddress, r.dexData);
+        });
+
+        // Build token balances array
+        const tokenBalances = nonZeroTokens.map((token: any) => {
+          const metadata = metadataMap.get(token.contractAddress) || {};
+          const dexData = dexDataMap.get(token.contractAddress);
+          const pair = dexData?.pairs?.[0];
+          
+          const decimals = metadata.decimals || 18;
+          const balance = parseInt(token.tokenBalance, 16) / Math.pow(10, decimals);
+          
+          let priceUsd = pair?.priceUsd ? parseFloat(pair.priceUsd) : 0;
+          let logo = metadata.logo || pair?.info?.imageUrl || pair?.baseToken?.logoURI || 
+                     `https://dexscreener.com/base/${token.contractAddress}/logo.png`;
+          
+          return {
+            contractAddress: token.contractAddress,
+            name: metadata.name || 'Unknown Token',
+            symbol: metadata.symbol || 'UNK',
+            tokenBalance: balance.toString(),
+            decimals: decimals.toString(),
+            logo,
+            priceUsd,
+            usdValue: balance * priceUsd,
+            priceChange24h: pair?.priceChange?.h24 ? parseFloat(pair.priceChange.h24) : 0
+          };
+        });
 
         // Sort by USD value (highest first)
-        tokenBalances.sort((a, b) => b.usdValue - a.usdValue);
+        tokenBalances.sort((a: any, b: any) => b.usdValue - a.usdValue);
 
         result = { tokenBalances };
-        console.log(`Token result: Found ${tokenBalances.length} tokens (all holdings shown)`);
+        console.log(`Token result: Found ${tokenBalances.length} tokens (optimized fetch)`);
         break;
 
       case 'transactions':
@@ -506,3 +507,5 @@ export async function POST(request: Request) {
     }, { status: 500 });
   }
 }
+
+

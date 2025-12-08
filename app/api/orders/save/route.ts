@@ -1,13 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
-import { 
-  getUserByWalletAddress, 
-  calculateCashback, 
-  calculateTier, 
-  processReferralReward, 
-  updateUserRewards 
-} from "@/lib/rewards-utils";
+import { processSwapRewards } from "@/lib/swap-rewards";
 
 export async function POST(request: Request) {
   try {
@@ -271,50 +265,71 @@ export async function POST(request: Request) {
       }
     }
 
-    // Process rewards (cashback and referrals) if user account exists
+    // Process rewards (cashback and referrals) using unified system
     let rewardsProcessed = false;
     let cashbackAmount = 0;
     let referralReward = 0;
+    let treasuryFee = 0;
+    let affiliateFee = 0;
+    let points = 0;
+    let cashbackPercent = '0';
 
     try {
-      // Get user by wallet address
-      const { userId, userData } = await getUserByWalletAddress(walletAddress);
+      // Calculate swap value in USD (use outputValue as it represents the token received value)
+      const swapValueUSD = outputValue || inputValue || 0;
+      
+      if (swapValueUSD > 0 && txHash) {
+        // Get ETH price for calculating swap value in ETH
+        const ethPriceResponse = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd', {
+          cache: 'no-store'
+        });
+        const ethPriceData = await ethPriceResponse.json();
+        const ethPrice = ethPriceData?.ethereum?.usd || 3000;
+        const swapValueETH = swapValueUSD / ethPrice;
 
-      if (userId && userData) {
-        // Calculate swap value in USD (use outputValue as it represents the token received value)
-        const swapValueUSD = outputValue || inputValue || 0;
-        
-        if (swapValueUSD > 0) {
-          // Calculate platform fee (0.75% of swap value)
-          // Note: 0.15% goes to 0x protocol, remaining 0.60% available for cashback/referrals
-          const platformFee = swapValueUSD * 0.0075;
+        // Determine input/output tokens
+        const normalizedInputToken = isBuy 
+          ? (inputToken === 'ETH' ? '0x4200000000000000000000000000000000000006' : (inputToken || '0x4200000000000000000000000000000000000006'))
+          : (inputToken || tokenAddress);
+        const normalizedOutputToken = isBuy 
+          ? (outputToken || tokenAddress)
+          : (outputToken === 'ETH' ? '0x4200000000000000000000000000000000000006' : (outputToken || '0x4200000000000000000000000000000000000006'));
 
-          // Get user's tier
-          const userPoints = userData.points || 0;
-          const tier = calculateTier(userPoints);
+        // Process rewards using unified system
+        const rewardResult = await processSwapRewards({
+          walletAddress,
+          swapValueUSD,
+          swapValueETH,
+          transactionHash: txHash,
+          inputToken: normalizedInputToken,
+          outputToken: normalizedOutputToken,
+          inputAmount: inputAmount,
+          outputAmount: outputAmount,
+          feeBps: parseFloat(process.env.ZEROX_FEE_BPS || '0')
+        });
 
-          // Calculate cashback
-          cashbackAmount = calculateCashback(swapValueUSD, tier);
-
-          // Update user rewards
-          await updateUserRewards(userId, swapValueUSD, cashbackAmount, platformFee);
-
-          // Process referral rewards if user was referred
-          if (userData.referredBy) {
-            const referralResult = await processReferralReward(userId, swapValueUSD, platformFee);
-            referralReward = referralResult.referralReward;
-          }
-
+        if (rewardResult.success) {
           rewardsProcessed = true;
-          console.log(`✅ Rewards processed for user ${userId}:`, {
+          cashbackAmount = rewardResult.rewards.cashbackAmount;
+          referralReward = rewardResult.rewards.referralReward;
+          treasuryFee = rewardResult.rewards.treasuryFee;
+          affiliateFee = rewardResult.rewards.affiliateFee;
+          points = rewardResult.rewards.points;
+          cashbackPercent = rewardResult.rewards.cashbackPercent.toFixed(2);
+
+          console.log(`✅ Rewards processed for wallet ${walletAddress}:`, {
             cashback: cashbackAmount,
             referralReward,
-            tier,
-            swapValueUSD
+            treasuryFee,
+            affiliateFee,
+            points,
+            cashbackPercent: cashbackPercent + '%'
           });
+        } else {
+          console.log(`ℹ️  Rewards not processed: ${rewardResult.error}`);
         }
       } else {
-        console.log(`ℹ️  No user account found for wallet ${walletAddress}, skipping rewards`);
+        console.log(`ℹ️  Insufficient swap value or missing txHash, skipping rewards`);
       }
     } catch (error) {
       console.error('❌ Error processing rewards:', error);
@@ -326,12 +341,16 @@ export async function POST(request: Request) {
       orderId: orderRef.id,
       message: 'Order and position saved successfully',
       rewards: rewardsProcessed ? {
+        processed: true,
         cashbackAmount,
         referralReward,
-        processed: true
+        treasuryFee,
+        affiliateFee,
+        points,
+        cashbackPercent
       } : {
         processed: false,
-        message: 'No user account linked to wallet'
+        message: 'No user account linked to wallet or insufficient swap value'
       }
     });
   } catch (error: any) {
