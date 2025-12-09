@@ -392,7 +392,13 @@ export default function Page() {
                         <div className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-900/30 transition-colors">
                           <div className="grid grid-cols-4 gap-1.5 sm:gap-2 md:gap-4 items-center">
                             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0">C</div>
+                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-blue-900/50 border border-blue-700/50 flex items-center justify-center shrink-0 overflow-hidden">
+                                <img 
+                                  src="https://i.imgur.com/TrMzYAi.png" 
+                                  alt="CypherX" 
+                                  className="w-[110%] h-[110%] object-contain"
+                                />
+                              </div>
                               <div className="min-w-0 flex-1">
                                 <div className="text-white font-medium text-[11px] sm:text-xs md:text-sm truncate">$CYPHX</div>
                                 <div className="text-gray-400 text-[9px] sm:text-[10px] md:text-xs truncate">CypherX</div>
@@ -408,7 +414,7 @@ export default function Page() {
                         <div className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-900/30 transition-colors">
                           <div className="grid grid-cols-4 gap-1.5 sm:gap-2 md:gap-4 items-center">
                             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0">A</div>
+                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-blue-900/50 border border-blue-700/50 flex items-center justify-center text-blue-500 font-semibold text-[11px] sm:text-sm shrink-0">A</div>
                               <div className="min-w-0 flex-1">
                                 <div className="text-white font-medium text-[11px] sm:text-xs md:text-sm truncate">$ALPHA</div>
                                 <div className="text-gray-400 text-[9px] sm:text-[10px] md:text-xs truncate">AlphaFi</div>
@@ -424,7 +430,7 @@ export default function Page() {
                         <div className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-900/30 transition-colors">
                           <div className="grid grid-cols-4 gap-1.5 sm:gap-2 md:gap-4 items-center">
                             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0">N</div>
+                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-blue-900/50 border border-blue-700/50 flex items-center justify-center text-blue-500 font-semibold text-[11px] sm:text-sm shrink-0">N</div>
                               <div className="min-w-0 flex-1">
                                 <div className="text-white font-medium text-[11px] sm:text-xs md:text-sm truncate">$NEXUS</div>
                                 <div className="text-gray-400 text-[9px] sm:text-[10px] md:text-xs truncate">NexusAI</div>
@@ -440,7 +446,7 @@ export default function Page() {
                         <div className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-900/30 transition-colors">
                           <div className="grid grid-cols-4 gap-1.5 sm:gap-2 md:gap-4 items-center">
                             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0">S</div>
+                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-blue-900/50 border border-blue-700/50 flex items-center justify-center text-blue-500 font-semibold text-[11px] sm:text-sm shrink-0">S</div>
                               <div className="min-w-0 flex-1">
                                 <div className="text-white font-medium text-[11px] sm:text-xs md:text-sm truncate">$SWIFT</div>
                                 <div className="text-gray-400 text-[9px] sm:text-[10px] md:text-xs truncate">SwiftPay</div>
@@ -456,7 +462,7 @@ export default function Page() {
                         <div className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-900/30 transition-colors">
                           <div className="grid grid-cols-4 gap-1.5 sm:gap-2 md:gap-4 items-center">
                             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0">Q</div>
+                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-blue-900/50 border border-blue-700/50 flex items-center justify-center text-blue-500 font-semibold text-[11px] sm:text-sm shrink-0">Q</div>
                               <div className="min-w-0 flex-1">
                                 <div className="text-white font-medium text-[11px] sm:text-xs md:text-sm truncate">$QUANT</div>
                                 <div className="text-gray-400 text-[9px] sm:text-[10px] md:text-xs truncate">QuantumX</div>

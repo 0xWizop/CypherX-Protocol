@@ -22,6 +22,8 @@ const WalletDisplay: React.FC<WalletDisplayProps> = ({
   const { setSelfCustodialWallet, setWalletLoading } = useWalletSystem();
   const [walletData, setWalletData] = useState<WalletData | null>(null);
   const [ethBalance, setEthBalance] = useState<string>("");
+  const [ethPrice, setEthPrice] = useState<number>(0);
+  const [totalPortfolioValue, setTotalPortfolioValue] = useState<number>(0);
   const walletLoadedRef = useRef(false);
 
 
@@ -124,16 +126,85 @@ const WalletDisplay: React.FC<WalletDisplayProps> = ({
 
 
 
-  // Refresh balance periodically
+  // Fetch ETH price
+  const fetchEthPrice = useCallback(async () => {
+    try {
+      const response = await fetch('/api/price/eth');
+      if (response.ok) {
+        const data = await response.json();
+        const price = data.ethereum?.usd || 0;
+        setEthPrice(price);
+        return price;
+      }
+    } catch (error) {
+      console.error("Error fetching ETH price:", error);
+    }
+    return 0;
+  }, []);
+
+  // Fetch total portfolio value (ETH + all tokens) - same method as WalletDropdown
+  const fetchPortfolioValue = useCallback(async (address: string) => {
+    try {
+      // Use the same API endpoint as WalletDropdown
+      const response = await fetch('/api/alchemy/wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address: address,
+          action: 'tokens'
+        })
+      });
+      
+      if (!response.ok) return;
+
+      const data = await response.json();
+      
+      if (data.success && data.data && data.data.tokenBalances) {
+        // Calculate total from token holdings (same as WalletDropdown)
+        const visibleTokensValue = data.data.tokenBalances
+          .reduce((sum: number, token: any) => sum + (token.usdValue || 0), 0);
+        
+        // Get ETH value
+        const ethBal = parseFloat(ethBalance || "0");
+        const ethValue = ethPrice > 0 ? ethBal * ethPrice : 0;
+        
+        // Total portfolio value (same calculation as WalletDropdown)
+        const totalValue = ethValue + visibleTokensValue;
+        setTotalPortfolioValue(totalValue);
+      }
+    } catch (error) {
+      console.error("Error fetching portfolio value:", error);
+    }
+  }, [ethBalance, ethPrice]);
+
+  // Fetch ETH price on mount and periodically
+  useEffect(() => {
+    fetchEthPrice();
+    const priceInterval = setInterval(fetchEthPrice, 60000); // Refresh every minute
+    return () => clearInterval(priceInterval);
+  }, [fetchEthPrice]);
+
+  // Fetch portfolio value immediately when wallet data, balance, or price changes
+  useEffect(() => {
+    if (walletData?.address && ethBalance && ethPrice > 0) {
+      // Load immediately on mount/change
+      fetchPortfolioValue(walletData.address);
+    }
+  }, [walletData?.address, ethBalance, ethPrice, fetchPortfolioValue]);
+
+  // Refresh balance and portfolio value periodically
   useEffect(() => {
     if (walletData?.address) {
       const interval = setInterval(() => {
         fetchBalance(walletData.address);
+        if (ethPrice > 0) {
+          fetchPortfolioValue(walletData.address);
+        }
       }, 30000); // Refresh every 30 seconds
 
       return () => clearInterval(interval);
     }
-  }, [walletData?.address, fetchBalance]);
+  }, [walletData?.address, ethBalance, ethPrice, fetchBalance, fetchPortfolioValue]);
 
   if (!walletData) {
     return (
@@ -153,11 +224,28 @@ const WalletDisplay: React.FC<WalletDisplayProps> = ({
     return `${address.slice(0, 4)}...${address.slice(-4)}`;
   };
 
+  // Format USD value with proper decimal layouting
+  const formatUSDValue = (value: number): string => {
+    if (!value || value === 0) return '$0.00';
+    
+    if (value >= 1000000) {
+      return `$${(value / 1000000).toFixed(2)}M`;
+    } else if (value >= 1000) {
+      return `$${(value / 1000).toFixed(2)}K`;
+    } else if (value >= 1) {
+      return `$${value.toFixed(2)}`;
+    } else if (value >= 0.01) {
+      return `$${value.toFixed(4)}`;
+    } else {
+      return `$${value.toFixed(6)}`;
+    }
+  };
+
   return (
     <button
       onClick={onToggleDropdown}
       data-wallet-display
-      className="flex items-center justify-center h-8 px-2.5 sm:px-3 sm:py-1.5 sm:space-x-2 rounded-lg sm:rounded-xl bg-[#111827] border border-gray-700/60 sm:border-gray-600 hover:bg-[#1f2937] hover:border-gray-500 transition-all duration-200"
+      className="flex items-center justify-center h-8 px-2.5 sm:px-3 sm:py-1.5 sm:space-x-2 rounded-lg sm:rounded-xl bg-[#111827] hover:bg-[#1f2937] transition-all duration-200"
     >
       {/* Wallet Icon - Hidden on Mobile */}
       <FaWallet className="w-3.5 h-3.5 text-gray-400 hidden sm:block" />
@@ -165,10 +253,10 @@ const WalletDisplay: React.FC<WalletDisplayProps> = ({
       {/* Separator - Hidden on Mobile */}
       <div className="w-px h-4 bg-gray-600 hidden sm:block"></div>
       
-      {/* ETH Balance Display - Hidden on Mobile */}
+      {/* Total Portfolio Value Display - Hidden on Mobile */}
       <div className="hidden sm:flex flex-col items-start">
         <span className="text-white text-sm font-semibold">
-          {parseFloat(ethBalance).toFixed(4)} ETH
+          {formatUSDValue(totalPortfolioValue)}
         </span>
       </div>
       

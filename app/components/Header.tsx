@@ -462,7 +462,7 @@ const Header: React.FC = () => {
                 {/* Action Buttons */}
                 <div className="hidden lg:flex items-center space-x-2">
                   <motion.button
-                    className="relative flex items-center justify-center w-8 h-8 bg-[#111827] hover:bg-[#1f2937] text-white hover:text-blue-400 rounded-lg transition-all duration-200 border border-gray-600 hover:border-gray-500"
+                    className="relative flex items-center justify-center w-8 h-8 bg-[#111827] hover:bg-[#1f2937] text-white hover:text-blue-400 rounded-lg transition-all duration-200"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     title="Watchlist"
@@ -477,7 +477,7 @@ const Header: React.FC = () => {
                   </motion.button>
                   
                   <motion.button
-                    className="flex items-center justify-center w-8 h-8 bg-[#111827] hover:bg-[#1f2937] text-white hover:text-blue-400 rounded-lg transition-all duration-200 border border-gray-600 hover:border-gray-500"
+                    className="flex items-center justify-center w-8 h-8 bg-[#111827] hover:bg-[#1f2937] text-white hover:text-blue-400 rounded-lg transition-all duration-200"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     title="Settings"

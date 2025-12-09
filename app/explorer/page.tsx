@@ -39,6 +39,7 @@ export default function ExplorerPage() {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentTime, setCurrentTime] = useState(Date.now());
   const previousTxHashesRef = useRef<Set<string>>(new Set());
 
   const fetchData = async () => {
@@ -89,14 +90,23 @@ export default function ExplorerPage() {
   useEffect(() => {
     fetchData();
     
-    // Refresh every 5 seconds
-    const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
+    // Refresh data every 5 seconds
+    const dataInterval = setInterval(fetchData, 5000);
+    
+    // Update current time every second for live time-ago display
+    const timeInterval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    
+    return () => {
+      clearInterval(dataInterval);
+      clearInterval(timeInterval);
+    };
   }, []);
 
+  // Reusable function to format time ago - uses currentTime state for live updates
   const formatTimeAgo = (timestamp: number) => {
-    const now = Date.now();
-    const diff = now - timestamp;
+    const diff = currentTime - timestamp;
     const seconds = Math.floor(diff / 1000);
     
     if (seconds < 60) return `${seconds}s ago`;

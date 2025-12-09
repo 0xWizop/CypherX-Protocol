@@ -2312,8 +2312,8 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
             <motion.div
             key="loading-wallet-dropdown"
             className={isMobile
-              ? "fixed inset-0 bottom-0 w-full bg-[#0d1628] border-t border-[#1f2a44] shadow-2xl z-[9999999] h-[70vh] max-h-[640px] flex flex-col overflow-hidden rounded-none"
-              : "fixed top-[85px] right-8 w-[400px] bg-[#0d1628] border border-[#1f2a44] shadow-2xl z-[9999999] max-h-[70vh] overflow-hidden rounded-[24px] flex flex-col"
+              ? "fixed inset-0 bottom-0 w-full bg-[#0d1628] shadow-2xl z-[9999999] h-[70vh] max-h-[640px] flex flex-col overflow-hidden rounded-none"
+              : "fixed top-[85px] right-8 w-[400px] bg-[#0d1628] shadow-2xl z-[9999999] max-h-[70vh] overflow-hidden rounded-[24px] flex flex-col"
               }
               style={!isMobile ? {
                 top: '85px'
@@ -2443,8 +2443,8 @@ const WalletDropdown: React.FC<WalletDropdownProps> = ({
             key="wallet-dropdown"
             data-wallet-dropdown
             className={isMobile
-              ? "fixed left-0 right-0 bottom-0 w-screen bg-[#0d1628] border-t border-[#1f2a44] shadow-2xl z-[9999999] h-[70vh] max-h-[680px] flex flex-col overflow-hidden rounded-t-[28px]"
-              : "fixed top-[85px] right-8 w-[400px] bg-[#0d1628] border border-[#1f2a44] shadow-2xl z-[9999999] max-h-[70vh] overflow-hidden rounded-[24px] flex flex-col"
+              ? "fixed left-0 right-0 bottom-0 w-screen bg-[#0d1628] shadow-2xl z-[9999999] h-[70vh] max-h-[680px] flex flex-col overflow-hidden rounded-t-[28px]"
+              : "fixed top-[85px] right-8 w-[400px] bg-[#0d1628] shadow-2xl z-[9999999] max-h-[70vh] overflow-hidden rounded-[24px] flex flex-col"
         }
             style={!isMobile ? {
               top: '85px',

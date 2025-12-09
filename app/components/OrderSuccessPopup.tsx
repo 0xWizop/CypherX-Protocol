@@ -74,16 +74,22 @@ const OrderSuccessPopup: React.FC<OrderSuccessPopupProps> = ({
 
           {/* Popup */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="relative bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+            className="relative bg-gray-950 border border-gray-800/50 rounded-[16px] shadow-2xl w-full max-w-sm overflow-hidden"
           >
-            {/* Progress bar */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gray-800">
+            {/* Subtle top accent strip */}
+            <div className={`absolute top-0 left-0 right-0 h-[4px] ${isBuy ? 'bg-green-500' : 'bg-red-500'}`} />
+            
+            {/* Subtle left border accent */}
+            <div className={`absolute top-0 bottom-0 left-0 w-[3px] ${isBuy ? 'bg-green-500/30' : 'bg-red-500/30'}`} />
+            
+            {/* Progress bar - subtle at bottom */}
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-800/50">
               <motion.div
-                className={`h-full ${isBuy ? 'bg-green-500' : 'bg-red-500'}`}
+                className={`h-full ${isBuy ? 'bg-green-500/60' : 'bg-red-500/60'}`}
                 style={{ width: `${progress}%` }}
                 transition={{ duration: 0.1 }}
               />
@@ -92,23 +98,21 @@ const OrderSuccessPopup: React.FC<OrderSuccessPopupProps> = ({
             {/* Close button */}
             <button
               onClick={onClose}
-              className="absolute top-4 right-4 p-1.5 text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+              className="absolute top-4 right-4 p-1.5 text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors z-10"
             >
               <FiX className="w-4 h-4" />
             </button>
 
             {/* Content */}
             <div className="pt-8 pb-6 px-6">
-              {/* Success icon */}
+              {/* Success icon - minimal */}
               <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: "spring", damping: 15, stiffness: 300, delay: 0.1 }}
-                className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center ${
-                  isBuy ? 'bg-green-500/20 border-2 border-green-500/30' : 'bg-red-500/20 border-2 border-red-500/30'
-                }`}
+                className="w-14 h-14 mx-auto mb-5 rounded-full flex items-center justify-center bg-gray-800/50 border border-gray-700/50"
               >
-                <FiCheck className={`w-8 h-8 ${isBuy ? 'text-green-400' : 'text-red-400'}`} />
+                <FiCheck className={`w-7 h-7 ${isBuy ? 'text-green-400' : 'text-red-400'}`} />
               </motion.div>
 
               {/* Title */}
@@ -116,7 +120,7 @@ const OrderSuccessPopup: React.FC<OrderSuccessPopupProps> = ({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15 }}
-                className="text-xl font-semibold text-white text-center mb-1"
+                className="text-xl font-semibold text-white text-center mb-2"
               >
                 Order Successful
               </motion.h3>
@@ -125,9 +129,9 @@ const OrderSuccessPopup: React.FC<OrderSuccessPopupProps> = ({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
-                className={`text-sm text-center mb-6 ${isBuy ? 'text-green-400' : 'text-red-400'}`}
+                className="text-sm text-gray-400 text-center mb-6"
               >
-                {isBuy ? 'Buy' : 'Sell'} order executed
+                {isBuy ? 'Buy' : 'Sell'} order executed successfully
               </motion.p>
 
               {/* Order details */}
@@ -135,23 +139,23 @@ const OrderSuccessPopup: React.FC<OrderSuccessPopupProps> = ({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.25 }}
-                className="bg-gray-800/50 rounded-xl p-4 space-y-3"
+                className="bg-gray-900/40 rounded-xl p-4 space-y-3 border border-gray-800/30"
               >
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400 text-sm">Token</span>
-                  <span className="text-white font-medium">{orderDetails.tokenSymbol}</span>
+                  <span className="text-white font-medium text-sm">{orderDetails.tokenSymbol}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400 text-sm">Amount</span>
-                  <span className="text-white font-medium">{orderDetails.amount}</span>
+                  <span className="text-white font-medium text-sm">{orderDetails.amount}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400 text-sm">Price</span>
-                  <span className="text-white font-medium">${orderDetails.price}</span>
+                  <span className="text-white font-medium text-sm">${orderDetails.price}</span>
                 </div>
-                <div className="flex justify-between items-center pt-2 border-t border-gray-700/50">
-                  <span className="text-gray-400 text-sm">Total</span>
-                  <span className={`font-semibold ${isBuy ? 'text-green-400' : 'text-red-400'}`}>
+                <div className="flex justify-between items-center pt-3 border-t border-gray-800/50">
+                  <span className="text-gray-400 text-sm font-medium">Total</span>
+                  <span className={`text-base font-semibold ${isBuy ? 'text-green-400' : 'text-red-400'}`}>
                     {orderDetails.total}
                   </span>
                 </div>
@@ -163,11 +167,11 @@ const OrderSuccessPopup: React.FC<OrderSuccessPopupProps> = ({
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
-                  className="mt-4"
+                  className="mt-5"
                 >
                   <Link
                     href={`/explorer/tx/${orderDetails.txHash}`}
-                    className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl transition-colors"
+                    className="flex items-center justify-center gap-2 w-full py-2.5 bg-gray-800/50 hover:bg-gray-800 border border-gray-700/50 text-white font-medium text-sm rounded-lg transition-all duration-200"
                     onClick={onClose}
                   >
                     View Transaction

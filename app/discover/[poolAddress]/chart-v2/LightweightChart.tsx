@@ -42,6 +42,30 @@ const formatPriceWithCommas = (price: number, precision: number): string => {
   return absPrice.toFixed(precision);
 };
 
+// Helper function to format price compactly for mobile (removes trailing zeros)
+const formatPriceCompact = (price: number, precision: number): string => {
+  if (price === 0 || !isFinite(price)) return '0';
+  
+  const absPrice = Math.abs(price);
+  
+  // For large numbers (>= 1000), add commas and remove trailing zeros
+  if (absPrice >= 1000) {
+    const formatted = absPrice.toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: Math.min(precision, 2),
+    });
+    return formatted.replace(/\.?0+$/, '');
+  }
+  
+  // For smaller numbers, format and remove trailing zeros
+  // Use a reasonable max precision to avoid too many decimals
+  const maxPrecision = Math.min(precision, 6);
+  const formatted = absPrice.toFixed(maxPrecision);
+  
+  // Remove trailing zeros and unnecessary decimal point
+  return formatted.replace(/\.?0+$/, '');
+};
+
 export type Candle = { time: number; open: number; high: number; low: number; close: number; volume?: number };
 
 export interface LightweightChartHandle {
@@ -65,6 +89,7 @@ interface Props {
   showRSI?: boolean;
   showEMA?: boolean;
   timeframe?: string; // Add timeframe prop for VWAP reset logic
+  isMobile?: boolean; // Add mobile flag for compact formatting
   indicatorColors?: {
     sma?: string;
     ema?: string;
@@ -74,7 +99,7 @@ interface Props {
 }
 
 const LightweightChart = forwardRef<LightweightChartHandle, Props>(function LightweightChart(
-  { height = 420, theme = "dark", candles, priceScalePadding = 0, yAxisMode = "price", currentMarketCap, currentPrice, showVolume = true, showMovingAverage = false, movingAveragePeriod = 20, showVWAP = false, showRSI = false, showEMA = false, timeframe = "1d", indicatorColors },
+  { height = 420, theme = "dark", candles, priceScalePadding = 0, yAxisMode = "price", currentMarketCap, currentPrice, showVolume = true, showMovingAverage = false, movingAveragePeriod = 20, showVWAP = false, showRSI = false, showEMA = false, timeframe = "1d", isMobile = false, indicatorColors },
   ref
 ) {
   // Default colors with theme support
@@ -245,24 +270,38 @@ const LightweightChart = forwardRef<LightweightChartHandle, Props>(function Ligh
     chartRef.current = chart;
     seriesRef.current = candlestickSeriesApi;
 
-    // Setup crosshair tooltip
+    // Setup crosshair tooltip - TradingView style
     const tooltip = document.createElement('div');
-    tooltip.className = 'absolute pointer-events-none z-10 bg-gray-900/95 border border-gray-700 rounded-lg px-3 py-2 text-xs shadow-xl';
+    tooltip.className = 'absolute pointer-events-none z-10';
     tooltip.style.display = 'none';
-    tooltip.style.fontFamily = 'monospace';
+    tooltip.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+    tooltip.style.backgroundColor = 'rgba(17, 24, 39, 0.95)';
+    tooltip.style.backdropFilter = 'blur(8px)';
+    tooltip.style.borderRadius = '12px';
+    tooltip.style.padding = '12px 16px';
+    tooltip.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2)';
+    tooltip.style.opacity = '0';
+    tooltip.style.transition = 'opacity 0.15s ease-in-out';
+    tooltip.style.border = 'none';
     containerRef.current?.appendChild(tooltip);
     tooltipRef.current = tooltip;
 
     chart.subscribeCrosshairMove((param) => {
       // Show tooltip
       if (!tooltip || !param.point || !param.time || !seriesRef.current) {
-        tooltip.style.display = 'none';
+        tooltip.style.opacity = '0';
+        setTimeout(() => {
+          tooltip.style.display = 'none';
+        }, 150);
         return;
       }
 
       const data = param.seriesData.get(seriesRef.current);
       if (!data || !('open' in data)) {
-        tooltip.style.display = 'none';
+        tooltip.style.opacity = '0';
+        setTimeout(() => {
+          tooltip.style.display = 'none';
+        }, 150);
         return;
       }
 
@@ -289,14 +328,14 @@ const LightweightChart = forwardRef<LightweightChartHandle, Props>(function Ligh
       };
 
       tooltip.innerHTML = `
-        <div class="text-gray-300 mb-1">${dateStr} ${timeStr}</div>
-        <div class="grid grid-cols-2 gap-x-4 gap-y-1">
-          <div class="text-gray-400">O:</div><div class="text-gray-200">${formatPrice(candle.open)}</div>
-          <div class="text-gray-400">H:</div><div class="text-gray-200">${formatPrice(candle.high)}</div>
-          <div class="text-gray-400">L:</div><div class="text-gray-200">${formatPrice(candle.low)}</div>
-          <div class="text-gray-400">C:</div><div class="text-gray-200">${formatPrice(candle.close)}</div>
-          <div class="text-gray-400">Vol:</div><div class="text-gray-200">${volume > 0 ? formatMarketCap(volume) : 'N/A'}</div>
-          ${prevCandle ? `<div class="text-gray-400">Change:</div><div style="color: ${priceChangeColor}">${priceChange >= 0 ? '+' : ''}${priceChange.toFixed(2)}%</div>` : ''}
+        <div style="color: #9ca3af; font-size: 11px; font-weight: 500; margin-bottom: 8px; letter-spacing: 0.3px;">${dateStr} ${timeStr}</div>
+        <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; font-size: 13px;">
+          <div style="color: #6b7280; font-weight: 500;">O:</div><div style="color: #f3f4f6; font-weight: 600;">${formatPrice(candle.open)}</div>
+          <div style="color: #6b7280; font-weight: 500;">H:</div><div style="color: #f3f4f6; font-weight: 600;">${formatPrice(candle.high)}</div>
+          <div style="color: #6b7280; font-weight: 500;">L:</div><div style="color: #f3f4f6; font-weight: 600;">${formatPrice(candle.low)}</div>
+          <div style="color: #6b7280; font-weight: 500;">C:</div><div style="color: #f3f4f6; font-weight: 600;">${formatPrice(candle.close)}</div>
+          <div style="color: #6b7280; font-weight: 500;">Vol:</div><div style="color: #f3f4f6; font-weight: 600;">${volume > 0 ? formatMarketCap(volume) : 'N/A'}</div>
+          ${prevCandle ? `<div style="color: #6b7280; font-weight: 500;">Change:</div><div style="color: ${priceChangeColor}; font-weight: 600;">${priceChange >= 0 ? '+' : ''}${priceChange.toFixed(2)}%</div>` : ''}
         </div>
       `;
 
@@ -304,6 +343,10 @@ const LightweightChart = forwardRef<LightweightChartHandle, Props>(function Ligh
       tooltip.style.left = coordinate.x + 10 + 'px';
       tooltip.style.top = coordinate.y - 10 + 'px';
       tooltip.style.display = 'block';
+      // Fade in animation
+      requestAnimationFrame(() => {
+        tooltip.style.opacity = '1';
+      });
     });
 
     return () => {
@@ -576,7 +619,19 @@ const LightweightChart = forwardRef<LightweightChartHandle, Props>(function Ligh
 
   // Update data when candles change
   useEffect(() => {
-    if (!seriesRef.current || !processedCandles.unique || processedCandles.unique.length === 0) return;
+    if (!seriesRef.current) return;
+    
+    // If no candles, clear the chart data
+    if (!processedCandles.unique || processedCandles.unique.length === 0) {
+      seriesRef.current.setData([]);
+      if (volumeSeriesRef.current) volumeSeriesRef.current.setData([]);
+      if (maSeriesRef.current) maSeriesRef.current.setData([]);
+      if (emaSeriesRef.current) emaSeriesRef.current.setData([]);
+      if (vwapSeriesRef.current) vwapSeriesRef.current.setData([]);
+      if (rsiSeriesRef.current) rsiSeriesRef.current.setData([]);
+      originalCandlesRef.current = [];
+      return;
+    }
 
     const uniqueCandles = processedCandles.unique;
     
@@ -828,13 +883,13 @@ const LightweightChart = forwardRef<LightweightChartHandle, Props>(function Ligh
           // Market cap is typically in millions/billions, so use 2 decimals
           precision = 2;
         } else {
-          // Price precision logic
+          // Price precision logic - reduce precision on mobile for more compact labels
           if (minValue < 0.0001) {
-            precision = 8; // For very small values like 0.00004964
+            precision = isMobile ? 4 : 8; // For very small values like 0.00004964
           } else if (minValue < 0.01) {
-            precision = 6; // For small values like 0.001
+            precision = isMobile ? 4 : 6; // For small values like 0.001
           } else if (minValue < 1) {
-            precision = 4; // For values like 0.1
+            precision = isMobile ? 3 : 4; // For values like 0.1
           } else if (minValue < 100) {
             precision = 2; // For normal values
           } else {
@@ -861,7 +916,7 @@ const LightweightChart = forwardRef<LightweightChartHandle, Props>(function Ligh
         if (priceScale) {
           priceScale.applyOptions({
             entireTextOnly: false,
-            minimumWidth: 80,
+            minimumWidth: isMobile ? 60 : 80, // Reduce width on mobile for compact labels
             ticksVisible: true,
           });
         }
@@ -874,8 +929,13 @@ const LightweightChart = forwardRef<LightweightChartHandle, Props>(function Ligh
                 if (yAxisMode === "marketCap") {
                   return formatMarketCap(price);
                 } else {
-                  // For price mode, add commas to large numbers
-                  return formatPriceWithCommas(price, precision);
+                  // For price mode, use compact format on mobile (removes trailing zeros)
+                  if (isMobile) {
+                    return formatPriceCompact(price, precision);
+                  } else {
+                    // For desktop, add commas to large numbers
+                    return formatPriceWithCommas(price, precision);
+                  }
                 }
               },
             },
@@ -894,7 +954,7 @@ const LightweightChart = forwardRef<LightweightChartHandle, Props>(function Ligh
         initialZoomSetRef.current = true;
       }
     }
-  }, [processedCandles, yAxisMode, currentMarketCap, currentPrice, showVolume, showMovingAverage, movingAveragePeriod, showVWAP, showRSI, showEMA, timeframe, colors, theme, calculateMovingAverage, calculateEMA, calculateVWAP, calculateRSI]);
+  }, [processedCandles, yAxisMode, currentMarketCap, currentPrice, showVolume, showMovingAverage, movingAveragePeriod, showVWAP, showRSI, showEMA, timeframe, isMobile, colors, theme, calculateMovingAverage, calculateEMA, calculateVWAP, calculateRSI]);
 
   const borderColor = theme === "dark" ? "#374151" : "#d1d5db";
   

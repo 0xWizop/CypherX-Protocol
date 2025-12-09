@@ -142,7 +142,7 @@ const Footer: React.FC<FooterProps> = ({ desktopAddon, isSticky = true }) => {
     <footer
       id="app-footer"
       className={`${isSticky ? "fixed inset-x-0 bottom-0" : "relative"} z-40 ${isSticky ? "bg-gray-950" : "bg-[#070c14]"} border-t border-gray-800 text-gray-300 text-xs px-4 py-3`}
-      style={{ margin: 0, marginTop: 0, marginBottom: 0 }}
+      style={{ margin: 0, marginTop: 0, marginBottom: 0, borderTopWidth: '1px' }}
     >
       {desktopAddon && (
         <div className="hidden sm:flex items-center justify-center border-b border-gray-900/60 px-3 py-3">

@@ -616,6 +616,7 @@ export default function TokenScreener() {
   const [showMobileSkeleton, setShowMobileSkeleton] = useState(true);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [timeCounter, setTimeCounter] = useState(0);
+  const [footerHeight, setFooterHeight] = useState(0);
   
   // Trending history tracking
   const [trendingHistory, setTrendingHistory] = useState<Map<string, number>>(new Map());
@@ -957,10 +958,33 @@ export default function TokenScreener() {
     const checkMobile = () => {
       const mobile = window.innerWidth < MOBILE_BREAKPOINT;
       setIsMobile(mobile);
+      
+      // Calculate footer height
+      const footerEl = document.getElementById("app-footer");
+      if (footerEl) {
+        setFooterHeight(footerEl.offsetHeight);
+      }
     };
     
+    // Initial check
     checkMobile();
+    
     window.addEventListener('resize', checkMobile);
+    
+    // Watch for footer height changes
+    const footerEl = document.getElementById("app-footer");
+    if (footerEl) {
+      const observer = new MutationObserver(() => {
+        setFooterHeight(footerEl.offsetHeight);
+      });
+      observer.observe(footerEl, { attributes: true, childList: true, subtree: true });
+      
+      return () => {
+        window.removeEventListener('resize', checkMobile);
+        observer.disconnect();
+      };
+    }
+    
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
@@ -981,10 +1005,25 @@ export default function TokenScreener() {
         // Fetch custom alerts
         const customAlertsRef = collection(db, `users/${currentUser.uid}/customAlerts`);
         const unsubCustomAlerts = onSnapshot(customAlertsRef, async (snapshot) => {
-          const cas = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          })) as CustomAlert[];
+          const cas = snapshot.docs.map((doc) => {
+            const data = doc.data();
+            // Safely handle any timestamp fields that might be in the data
+            const safeData: any = {};
+            for (const [key, value] of Object.entries(data)) {
+              if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
+                // Convert Firestore Timestamp to ISO string
+                safeData[key] = value.toDate().toISOString();
+              } else if (value instanceof Date) {
+                safeData[key] = value.toISOString();
+              } else {
+                safeData[key] = value;
+              }
+            }
+            return {
+              id: doc.id,
+              ...safeData,
+            } as CustomAlert;
+          });
           setCustomAlerts(cas);
           
           // Fetch token data for alerts from Firebase tokens collection
@@ -1108,7 +1147,20 @@ export default function TokenScreener() {
           symbol: doc.data().symbol as string || "",
           name: doc.data().name as string || doc.data().symbol || "Unknown",
           decimals: doc.data().decimals as number || 18,
-          pairCreatedAt: doc.data().createdAt?.toDate().getTime() || 0,
+          pairCreatedAt: (() => {
+            const createdAt = doc.data().createdAt;
+            if (!createdAt) return 0;
+            if (createdAt?.toDate && typeof createdAt.toDate === 'function') {
+              return createdAt.toDate().getTime();
+            }
+            if (createdAt instanceof Date) {
+              return createdAt.getTime();
+            }
+            if (typeof createdAt === 'number') {
+              return createdAt;
+            }
+            return 0;
+          })(),
           docId: doc.id,
         }));
       
@@ -1240,7 +1292,20 @@ export default function TokenScreener() {
       const boostMap: { [poolAddress: string]: number } = {};
       snapshot.forEach((doc) => {
         const data = doc.data();
-        const expiresAt = data.expiresAt?.toDate();
+        const expiresAt = (() => {
+          const exp = data.expiresAt;
+          if (!exp) return null;
+          if (exp?.toDate && typeof exp.toDate === 'function') {
+            return exp.toDate();
+          }
+          if (exp instanceof Date) {
+            return exp;
+          }
+          if (typeof exp === 'string') {
+            return new Date(exp);
+          }
+          return null;
+        })();
         if (!expiresAt || expiresAt > now) {
           if (data.poolAddress) {
             boostMap[data.poolAddress.toLowerCase()] = data.boostValue || 0;
@@ -3282,7 +3347,7 @@ export default function TokenScreener() {
               <div
                 className="md:hidden bg-gray-950"
                 style={{ 
-                  paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))",
+                  paddingBottom: `calc(${footerHeight + 56}px + env(safe-area-inset-bottom, 0px))`,
                   marginBottom: 0,
                   overscrollBehavior: 'contain',
                   overscrollBehaviorY: 'contain'
@@ -3446,8 +3511,11 @@ export default function TokenScreener() {
 
         {/* Mobile Pagination */}
         <div
-          className="md:hidden fixed left-0 right-0 z-40 flex items-center justify-between border-t border-gray-800 bg-gray-950 px-4 py-3 text-[11px] font-semibold uppercase text-gray-200"
-          style={{ bottom: "calc(32px + env(safe-area-inset-bottom, 0px))" }}
+          className="md:hidden fixed left-0 right-0 z-40 flex items-center justify-between bg-gray-950 px-4 py-3 text-[11px] font-semibold uppercase text-gray-200"
+          style={{ 
+            bottom: `calc(${footerHeight}px + env(safe-area-inset-bottom, 0px))`,
+            borderTop: '1px solid rgba(31, 41, 55, 0.5)'
+          }}
         >
           {totalPages > 1 ? (
             <>
@@ -3480,7 +3548,7 @@ export default function TokenScreener() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setShowMobileFilterModal(true)}
-            className="ml-4 flex items-center gap-2 px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-md text-gray-300 hover:bg-gray-800 hover:border-gray-600 hover:text-white transition-all"
+            className="ml-4 flex items-center gap-2 px-3 py-1.5 bg-gray-900 rounded-md text-gray-300 hover:bg-gray-800 hover:text-white transition-all"
           >
             <FaFilter className="w-3 h-3" />
             <span className="text-[10px] font-medium">

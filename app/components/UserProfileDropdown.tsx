@@ -573,7 +573,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
         aria-label={user ? "Account" : "Sign In"}
       >
         <div
-          className={`relative w-8 h-8 ${variant === "circle" ? "rounded-full bg-[#111827] border border-gray-600 hover:bg-[#1f2937]" : "rounded-lg bg-[#111827] border border-gray-700/60 hover:bg-[#1f2937]"} flex items-center justify-center transition-all duration-300 shadow-lg hover:border-gray-500 overflow-hidden`}
+          className={`relative w-8 h-8 ${variant === "circle" ? "rounded-full bg-[#111827] hover:bg-[#1f2937]" : "rounded-lg bg-[#111827] hover:bg-[#1f2937]"} flex items-center justify-center transition-all duration-300 shadow-lg overflow-hidden`}
         >
           {profilePicture ? (
             <Image
