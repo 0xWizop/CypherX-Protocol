@@ -69,7 +69,43 @@ const PULL_TO_REFRESH_THRESHOLD = 80;
 
 const firebaseAuth = auth;
 
-// DexScreenerPair type removed - now using optimized API
+// DexScreenerPair type
+
+type DexScreenerPair = {
+  pairAddress: string;
+  baseToken?: {
+    address: string;
+    symbol: string;
+    name: string;
+    decimals: number;
+  };
+  quoteToken?: {
+    address: string;
+    symbol: string;
+    name: string;
+    decimals: number;
+  };
+  priceUsd: string;
+  priceChange: {
+    m5: number;
+    h1: number;
+    h6: number;
+    h24: number;
+  };
+  volume: {
+    h1: number;
+    h24: number;
+  };
+  liquidity: {
+    usd: number;
+  };
+  marketCap: number;
+  info?: {
+    imageUrl: string;
+  };
+  pairCreatedAt: number;
+  dexId?: string;
+};
 
 // Memoized Token Row Component
 
@@ -616,7 +652,6 @@ export default function TokenScreener() {
   const [showMobileSkeleton, setShowMobileSkeleton] = useState(true);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [timeCounter, setTimeCounter] = useState(0);
-  const [footerHeight, setFooterHeight] = useState(0);
   
   // Trending history tracking
   const [trendingHistory, setTrendingHistory] = useState<Map<string, number>>(new Map());
@@ -726,6 +761,8 @@ export default function TokenScreener() {
       console.error('Failed to save trending history:', error);
     }
   }, [trendingHistory, lastTrendingUpdate]);
+  
+  const pageSize = 25;
   
   // Missing variables that were removed
   const [_previousPrices, _setPreviousPrices] = useState<{ [symbol: string]: number }>({});
@@ -958,33 +995,10 @@ export default function TokenScreener() {
     const checkMobile = () => {
       const mobile = window.innerWidth < MOBILE_BREAKPOINT;
       setIsMobile(mobile);
-      
-      // Calculate footer height
-      const footerEl = document.getElementById("app-footer");
-      if (footerEl) {
-        setFooterHeight(footerEl.offsetHeight);
-      }
     };
     
-    // Initial check
     checkMobile();
-    
     window.addEventListener('resize', checkMobile);
-    
-    // Watch for footer height changes
-    const footerEl = document.getElementById("app-footer");
-    if (footerEl) {
-      const observer = new MutationObserver(() => {
-        setFooterHeight(footerEl.offsetHeight);
-      });
-      observer.observe(footerEl, { attributes: true, childList: true, subtree: true });
-      
-      return () => {
-        window.removeEventListener('resize', checkMobile);
-        observer.disconnect();
-      };
-    }
-    
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
@@ -1005,25 +1019,10 @@ export default function TokenScreener() {
         // Fetch custom alerts
         const customAlertsRef = collection(db, `users/${currentUser.uid}/customAlerts`);
         const unsubCustomAlerts = onSnapshot(customAlertsRef, async (snapshot) => {
-          const cas = snapshot.docs.map((doc) => {
-            const data = doc.data();
-            // Safely handle any timestamp fields that might be in the data
-            const safeData: any = {};
-            for (const [key, value] of Object.entries(data)) {
-              if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
-                // Convert Firestore Timestamp to ISO string
-                safeData[key] = value.toDate().toISOString();
-              } else if (value instanceof Date) {
-                safeData[key] = value.toISOString();
-              } else {
-                safeData[key] = value;
-              }
-            }
-            return {
-              id: doc.id,
-              ...safeData,
-            } as CustomAlert;
-          });
+          const cas = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as CustomAlert[];
           setCustomAlerts(cas);
           
           // Fetch token data for alerts from Firebase tokens collection
@@ -1126,157 +1125,98 @@ export default function TokenScreener() {
     return () => unsubscribe();
   }, []);
 
-  // Pagination config - 25 tokens per page with on-demand loading
-  const TOKENS_PER_PAGE = 25;
-  const [allFirebaseTokens, setAllFirebaseTokens] = useState<Array<{
-    poolAddress: string;
-    tokenAddress: string;
-    symbol: string;
-    name: string;
-    decimals: number;
-    pairCreatedAt: number;
-    docId: string;
-  }>>([]);
-  
-  // Initial Firebase fetch (just metadata, fast)
+  // Fetch Tokens from Firebase and DexScreener - Ensure unique by tokenAddress, optimize with caching
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "tokens"), (snapshot) => {
+    setLoading(true);
+    setError("");
+            const unsubscribe = onSnapshot(collection(db, "tokens"), async (snapshot) => {
+      try {
         const tokenList = snapshot.docs.map((doc) => ({
           poolAddress: doc.data().pool as string || "",
           tokenAddress: doc.data().address as string || "",
           symbol: doc.data().symbol as string || "",
           name: doc.data().name as string || doc.data().symbol || "Unknown",
           decimals: doc.data().decimals as number || 18,
-          pairCreatedAt: (() => {
-            const createdAt = doc.data().createdAt;
-            if (!createdAt) return 0;
-            if (createdAt?.toDate && typeof createdAt.toDate === 'function') {
-              return createdAt.toDate().getTime();
-            }
-            if (createdAt instanceof Date) {
-              return createdAt.getTime();
-            }
-            if (typeof createdAt === 'number') {
-              return createdAt;
-            }
-            return 0;
-          })(),
+          pairCreatedAt: doc.data().createdAt?.toDate().getTime() || 0,
           docId: doc.id,
         }));
-      
         const uniqueTokenMap = new Map<string, typeof tokenList[0]>();
         tokenList.forEach((token) => {
-        if (token.tokenAddress && /^0x[a-fA-F0-9]{40}$/.test(token.tokenAddress)) {
           if (!uniqueTokenMap.has(token.tokenAddress)) {
             uniqueTokenMap.set(token.tokenAddress, token);
           }
-        }
         });
-      setAllFirebaseTokens(Array.from(uniqueTokenMap.values()));
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // Fetch price data for a batch of tokens - only return tokens WITH price data
-  const fetchPriceData = useCallback(async (tokensToFetch: typeof allFirebaseTokens) => {
-    if (tokensToFetch.length === 0) return [];
-    
-    const results: TokenData[] = [];
-    
-    // Chunk tokens (10 per API call)
-    const chunks: string[][] = [];
-    for (let i = 0; i < tokensToFetch.length; i += 10) {
-      chunks.push(tokensToFetch.slice(i, i + 10).map((t) => t.tokenAddress));
+        const uniqueTokens = Array.from(uniqueTokenMap.values());
+        const validTokens = uniqueTokens.filter((token) => /^0x[a-fA-F0-9]{40}$/.test(token.tokenAddress));
+        if (validTokens.length === 0) {
+          setError("No valid token addresses found in Firebase.");
+          setTokens([]);
+          setLoading(false);
+          return;
         }
-    
-    // Fetch all chunks in parallel
-    const chunkPromises = chunks.map(async (chunk) => {
+
+        // Chunk and fetch from DexScreener, cache results if possible
+        const tokenChunks: string[][] = [];
+        for (let i = 0; i < validTokens.length; i += 10) {
+          tokenChunks.push(validTokens.slice(i, i + 10).map((t) => t.tokenAddress));
+        }
+        const allResults: TokenData[] = [];
+        for (const chunk of tokenChunks) {
           const joinedChunk = chunk.join(",");
-      try {
           const res = await fetch(
             `https://api.dexscreener.com/tokens/v1/base/${encodeURIComponent(joinedChunk)}`,
-          { headers: { Accept: "application/json" } }
+            {
+              headers: { Accept: "application/json" },
+            }
           );
-        if (!res.ok) return [];
-        return await res.json();
-      } catch {
-        return [];
-      }
-    });
-    
-    const chunkResults = await Promise.all(chunkPromises);
-    
-    chunkResults.flat().forEach((pair: any) => {
+          if (!res.ok) {
+            console.error(`API fetch failed for chunk: ${joinedChunk}, status: ${res.status}`);
+            continue;
+          }
+          const data: DexScreenerPair[] = await res.json();
+          data.forEach((pair) => {
             if (pair && pair.baseToken && pair.baseToken.address) {
-        const firestoreToken = tokensToFetch.find(
+              const firestoreToken = validTokens.find(
                 (t) => t.tokenAddress.toLowerCase() === pair.baseToken?.address.toLowerCase()
               );
-        if (firestoreToken && !results.some((r) => r.tokenAddress === firestoreToken.tokenAddress)) {
-          results.push({
+              if (firestoreToken && !allResults.some((r) => r.tokenAddress === firestoreToken.tokenAddress)) {
+                allResults.push({
                   ...firestoreToken,
                   poolAddress: pair.pairAddress,
+                  quoteToken: pair.quoteToken ? {
+                    address: pair.quoteToken.address,
+                    symbol: pair.quoteToken.symbol,
+                    name: pair.quoteToken.name,
+                    decimals: pair.quoteToken.decimals,
+                  } : undefined,
                   priceUsd: pair.priceUsd || "0",
                   priceChange: pair.priceChange || { m5: 0, h1: 0, h6: 0, h24: 0 },
                   volume: pair.volume || { h1: 0, h24: 0 },
                   liquidity: pair.liquidity || { usd: 0 },
                   marketCap: pair.marketCap || 0,
                   info: pair.info ? { imageUrl: pair.info.imageUrl } : undefined,
-            dexId: pair.dexId || "unknown",
+                  dexId: (pair as any).dexId || "unknown",
                 });
               }
             }
           });
-    
-    return results;
-  }, []);
-
-  // Load ALL tokens with price data when Firebase data arrives
-  useEffect(() => {
-    if (allFirebaseTokens.length === 0) return;
-    
-    const loadAllTokens = async () => {
-      setLoading(true);
-      setError("");
-      
-      try {
-        // Fetch price data for all tokens in batches to avoid rate limits
-        const BATCH_SIZE = 50; // Fetch 50 tokens per batch
-        const allResults: TokenData[] = [];
-        
-        for (let i = 0; i < allFirebaseTokens.length; i += BATCH_SIZE) {
-          const batch = allFirebaseTokens.slice(i, i + BATCH_SIZE);
-          const batchResults = await fetchPriceData(batch);
-          allResults.push(...batchResults);
-          
-          // Small delay between batches to avoid rate limiting
-          if (i + BATCH_SIZE < allFirebaseTokens.length) {
-            await new Promise(resolve => setTimeout(resolve, 100));
         }
+        if (allResults.length === 0) {
+          setTokens([]);
+        } else {
+          setTokens(allResults);
         }
-        
-        setTokens(allResults);
       } catch (err) {
         setError("Unable to load tokens. Please try again later.");
         console.error(err);
+        setTokens([]);
               } finally {
           setLoading(false);
           setInitialLoad(false);
         }
-    };
-    
-    loadAllTokens();
-  }, [allFirebaseTokens, fetchPriceData]);
-
-  // Reset to last valid page if current page exceeds total pages
-  useEffect(() => {
-    const maxPages = filteredAndSortedTokens.length > 0 
-      ? Math.ceil(filteredAndSortedTokens.length / TOKENS_PER_PAGE) 
-      : 1;
-    if (currentPage > maxPages && maxPages > 0) {
-      setCurrentPage(maxPages);
-    }
-  }, [filteredAndSortedTokens.length, currentPage]);
-
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Fetch Alerts from Firestore and Clean Up
   // TODO: Reintroduce alert subscription once the new alert system is ready
@@ -1292,20 +1232,7 @@ export default function TokenScreener() {
       const boostMap: { [poolAddress: string]: number } = {};
       snapshot.forEach((doc) => {
         const data = doc.data();
-        const expiresAt = (() => {
-          const exp = data.expiresAt;
-          if (!exp) return null;
-          if (exp?.toDate && typeof exp.toDate === 'function') {
-            return exp.toDate();
-          }
-          if (exp instanceof Date) {
-            return exp;
-          }
-          if (typeof exp === 'string') {
-            return new Date(exp);
-          }
-          return null;
-        })();
+        const expiresAt = data.expiresAt?.toDate();
         if (!expiresAt || expiresAt > now) {
           if (data.poolAddress) {
             boostMap[data.poolAddress.toLowerCase()] = data.boostValue || 0;
@@ -1757,21 +1684,10 @@ export default function TokenScreener() {
     [setCurrentPage]
   );
 
-  // Calculate total pages from tokens WITH price data (filteredAndSortedTokens)
-  const totalPages = filteredAndSortedTokens.length > 0 
-    ? Math.ceil(filteredAndSortedTokens.length / TOKENS_PER_PAGE) 
-    : 1;
-  
-  // Index for ranking display
-  const indexOfFirstToken = (currentPage - 1) * TOKENS_PER_PAGE;
-  
-  // Get exactly 25 tokens for current page from the sorted/filtered list
-  const currentTokens = useMemo(() => {
-    const startIndex = (currentPage - 1) * TOKENS_PER_PAGE;
-    const endIndex = startIndex + TOKENS_PER_PAGE;
-    return filteredAndSortedTokens.slice(startIndex, endIndex);
-  }, [filteredAndSortedTokens, currentPage]);
-  
+  const indexOfLastToken = currentPage * pageSize;
+  const indexOfFirstToken = indexOfLastToken - pageSize;
+  const currentTokens = filteredAndSortedTokens.slice(indexOfFirstToken, indexOfLastToken);
+  const totalPages = Math.ceil(filteredAndSortedTokens.length / pageSize);
   const rowVariants = {
     hidden: { opacity: 0, y: 20 },
     // Use a TS-safe transition (omit `ease` which conflicts with framer-motion's typed Easing)
@@ -3347,7 +3263,7 @@ export default function TokenScreener() {
               <div
                 className="md:hidden bg-gray-950"
                 style={{ 
-                  paddingBottom: `calc(${footerHeight + 56}px + env(safe-area-inset-bottom, 0px))`,
+                  paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))",
                   marginBottom: 0,
                   overscrollBehavior: 'contain',
                   overscrollBehaviorY: 'contain'
@@ -3511,11 +3427,8 @@ export default function TokenScreener() {
 
         {/* Mobile Pagination */}
         <div
-          className="md:hidden fixed left-0 right-0 z-40 flex items-center justify-between bg-gray-950 px-4 py-3 text-[11px] font-semibold uppercase text-gray-200"
-          style={{ 
-            bottom: `calc(${footerHeight}px + env(safe-area-inset-bottom, 0px))`,
-            borderTop: '1px solid rgba(31, 41, 55, 0.5)'
-          }}
+          className="md:hidden fixed left-0 right-0 z-40 flex items-center justify-between border-t border-gray-800 bg-gray-950 px-4 py-3 text-[11px] font-semibold uppercase text-gray-200"
+          style={{ bottom: "calc(32px + env(safe-area-inset-bottom, 0px))" }}
         >
           {totalPages > 1 ? (
             <>
@@ -3548,7 +3461,7 @@ export default function TokenScreener() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setShowMobileFilterModal(true)}
-            className="ml-4 flex items-center gap-2 px-3 py-1.5 bg-gray-900 rounded-md text-gray-300 hover:bg-gray-800 hover:text-white transition-all"
+            className="ml-4 flex items-center gap-2 px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-md text-gray-300 hover:bg-gray-800 hover:border-gray-600 hover:text-white transition-all"
           >
             <FaFilter className="w-3 h-3" />
             <span className="text-[10px] font-medium">

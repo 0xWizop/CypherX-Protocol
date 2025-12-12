@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { QuickBuyButtons as BaseQuickBuyButtons } from './QuickBuyButton';
+import QuickBuyButton, { QuickBuyButtons as BaseQuickBuyButtons } from './QuickBuyButton';
 import { useQuickBuyConfig } from '@/app/hooks/useQuickBuyConfig';
 
 interface QuickBuyButtonsWithConfigProps {
@@ -27,14 +27,11 @@ export function QuickBuyButtonsWithConfig(props: QuickBuyButtonsWithConfigProps)
   
   // Use saved config amounts if no custom amounts provided
   const finalAmounts = props.amounts || config.amounts || [0.01, 0.025, 0.05, 0.1];
-  // Use saved config slippage
-  const finalSlippage = config.defaultSlippage || 1;
 
   return (
     <BaseQuickBuyButtons
       {...props}
       amounts={finalAmounts}
-      slippage={finalSlippage}
     />
   );
 }

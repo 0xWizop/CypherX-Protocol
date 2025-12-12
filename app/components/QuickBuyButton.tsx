@@ -18,7 +18,6 @@ interface QuickBuyButtonProps {
   onSuccess?: (txHash: string) => void;
   className?: string;
   disabled?: boolean;
-  slippage?: number; // Slippage percentage (default: 1)
 }
 
 /**
@@ -33,7 +32,6 @@ export default function QuickBuyButton({
   onSuccess,
   className = "",
   disabled = false,
-  slippage = 1,
 }: QuickBuyButtonProps) {
   const router = useRouter();
   const [isExecuting, setIsExecuting] = useState(false);
@@ -50,7 +48,6 @@ export default function QuickBuyButton({
     if (disabled || isExecuting) return;
 
     setIsExecuting(true);
-    let loadingToast: string | undefined;
     
     try {
       // Step 1: Get swap quote
@@ -61,7 +58,7 @@ export default function QuickBuyButton({
           sellToken: 'ETH',
           buyToken: token.address,
           sellAmount: (amount * 1e18).toString(), // Convert to wei
-          slippagePercentage: slippage, // Use configured slippage
+          slippagePercentage: 1, // 1% slippage for quick buys
         }),
       });
 
@@ -74,7 +71,7 @@ export default function QuickBuyButton({
       const buyAmount = (parseFloat(quoteData.buyAmount || '0') / 1e18).toFixed(6);
 
       // Step 2: Prepare transaction
-      loadingToast = toast.loading('Preparing swap...');
+      const loadingToast = toast.loading('Preparing swap...');
       
       const prepareResponse = await fetch('/api/swap/prepare', {
         method: 'POST',
@@ -83,7 +80,7 @@ export default function QuickBuyButton({
           inputToken: 'ETH',
           outputToken: token.symbol,
           amountIn: amount.toString(),
-          slippage: slippage,
+          slippage: 1,
           walletAddress,
           tokenAddress: token.address,
         }),
@@ -106,7 +103,7 @@ export default function QuickBuyButton({
           outputToken: token.symbol,
           inputAmount: amount.toString(),
           outputAmount: buyAmount,
-          slippage: slippage,
+          slippage: 1,
           walletAddress,
           privateKey,
           tokenAddress: token.address,
@@ -129,16 +126,12 @@ export default function QuickBuyButton({
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Swap failed';
-      if (loadingToast) {
-        toast.error(errorMessage, { id: loadingToast });
-      } else {
-        toast.error(errorMessage);
-      }
+      toast.error(errorMessage, { id: loadingToast });
       console.error('Quick buy error:', error);
     } finally {
       setIsExecuting(false);
     }
-  }, [token, amount, walletAddress, privateKey, onSuccess, router, disabled, isExecuting, slippage]);
+  }, [token, amount, walletAddress, privateKey, onSuccess, router, disabled, isExecuting]);
 
   return (
     <button
@@ -171,7 +164,6 @@ interface QuickBuyButtonsProps {
   onSuccess?: (txHash: string) => void;
   className?: string;
   disabled?: boolean;
-  slippage?: number;
 }
 
 export function QuickBuyButtons({
@@ -182,10 +174,23 @@ export function QuickBuyButtons({
   onSuccess,
   className = "",
   disabled = false,
-  slippage = 1,
 }: QuickBuyButtonsProps) {
-  // Use provided amounts or default values
-  const finalAmounts = amounts || [0.01, 0.025, 0.05, 0.1];
+  // Dynamically import to avoid hook rules violations
+  const [savedAmounts, setSavedAmounts] = React.useState<number[] | null>(null);
+  
+  React.useEffect(() => {
+    if (!amounts && typeof window !== 'undefined') {
+      // Load saved config from user account
+      import('@/app/hooks/useQuickBuyConfig').then(({ useQuickBuyConfig }) => {
+        // This will be handled by the component that uses this
+      }).catch(() => {
+        // Fallback to defaults
+      });
+    }
+  }, [amounts]);
+  
+  // Use saved config amounts if no custom amounts provided
+  const finalAmounts = amounts || savedAmounts || [0.01, 0.025, 0.05, 0.1];
 
   return (
     <div className={`flex items-center gap-1.5 ${className}`}>
@@ -198,7 +203,6 @@ export function QuickBuyButtons({
           privateKey={privateKey}
           onSuccess={onSuccess}
           disabled={disabled}
-          slippage={slippage}
         />
       ))}
     </div>

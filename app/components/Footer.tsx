@@ -3,7 +3,7 @@
 import { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { SiEthereum, SiBitcoin } from "react-icons/si";
-import { FiBarChart, FiEye, FiCompass, FiGift, FiZap, FiBook } from "react-icons/fi";
+import { FiBarChart, FiTrendingUp, FiEye, FiCompass, FiGift, FiZap } from "react-icons/fi";
 
 type FooterProps = {
   desktopAddon?: ReactNode;
@@ -141,16 +141,15 @@ const Footer: React.FC<FooterProps> = ({ desktopAddon, isSticky = true }) => {
   return (
     <footer
       id="app-footer"
-      className={`${isSticky ? "fixed inset-x-0 bottom-0" : "relative"} z-40 ${isSticky ? "bg-gray-950" : "bg-[#070c14]"} border-t border-gray-800 text-gray-300 text-xs px-4 py-3`}
-      style={{ margin: 0, marginTop: 0, marginBottom: 0, borderTopWidth: '1px' }}
+      className={`${isSticky ? "fixed inset-x-0 bottom-0" : "relative"} z-40 bg-gray-950 border-t border-gray-800 text-gray-300 text-xs px-4 py-2`}
     >
       {desktopAddon && (
-        <div className="hidden sm:flex items-center justify-center border-b border-gray-900/60 px-3 py-3">
+        <div className="hidden sm:flex items-center justify-center border-b border-gray-900/60 px-3 py-2">
           {desktopAddon}
         </div>
       )}
       {/* Desktop Layout */}
-      <div className={`hidden sm:flex flex-row items-center justify-between ${desktopAddon ? "pt-3" : ""}`}>
+      <div className={`hidden sm:flex flex-row items-center justify-between ${desktopAddon ? "pt-2" : ""}`}>
         {/* Left Section - Status & Info */}
         <div className="flex items-center justify-start gap-4">
           <div className="flex items-center space-x-2">
@@ -226,16 +225,6 @@ const Footer: React.FC<FooterProps> = ({ desktopAddon, isSticky = true }) => {
             <FiCompass className="w-3 h-3" />
             <span>Explorer</span>
           </Link>
-
-          <a 
-            href="/docs" 
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center space-x-1 hover:text-blue-400 transition-colors duration-200"
-          >
-            <FiBook className="w-3 h-3" />
-            <span>Docs</span>
-          </a>
         </div>
 
         {/* Right Section - Social & Info */}

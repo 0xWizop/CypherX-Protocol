@@ -103,14 +103,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isFullScreenLayout = pathname?.includes('/discover/') && pathname?.includes('/chart');
   const isExplorerPage = pathname?.startsWith('/explorer');
-  const isDocsPage = pathname?.startsWith('/docs');
+  const isPredictPage = pathname?.startsWith('/predict');
+  const isDashboardPage = pathname?.startsWith('/dashboard');
   const isHomepage = pathname === "/";
+  const [footerHeight, setFooterHeight] = useState(0);
 
   useEffect(() => {
     const updateFooterHeight = () => {
       if (typeof window === "undefined") return;
       const footerEl = document.getElementById("app-footer");
       const height = footerEl?.offsetHeight ?? 0;
+      setFooterHeight(height);
       if (typeof document !== "undefined") {
         document.documentElement.style.setProperty("--app-footer-height", `${height}px`);
       }
@@ -254,20 +257,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
               }}
             >
               <div className={`flex min-h-screen flex-col ${isExplorerPage ? 'bg-gray-950' : ''}`}>
+                <SiteBanner />
                 <main
                   className={`flex-1 ${isExplorerPage ? 'bg-gray-950' : ''}`}
                   style={{ 
-                    paddingBottom: 0,
-                    backgroundColor: '#030712', // gray-950 to match background
-                    margin: 0,
-                    marginBottom: 0
+                    paddingBottom: `${isFullScreenLayout || isExplorerPage || isPredictPage || isDashboardPage ? 0 : footerHeight ? footerHeight + 16 : 72}px` 
                   }}
                 >
                   {children}
                 </main>
-                {/* SiteBanner is now fixed positioned - desktop: bottom-left toast, mobile: top banner */}
-                {!isDocsPage && <SiteBanner />}
-                {!isDocsPage && <Footer isSticky={!isHomepage} />}
+                <Footer isSticky={!isHomepage} />
               </div>
               <LoginModal
                 isOpen={showLoginModal}

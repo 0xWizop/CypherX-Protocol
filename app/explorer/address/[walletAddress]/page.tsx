@@ -51,6 +51,13 @@ interface WalletData {
 // Utility functions
 const formatAddress = (address: string) => `${address.slice(0, 6)}...${address.slice(-4)}`;
 
+const formatNumber = (num: number) => {
+  if (num >= 1e9) return `${(num / 1e9).toFixed(2)}B`;
+  if (num >= 1e6) return `${(num / 1e6).toFixed(2)}M`;
+  if (num >= 1e3) return `${(num / 1e3).toFixed(2)}K`;
+  return num.toFixed(2);
+};
+
 const formatEthValue = (value: number) => {
   if (value === 0) return '0.0000';
   if (value < 0.0001) return value.toFixed(8);
@@ -369,7 +376,7 @@ export default function WalletPage() {
                                 width={40} 
                                 height={40} 
                                 className="w-10 h-10 object-cover" 
-                                onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                                onError={(e) => { 
                                   e.currentTarget.style.display = 'none';
                                   const parent = e.currentTarget.parentElement;
                                   if (parent) {

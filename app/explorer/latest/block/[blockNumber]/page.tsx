@@ -42,8 +42,6 @@ export default function BlockDetails() {
   const [error, setError] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showCopyNotification, setShowCopyNotification] = useState<boolean>(false);
-  const [ethPrice, setEthPrice] = useState<number>(0);
-  const [txUsdValues, setTxUsdValues] = useState<Map<string, number>>(new Map());
   const router = useRouter();
   const params = useParams();
   const blockNumber = params.blockNumber as string;
@@ -140,43 +138,6 @@ export default function BlockDetails() {
       setLoading(false);
     }
   }, [blockNumber]);
-
-  // Fetch ETH price
-  useEffect(() => {
-    const fetchEthPrice = async () => {
-      try {
-        const response = await fetch('/api/price/eth');
-        const data = await response.json();
-        setEthPrice(data.ethereum?.usd || 0);
-      } catch (err) {
-        console.error('Failed to fetch ETH price:', err);
-      }
-    };
-    fetchEthPrice();
-  }, []);
-
-  // Fetch USD values for transactions
-  useEffect(() => {
-    if (!block?.transactionList || block.transactionList.length === 0 || ethPrice === 0) return;
-
-    const fetchTxValues = async () => {
-      const values = new Map<string, number>();
-      for (const tx of block.transactionList || []) {
-        try {
-          const response = await fetch(`/api/alchemy/transaction?hash=${tx.hash}`);
-          const data = await response.json();
-          if (data.success && data.transaction?.ethValueUsd) {
-            values.set(tx.hash, data.transaction.ethValueUsd);
-          }
-        } catch (err) {
-          // Silently fail for individual transactions
-        }
-      }
-      setTxUsdValues(values);
-    };
-
-    fetchTxValues();
-  }, [block?.transactionList, ethPrice]);
 
   useEffect(() => {
     if (!blockNumber) {
@@ -361,24 +322,24 @@ export default function BlockDetails() {
                 <div className="px-4 py-2.5">
                   <h2 className="text-sm font-semibold text-white">Gas Information</h2>
                 </div>
-                <div className="px-4 py-4 sm:hidden space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1 min-w-0">
-                      <span className="text-xs text-gray-400 uppercase tracking-wide whitespace-nowrap">Gas Used</span>
-                      <span className="text-sm text-white font-semibold break-all">{parseInt(block.gasUsed, 10).toLocaleString()}</span>
+                <div className="px-4 py-4 sm:hidden space-y-3">
+                  <div className="flex items-center gap-4">
+                    <div className="flex flex-col gap-1 flex-1">
+                      <span className="text-xs text-gray-400 uppercase tracking-wide">Gas Used</span>
+                      <span className="text-sm text-white">{parseInt(block.gasUsed, 10).toLocaleString()}</span>
                     </div>
-                    <div className="flex flex-col gap-1 min-w-0">
-                      <span className="text-xs text-gray-400 uppercase tracking-wide whitespace-nowrap">Gas Limit</span>
-                      <span className="text-sm text-white font-semibold break-all">{parseInt(block.gasLimit, 10).toLocaleString()}</span>
+                    <div className="flex flex-col gap-1 flex-1">
+                      <span className="text-xs text-gray-400 uppercase tracking-wide">Gas Limit</span>
+                      <span className="text-sm text-white">{parseInt(block.gasLimit, 10).toLocaleString()}</span>
                     </div>
                   </div>
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-1">
                     <span className="text-xs text-gray-400 uppercase tracking-wide">Utilization</span>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-2.5 rounded-full bg-gray-700/50 overflow-hidden">
-                        <div className="h-full rounded-full bg-blue-500 transition-all duration-300" style={{ width: `${gasUsedPercentage}%` }} />
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-2 rounded-full bg-gray-700">
+                        <div className="h-2 rounded-full bg-blue-500 transition-all duration-300" style={{ width: `${gasUsedPercentage}%` }} />
                       </div>
-                      <span className="text-sm text-white font-semibold min-w-[3rem] text-right">{gasUsedPercentage}%</span>
+                      <span className="text-sm text-white font-semibold w-12 text-right">{gasUsedPercentage}%</span>
                     </div>
                   </div>
                 </div>
@@ -408,17 +369,20 @@ export default function BlockDetails() {
                 {block.transactionList && block.transactionList.length > 0 ? (
                   <>
                     <div className="sm:hidden">
-                      <div className="max-h-[60vh] overflow-y-auto scrollbar-hide overscroll-contain" style={{ WebkitOverflowScrolling: 'touch', willChange: 'scroll-position' }}>
+                      <div className="max-h-[200px] overflow-y-auto scrollbar-hide overscroll-contain">
                         <div className="px-4 py-3 space-y-2 pb-4">
-                          {block.transactionList.map((tx, _index) => {
-                            const formatHash = (hash: string) => `${hash.slice(0, 8)}...${hash.slice(-6)}`;
-                            const formatAddress = (addr: string) => `${addr.slice(0, 4)}...${addr.slice(-4)}`;
-                            return (
-                            <div
-                              key={tx.hash}
-                              className="py-2.5 border-b border-gray-800/30 last:border-b-0"
-                            >
-                              <div className="flex flex-col gap-1.5">
+                          <AnimatePresence mode="popLayout">
+                            {block.transactionList.map((tx, index) => {
+                              const formatHash = (hash: string) => `${hash.slice(0, 8)}...${hash.slice(-6)}`;
+                              const formatAddress = (addr: string) => `${addr.slice(0, 4)}...${addr.slice(-4)}`;
+                              return (
+                              <motion.div
+                                key={tx.hash}
+                                initial={{ opacity: 0, y: 12 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: index * 0.03 }}
+                                className="py-2.5"
+                              >
                                 <div className="flex items-center gap-2">
                                   <div className="flex items-center flex-1 min-w-0">
                                     <Link href={`/explorer/tx/${tx.hash}`} className="font-mono text-xs text-blue-400 hover:text-blue-300 truncate">
@@ -435,50 +399,41 @@ export default function BlockDetails() {
                                     </a>
                                   </div>
                                 </div>
-                                {txUsdValues.has(tx.hash) && txUsdValues.get(tx.hash)! > 0 && (
-                                  <div className="text-[10px] text-gray-400 ml-0">
-                                    ${txUsdValues.get(tx.hash)!.toFixed(2)}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            );
-                          })}
+                              </motion.div>
+                              );
+                            })}
+                          </AnimatePresence>
                         </div>
                       </div>
                     </div>
 
                     <div className="hidden sm:block">
                       <div className="grid grid-cols-12 px-4 py-2 text-[0.75rem] text-slate-400 border-b border-slate-700/50">
-                        <span className="col-span-3">Hash</span>
-                        <span className="col-span-2">From</span>
-                        <span className="col-span-2">To</span>
-                        <span className="col-span-2">Value (USD)</span>
-                        <span className="col-span-3 text-right">Actions</span>
+                        <span className="col-span-4">Hash</span>
+                        <span className="col-span-3">From</span>
+                        <span className="col-span-3">To</span>
+                        <span className="col-span-2 text-right">Actions</span>
                       </div>
                       <div className="max-h-[200px] overflow-y-auto scrollbar-hide overscroll-contain">
                         <div className="px-4 py-2 pb-4">
                           {block.transactionList.map((tx) => (
                             <div key={tx.hash} className="grid grid-cols-12 items-center py-2 text-xs text-slate-200">
-                              <span className="col-span-3 font-mono text-blue-300 truncate pr-3">
+                              <span className="col-span-4 font-mono text-blue-300 truncate pr-3">
                                 <Link href={`/explorer/tx/${tx.hash}`} className="hover:text-blue-200">
                                   {tx.hash}
                                 </Link>
                               </span>
-                              <span className="col-span-2 truncate pr-2">
+                              <span className="col-span-3 truncate pr-2">
                                 <a href={`/explorer/address/${tx.from}`} className="hover:text-blue-300">
                                   {tx.from}
                                 </a>
                               </span>
-                              <span className="col-span-2 truncate pr-2">
+                              <span className="col-span-3 truncate pr-2">
                                 <a href={`/explorer/address/${tx.to}`} className="hover:text-blue-300">
                                   {tx.to}
                                 </a>
                               </span>
-                              <span className="col-span-2 text-gray-400">
-                                {txUsdValues.has(tx.hash) && txUsdValues.get(tx.hash)! > 0 ? `$${txUsdValues.get(tx.hash)!.toFixed(2)}` : '-'}
-                              </span>
-                              <span className="col-span-3 text-right">
+                              <span className="col-span-2 text-right">
                                 <a href={`/explorer/tx/${tx.hash}`} className="inline-flex items-center gap-1 text-blue-300 hover:text-blue-100">
                                   View
                                 </a>

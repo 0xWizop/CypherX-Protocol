@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ethers } from "ethers";
 
 // Constants
 const BASE_RPC_URL = "https://base-mainnet.g.alchemy.com/v2/8KR6qwxbLlIISgrMCZfsrYeMmn6-S-bN";
@@ -58,7 +59,6 @@ interface WalletSearchResult {
   balance?: string;
   transactionCount?: number;
   lastActivity?: string | null;
-  isContract?: boolean;
 }
 
 interface TransactionSearchResult {
@@ -122,26 +122,16 @@ async function searchTokens(query: string, baseUrl: string): Promise<TokenSearch
   const results: TokenSearchResult[] = [];
   
   try {
-    console.log('[Search API] Searching tokens with query:', query, 'baseUrl:', baseUrl);
-    
-    // First, try to search in our tokens collection
+    // Only search in our tokens collection - use absolute URL with proper error handling
     const tokensUrl = `${baseUrl}/api/tokens?search=${encodeURIComponent(query)}&limit=10`;
-    console.log('[Search API] Fetching from:', tokensUrl);
-    
-    let response;
-    try {
-      response = await fetch(tokensUrl, {
-        headers: {
-          'Accept': 'application/json',
-        },
-        signal: AbortSignal.timeout(8000), // 8 second timeout
-      });
-    } catch (fetchError) {
-      console.error('[Search API] Failed to fetch from internal tokens API:', fetchError);
-      // Fall through to DexScreener search
-    }
-    
-    if (response?.ok) {
+    const response = await fetch(tokensUrl, {
+      headers: {
+        'Accept': 'application/json',
+      },
+      // Add timeout and better error handling
+      signal: AbortSignal.timeout(10000), // 10 second timeout
+    });
+    if (response.ok) {
       const data = await response.json();
       if (data.tokens) {
         // Enhance our tokens with DexScreener data using the same pattern as token screener
@@ -428,50 +418,12 @@ async function searchTokens(query: string, baseUrl: string): Promise<TokenSearch
       }
     }
   } catch (error: any) {
-    console.error("[Search API] Error searching tokens:", error?.message || error);
-  }
-
-  // If no results from our DB, try DexScreener direct search as fallback
-  if (results.length === 0 && query.length >= 2) {
-    try {
-      console.log('[Search API] No internal results, trying DexScreener search');
-      const dexSearchUrl = `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(query)}`;
-      const dexResponse = await fetch(dexSearchUrl, {
-        headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(5000),
-      });
-      
-      if (dexResponse.ok) {
-        const dexData = await dexResponse.json();
-        const pairs = dexData?.pairs || [];
-        const basePairs = pairs.filter((p: any) => p.chainId === 'base').slice(0, 10);
-        
-        for (const pair of basePairs) {
-          if (!pair.baseToken?.address) continue;
-          results.push({
-            type: "token",
-            address: pair.baseToken.address,
-            poolAddress: pair.pairAddress,
-            name: pair.baseToken.name || 'Unknown',
-            symbol: pair.baseToken.symbol || '???',
-            marketCap: pair.marketCap || pair.fdv || 0,
-            volume24h: pair.volume?.h24 || 0,
-            priceUsd: pair.priceUsd,
-            liquidity: pair.liquidity,
-            source: 'dexscreener',
-            imageUrl: pair.info?.imageUrl,
-            priceChange: pair.priceChange,
-            volume: pair.volume,
-            txns: pair.txns,
-            fdv: pair.fdv,
-            pairCreatedAt: pair.pairCreatedAt,
-            dexId: pair.dexId,
-            url: pair.url,
-          });
-        }
-      }
-    } catch (dexError) {
-      console.error('[Search API] External search fallback failed:', dexError);
+    // Log more details about the error
+    console.error("Error searching CypherX tokens:", error);
+    if (error.name === 'AbortError') {
+      console.error("Search request timed out");
+    } else if (error.message) {
+      console.error("Search error message:", error.message);
     }
   }
 
@@ -532,103 +484,76 @@ async function searchNews(query: string, baseUrl: string): Promise<NewsSearchRes
 
 // Calendar events search removed
 
-// Search wallet information using Alchemy RPC directly (no ethers)
+// Search wallet information
 async function searchWallet(address: string): Promise<WalletSearchResult | null> {
   try {
-    console.log('[searchWallet] Fetching wallet data for:', address);
+    const provider = new ethers.JsonRpcProvider(BASE_RPC_URL);
     
-    // Call Alchemy RPC directly using fetch
-    const batchRequest = [
-      { jsonrpc: "2.0", method: "eth_getBalance", params: [address, "latest"], id: 1 },
-      { jsonrpc: "2.0", method: "eth_getTransactionCount", params: [address, "latest"], id: 2 },
-      { jsonrpc: "2.0", method: "eth_getCode", params: [address, "latest"], id: 3 }
-    ];
-
-    const response = await fetch(BASE_RPC_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(batchRequest),
-    });
-
-    if (!response.ok) {
-      console.error('[searchWallet] Alchemy API error:', response.status);
-      return null;
+    // Get wallet balance
+    const balance = await provider.getBalance(address);
+    
+    // Get transaction count
+    const transactionCount = await provider.getTransactionCount(address);
+    
+    // Get latest transaction for last activity
+    const latestBlock = await provider.getBlockNumber();
+    let lastActivity = null;
+    
+    try {
+      // Try to get the latest transaction involving this address
+      const filter = {
+        fromBlock: latestBlock - 1000, // Last 1000 blocks
+        toBlock: latestBlock,
+        address: address
+      };
+      
+      const logs = await provider.getLogs(filter);
+      if (logs.length > 0) {
+        const latestLog = logs[logs.length - 1];
+        const block = await provider.getBlock(latestLog.blockNumber);
+        lastActivity = new Date(block?.timestamp ? block.timestamp * 1000 : Date.now()).toISOString();
+      }
+    } catch (error) {
+      console.error("Error getting last activity:", error);
     }
-
-    const results = await response.json();
-    console.log('[searchWallet] Alchemy response received');
     
-    // Parse the batch response
-    const ethBalance = parseInt(results[0]?.result || "0x0", 16) / 1e18;
-    const transactionCount = parseInt(results[1]?.result || "0x0", 16);
-    const isContract = results[2]?.result !== "0x";
-    
-    const walletResult: WalletSearchResult = {
+    return {
       type: "wallet",
       address,
-      balance: ethBalance.toFixed(6),
+      balance: ethers.formatEther(balance),
       transactionCount: transactionCount,
-      lastActivity: null,
-      isContract
+      lastActivity
     };
-    
-    console.log('[searchWallet] Returning wallet result:', walletResult);
-    return walletResult;
   } catch (error) {
     console.error("Error searching wallet:", error);
     return null;
   }
 }
 
-// Search transaction information using Alchemy RPC directly
+// Search transaction information
 async function searchTransaction(hash: string): Promise<TransactionSearchResult | null> {
   try {
-    const batchRequest = [
-      { jsonrpc: "2.0", method: "eth_getTransactionByHash", params: [hash], id: 1 },
-      { jsonrpc: "2.0", method: "eth_getTransactionReceipt", params: [hash], id: 2 }
-    ];
-
-    const response = await fetch(BASE_RPC_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(batchRequest),
-    });
-
-    if (!response.ok) return null;
-
-    const results = await response.json();
-    const tx = results[0]?.result;
-    const receipt = results[1]?.result;
+    const provider = new ethers.JsonRpcProvider(BASE_RPC_URL);
     
-    if (!tx && !receipt) return null;
-
-    // Get block for timestamp if we have a block number
-    let timestamp: number | undefined;
-    if (tx?.blockNumber || receipt?.blockNumber) {
-      const blockNum = tx?.blockNumber || receipt?.blockNumber;
-      const blockReq = { jsonrpc: "2.0", method: "eth_getBlockByNumber", params: [blockNum, false], id: 3 };
-      const blockRes = await fetch(BASE_RPC_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(blockReq),
-      });
-      if (blockRes.ok) {
-        const blockData = await blockRes.json();
-        if (blockData?.result?.timestamp) {
-          timestamp = parseInt(blockData.result.timestamp, 16) * 1000;
-        }
-      }
-    }
-
+    // Get transaction receipt
+    const receipt = await provider.getTransactionReceipt(hash);
+    if (!receipt) return null;
+    
+    // Get transaction details
+    const tx = await provider.getTransaction(hash);
+    
+    // Get block for timestamp
+    const block = await provider.getBlock(receipt.blockNumber);
+    
     return {
       type: "transaction",
       hash,
-      blockNumber: tx?.blockNumber ? parseInt(tx.blockNumber, 16) : null,
-      from: tx?.from || receipt?.from || "",
-      to: tx?.to || receipt?.to || "",
-      value: tx?.value ? (parseInt(tx.value, 16) / 1e18).toFixed(6) : undefined,
-      status: receipt?.status ? parseInt(receipt.status, 16) : null,
-      timestamp
+      blockNumber: receipt.blockNumber || undefined,
+      from: receipt.from,
+      to: receipt.to || "",
+      value: tx?.value ? ethers.formatEther(tx.value) : undefined,
+      status: receipt.status || undefined,
+      timestamp: block?.timestamp ? block.timestamp * 1000 : undefined
     };
   } catch (error) {
     console.error("Error searching transaction:", error);
@@ -636,38 +561,28 @@ async function searchTransaction(hash: string): Promise<TransactionSearchResult 
   }
 }
 
-// Search block information using Alchemy RPC directly
+// Search block information
 async function searchBlock(numberOrHash: string): Promise<BlockSearchResult | null> {
   try {
-    let blockParam: string;
+    const provider = new ethers.JsonRpcProvider(BASE_RPC_URL);
+    
+    let block;
     if (isBlockNumber(numberOrHash)) {
-      blockParam = "0x" + parseInt(numberOrHash).toString(16);
+      block = await provider.getBlock(parseInt(numberOrHash));
     } else {
-      blockParam = numberOrHash;
+      block = await provider.getBlock(numberOrHash);
     }
-
-    const blockReq = { jsonrpc: "2.0", method: "eth_getBlockByNumber", params: [blockParam, false], id: 1 };
-    const response = await fetch(BASE_RPC_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(blockReq),
-    });
-
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    const block = data?.result;
     
     if (!block) return null;
-
+    
     return {
       type: "block",
-      number: parseInt(block.number, 16),
+      number: block.number,
       hash: block.hash,
-      timestamp: block.timestamp ? parseInt(block.timestamp, 16) * 1000 : undefined,
-      transactions: Array.isArray(block.transactions) ? block.transactions.length : 0,
-      gasUsed: block.gasUsed ? parseInt(block.gasUsed, 16).toString() : null,
-      gasLimit: block.gasLimit ? parseInt(block.gasLimit, 16).toString() : null
+      timestamp: block.timestamp ? block.timestamp * 1000 : undefined,
+      transactions: block.transactions.length,
+      gasUsed: block.gasUsed?.toString(),
+      gasLimit: block.gasLimit?.toString()
     };
   } catch (error) {
     console.error("Error searching block:", error);
@@ -676,35 +591,29 @@ async function searchBlock(numberOrHash: string): Promise<BlockSearchResult | nu
 }
 
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const { searchParams } = url;
-  const query = searchParams.get('q') || '';
-  
   try {
+    const url = new URL(request.url);
+    const { searchParams } = url;
+    const query = searchParams.get('q') || '';
     
-    // Get base URL for internal API calls
-    // Priority: NEXT_PUBLIC_BASE_URL > VERCEL_URL > construct from request
+    // Get base URL for internal API calls - use consistent env var
+    // Priority: NEXT_PUBLIC_BASE_URL > NEXT_PUBLIC_APP_URL > construct from request
     let baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL;
     
-    if (!baseUrl && process.env.VERCEL_URL) {
-      // On Vercel, use the VERCEL_URL with https
-      baseUrl = `https://${process.env.VERCEL_URL}`;
-    }
-    
     if (!baseUrl) {
-      // Fallback: construct from request URL
-      const protocol = url.protocol || 'https:';
-      const host = url.host || 'localhost:3000';
+      // Fallback: construct from request URL - handle edge cases
+      const protocol = url.protocol || (url.hostname === 'localhost' ? 'http:' : 'https:');
+      const host = url.host || (process.env.VERCEL_URL ? `${process.env.VERCEL_URL}` : 'localhost:3000');
       baseUrl = `${protocol}//${host}`;
+      
+      // Log for debugging in production
+      if (process.env.NODE_ENV === 'production') {
+        console.log('[Search API] Constructed baseUrl from request:', { protocol, host, baseUrl, url: url.toString() });
+      }
     }
     
-    // Ensure baseUrl doesn't end with a slash and uses https in production
+    // Ensure baseUrl doesn't end with a slash
     baseUrl = baseUrl.replace(/\/$/, '');
-    if (process.env.NODE_ENV === 'production' && baseUrl.startsWith('http://')) {
-      baseUrl = baseUrl.replace('http://', 'https://');
-    }
-    
-    console.log('[Search API] Using baseUrl:', baseUrl, 'Query:', query);
     
     if (!query || query.trim().length === 0) {
       return NextResponse.json({

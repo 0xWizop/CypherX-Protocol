@@ -283,12 +283,7 @@ export default function TransactionDetails() {
 
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 text-xs">Value</span>
-                    <div className="flex flex-col items-end">
-                      <span className="text-white text-xs">{formatValue(transaction.value)}</span>
-                      {transaction.ethValueUsd > 0 && (
-                        <span className="text-gray-400 text-[10px]">${transaction.ethValueUsd.toFixed(2)}</span>
-                      )}
-                    </div>
+                    <span className="text-white text-xs">{formatValue(transaction.value)}</span>
                   </div>
                 </div>
 
@@ -377,9 +372,9 @@ export default function TransactionDetails() {
               </div>
 
               {/* Advanced Details */}
-              <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4 mb-8 pb-8">
+              <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-700/50">
-                  <h2 className="text-xs sm:text-sm text-white font-semibold">
+                  <h2 className="text-xs sm:text-sm text-white">
                 Advanced Details
               </h2>
                 </div>
@@ -467,9 +462,9 @@ export default function TransactionDetails() {
                     <h3 className="text-xs sm:text-sm text-white">Transaction Logs</h3>
                     <button
                       onClick={() => setShowLogs(!showLogs)}
-                      className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 bg-gray-800/50 hover:bg-gray-700/50 text-xs sm:text-sm text-gray-200 transition-colors rounded-full border border-blue-500/30 hover:border-blue-500/50 uppercase font-sans"
+                      className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 bg-gray-700 hover:bg-gray-600 text-xs sm:text-sm text-gray-300 transition-colors rounded-lg"
                     >
-                      <span className="hidden sm:inline">{showLogs ? <FiMinus className="w-3.5 h-3.5" /> : <FiPlus className="w-3.5 h-3.5" />}</span>
+                      <span className="hidden sm:inline">{showLogs ? <FiMinus className="w-4 h-4" /> : <FiPlus className="w-4 h-4" />}</span>
                       {showLogs ? "Hide" : "Show"} Logs
                     </button>
                   </div>
@@ -532,9 +527,7 @@ export default function TransactionDetails() {
         </div>
       </main>
       
-      <div className="pb-20 sm:pb-0">
-        <Footer />
-      </div>
+      <Footer />
 
       {/* Copy Notification */}
       <AnimatePresence>

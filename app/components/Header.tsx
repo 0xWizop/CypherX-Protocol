@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -9,7 +9,6 @@ import { db, storage } from "@/lib/firebase";
 import { useAuth, useLoginModal, useWalletSystem } from "@/app/providers";
 import { useFavorites } from "@/app/hooks/useFavorites";
 import { useWatchlists } from "@/app/hooks/useWatchlists";
-import { useQuickBuyConfig } from "@/app/hooks/useQuickBuyConfig";
 
 import WalletDropdown from "./WalletDropdown";
 import WalletDisplay from "./WalletDisplay";
@@ -18,21 +17,20 @@ import GlobalSearch from "./GlobalSearch";
 import UserProfileDropdown from "./UserProfileDropdown";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { FiMenu, FiX, FiStar, FiTrash2, FiUser, FiSettings, FiCheck, FiAlertCircle, FiBook, FiSearch } from "react-icons/fi";
+import { FiMenu, FiX, FiStar, FiTrash2, FiUser, FiSettings, FiCheck, FiAlertCircle } from "react-icons/fi";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 
-// Mobile Search Button Component
-const MobileSearchButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-  <motion.button
-    onClick={onClick}
-    className="lg:hidden flex items-center justify-center w-8 h-8 rounded-lg border border-gray-700/60 bg-gray-900/40 text-gray-300 hover:text-white hover:border-gray-500 transition-all duration-200"
-    whileHover={{ scale: 1.05 }}
-    whileTap={{ scale: 0.95 }}
-    aria-label="Search"
-  >
-    <FiSearch className="w-4 h-4" />
-  </motion.button>
+const MobileChainBadge: React.FC = () => (
+  <div className="lg:hidden flex items-center justify-center w-8 h-8 rounded-lg border border-gray-700/60 bg-gray-900/40">
+    <Image
+      src="https://i.imgur.com/k4HafXg.png"
+      alt="Base Chain"
+      width={24}
+      height={24}
+      className="w-4 h-4"
+    />
+  </div>
 );
 
 // Favorite Token Item Component
@@ -144,14 +142,10 @@ const FavoriteTokenItem = ({ poolAddress, onRemove }: { poolAddress: string; onR
 
 const Header: React.FC = () => {
   const pathname = usePathname();
-  const router = useRouter();
   const { user } = useAuth();
   const { favorites, toggleFavorite } = useFavorites();
   const { watchlists, removeFromWatchlist } = useWatchlists();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [showFullPageSearch, setShowFullPageSearch] = useState(false);
-  const [recentTokens, setRecentTokens] = useState<Array<{symbol: string; address: string; logo?: string; name?: string; poolAddress?: string}>>([]);
-  const [hasActiveSearch, setHasActiveSearch] = useState(false);
 
   const [points, setPoints] = useState<number | null>(null);
   const [tier, setTier] = useState<string>('normie');
@@ -163,22 +157,8 @@ const Header: React.FC = () => {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const { setShowLoginModal, setRedirectTo } = useLoginModal();
 
-  // Load recent tokens from localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined' && showFullPageSearch) {
-      const stored = localStorage.getItem('cypherx_recent_tokens');
-      if (stored) {
-        try {
-          setRecentTokens(JSON.parse(stored));
-        } catch (e) {
-          console.error('Error loading recent tokens:', e);
-        }
-      }
-    }
-  }, [showFullPageSearch]);
 
-
-  const navLinks: Array<{ href: string; label: string; isActive: (path: string) => boolean; comingSoon?: boolean }> = [
+  const navLinks: Array<{ href: string; label: string; isActive: (path: string) => boolean }> = [
     {
       href: "/discover",
       label: "Discover",
@@ -187,20 +167,19 @@ const Header: React.FC = () => {
         path.startsWith("/discover/"),
     },
     {
-      href: "/radar",
-      label: "Radar",
-      isActive: (path) => path === "/radar" || path.startsWith("/radar/"),
-    },
-    {
       href: "/dashboard",
       label: "Dashboard",
       isActive: (path) => path === "/dashboard" || path.startsWith("/dashboard/"),
     },
     {
+      href: "/radar",
+      label: "Radar",
+      isActive: (path) => path === "/radar" || path.startsWith("/radar/"),
+    },
+    {
       href: "/predict",
       label: "Predict",
       isActive: (path) => path === "/predict" || path.startsWith("/predict/"),
-      comingSoon: true,
     },
     {
       href: "/rewards",
@@ -219,6 +198,7 @@ const Header: React.FC = () => {
   const walletDropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
+  const [headerHeight, setHeaderHeight] = useState<number>(72);
 
   // Fetch user stats from API
   useEffect(() => {
@@ -281,50 +261,24 @@ const Header: React.FC = () => {
     const updateHeaderHeight = () => {
       if (headerRef.current) {
         const height = headerRef.current.offsetHeight;
+        setHeaderHeight(height);
         document.documentElement.style.setProperty('--header-height', `${height}px`);
       }
     };
-    
     updateHeaderHeight();
     window.addEventListener('resize', updateHeaderHeight);
-    
-    return () => {
-      window.removeEventListener('resize', updateHeaderHeight);
-    };
+    return () => window.removeEventListener('resize', updateHeaderHeight);
   }, []);
 
-  // Prevent body scroll and hide header/footer/banner when mobile menu is open
+  // Prevent body scroll when mobile menu is open
   useEffect(() => {
     if (isMenuOpen) {
       document.body.style.overflow = 'hidden';
-      document.body.setAttribute('data-menu-open', 'true');
-      // Hide header, footer, and banner
-      const header = document.querySelector('header');
-      const footer = document.querySelector('footer');
-      const banner = document.querySelector('[data-banner]');
-      if (header) header.style.display = 'none';
-      if (footer) footer.style.display = 'none';
-      if (banner) (banner as HTMLElement).style.display = 'none';
     } else {
       document.body.style.overflow = '';
-      document.body.removeAttribute('data-menu-open');
-      // Show header, footer, and banner
-      const header = document.querySelector('header');
-      const footer = document.querySelector('footer');
-      const banner = document.querySelector('[data-banner]');
-      if (header) header.style.display = '';
-      if (footer) footer.style.display = '';
-      if (banner) (banner as HTMLElement).style.display = '';
     }
     return () => {
       document.body.style.overflow = '';
-      document.body.removeAttribute('data-menu-open');
-      const header = document.querySelector('header');
-      const footer = document.querySelector('footer');
-      const banner = document.querySelector('[data-banner]');
-      if (header) header.style.display = '';
-      if (footer) footer.style.display = '';
-      if (banner) (banner as HTMLElement).style.display = '';
     };
   }, [isMenuOpen]);
 
@@ -342,7 +296,7 @@ const Header: React.FC = () => {
 
   return (
     <>
-            <header ref={headerRef} className="bg-gray-950 border-b border-gray-800/20 sticky z-40" style={{ top: 'var(--banner-height, 0px)' }}>
+            <header ref={headerRef} className="bg-gray-950 border-b border-gray-800/20 sticky top-0 z-40">
         <div className="w-full">
                      <div className="flex items-center justify-between px-4 py-3 lg:px-6 lg:py-4">
             {/* Left Side - Menu, Logo & Navigation */}
@@ -397,13 +351,13 @@ const Header: React.FC = () => {
                     />
                     <div className="hidden lg:flex items-center space-x-2">
                       <Image
-                        src="https://i.imgur.com/b9l8Ndl.png"
+                        src="https://i.imgur.com/d2OCO6H.png"
                         alt="CypherX"
-                        width={160}
-                        height={40}
-                        className="h-9 w-auto"
+                        width={32}
+                        height={32}
+                        className="w-8 h-8"
                       />
-                      <span className="text-lg text-blue-400 font-semibold tracking-tight" style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", letterSpacing: '0.05em' }}>
+                      <span className="text-lg text-white font-semibold" style={{ fontFamily: "'Poppins', sans-serif", letterSpacing: '0.02em' }}>
                         CYPHERX
                       </span>
                     </div>
@@ -413,27 +367,13 @@ const Header: React.FC = () => {
 
                               {/* Desktop Navigation */}
               <nav className="hidden lg:flex items-center gap-2">
-                {navLinks.map(({ href, label, isActive, comingSoon }) => {
+                {navLinks.map(({ href, label, isActive }) => {
                   const active = isActive(currentPath);
                   const baseClasses =
                     "text-sm font-normal px-3 py-2 transition-all duration-200";
-                  const stateClasses = comingSoon
-                    ? "text-gray-500 cursor-not-allowed"
-                    : active
+                  const stateClasses = active
                     ? "text-blue-300"
                     : "text-white hover:text-blue-300";
-
-                  if (comingSoon) {
-                    return (
-                      <div
-                        key={href}
-                        className={`${baseClasses} ${stateClasses} flex items-center gap-1.5`}
-                      >
-                        {label}
-                        <span className="px-1.5 py-0.5 rounded-full bg-blue-900/60 text-blue-300 text-[10px] font-medium">Soon</span>
-                      </div>
-                    );
-                  }
 
                   return (
                  <Link
@@ -462,7 +402,7 @@ const Header: React.FC = () => {
                 {/* Action Buttons */}
                 <div className="hidden lg:flex items-center space-x-2">
                   <motion.button
-                    className="relative flex items-center justify-center w-8 h-8 bg-[#111827] hover:bg-[#1f2937] text-white hover:text-blue-400 rounded-lg transition-all duration-200"
+                    className="relative flex items-center justify-center w-8 h-8 bg-gray-950/50 backdrop-blur-sm hover:bg-gray-900/50 text-white hover:text-blue-400 rounded-lg transition-all duration-200 border border-gray-600 hover:border-gray-500"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     title="Watchlist"
@@ -477,7 +417,7 @@ const Header: React.FC = () => {
                   </motion.button>
                   
                   <motion.button
-                    className="flex items-center justify-center w-8 h-8 bg-[#111827] hover:bg-[#1f2937] text-white hover:text-blue-400 rounded-lg transition-all duration-200"
+                    className="flex items-center justify-center w-8 h-8 bg-gray-950/50 backdrop-blur-sm hover:bg-gray-900/50 text-white hover:text-blue-400 rounded-lg transition-all duration-200 border border-gray-600 hover:border-gray-500"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     title="Settings"
@@ -489,7 +429,7 @@ const Header: React.FC = () => {
 
                 {/* Mobile Quick Actions */}
                 <div className="flex items-center space-x-2 lg:hidden">
-                  <MobileSearchButton onClick={() => setShowFullPageSearch(true)} />
+                  <MobileChainBadge />
                   <motion.button
                     onClick={() => setShowSettingsModal(true)}
                     className="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-700/60 bg-gray-900/40 text-gray-300 hover:text-white hover:border-gray-500 transition-all duration-200"
@@ -522,7 +462,7 @@ const Header: React.FC = () => {
                        setRedirectTo(pathname);
                        setShowLoginModal(true);
                      }}
-                     className="w-8 h-8 rounded-full bg-[#111827] border border-gray-600 flex items-center justify-center hover:bg-[#1f2937] hover:border-gray-500 transition-all duration-200"
+                     className="w-8 h-8 rounded-full bg-gray-950/50 backdrop-blur-sm border border-gray-600 flex items-center justify-center hover:bg-gray-900/50 hover:border-gray-500 transition-all duration-200"
                    >
                      <FiUser className="w-5 h-5 text-gray-300" />
                    </button>
@@ -549,116 +489,98 @@ const Header: React.FC = () => {
                   {/* Menu */}
                   <motion.div
                     ref={mobileMenuRef}
-                    className="fixed inset-0 z-[10001] bg-gray-950 lg:hidden overflow-hidden"
+                    className="fixed left-0 right-0 bottom-0 z-50 bg-gray-950 lg:hidden overflow-hidden"
+                    style={{ top: `${headerHeight}px` }}
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.18, ease: "easeOut" }}
                   >
-                    <div className="h-full flex flex-col px-5 py-5">
-                      <div className="flex items-center justify-between mb-4 flex-shrink-0">
-                        <Image
-                          src="https://i.imgur.com/b9l8Ndl.png"
-                          alt="CypherX"
-                          width={160}
-                          height={40}
-                          className="h-9 w-auto"
-                        />
+                    <div className="h-full overflow-y-auto px-4 py-5 space-y-5">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-white text-xs font-semibold tracking-[0.3em] uppercase">
+                          Menu
+                        </h3>
                         <button
                           onClick={() => setIsMenuOpen(false)}
-                          className="text-gray-400 hover:text-white transition-colors p-2"
+                          className="text-gray-400 hover:text-white transition-colors"
                           aria-label="Close menu"
                         >
-                          <FiX className="w-6 h-6" />
+                          <FiX className="w-4 h-4" />
                         </button>
                       </div>
 
-                      <div className="space-y-1 flex-1 overflow-y-auto min-h-0 mb-4">
-                          {[{
-                            href: "/discover",
-                            label: "Discover",
-                            delay: 0.05,
-                            comingSoon: false
-                          }, {
-                            href: "/radar",
-                            label: "Radar",
-                            delay: 0.075,
-                            comingSoon: false
-                          }, {
-                            href: "/dashboard",
-                            label: "Dashboard",
-                            delay: 0.1,
-                            comingSoon: false
-                          }, {
-                            href: "/predict",
-                            label: "Predict",
-                            delay: 0.125,
-                            comingSoon: true
-                          }, {
-                            href: "/rewards",
-                            label: "Rewards",
-                            delay: 0.15,
-                            comingSoon: false
-                          }, {
-                            href: "/explorer",
-                            label: "Explorer",
-                            delay: 0.2,
-                            comingSoon: false
-                          }, {
-                            href: "/docs",
-                            label: "Docs",
-                            icon: <FiBook className="w-5 h-5" />,
-                            delay: 0.25,
-                            comingSoon: false
-                          }].map(({ href, label, icon, delay, comingSoon }, index) => (
-                            <motion.div
-                              key={href}
-                              initial={{ opacity: 0, y: 8 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ delay }}
-                            >
-                              {comingSoon ? (
-                                <div className="block px-4 py-3 text-gray-500 text-sm font-normal tracking-wide cursor-not-allowed flex items-center gap-2 rounded-lg">
-                                  <span>{label}</span>
-                                  <span className="px-2 py-0.5 rounded-full bg-blue-900/60 text-blue-300 text-xs font-medium">Soon</span>
-                                </div>
-                              ) : (
-                                <Link
-                                  href={href}
-                                  className="block px-4 py-3 text-white text-sm font-normal tracking-wide hover:text-blue-300 hover:bg-gray-800/30 transition-all rounded-lg flex items-center gap-3"
-                                  prefetch={true}
-                                  onClick={() => setIsMenuOpen(false)}
-                                >
-                                  {icon && <span className="text-blue-400">{icon}</span>}
-                                  <span className="flex-1">{label}</span>
-                                </Link>
-                              )}
-                              {index < 6 && <div className="h-px bg-gray-800/60 my-1" />}
-                            </motion.div>
-                          ))}
-                        </div>
+                      <GlobalSearch 
+                        placeholder="Search tokens, addresses, transactions..."
+                        variant="header"
+                      />
 
-                        <div className="grid grid-cols-2 gap-4 flex-shrink-0">
-                          <button
-                            onClick={() => {
-                              setIsMenuOpen(false);
-                              setShowWatchlistsModal(true);
-                            }}
-                            className="px-4 py-2.5 rounded-full bg-gray-900/50 text-white text-sm font-medium hover:bg-gray-900/80 transition-colors border border-blue-500/30"
+                      <div className="space-y-2">
+                        {[{
+                          href: "/discover",
+                          label: "Discover",
+                          delay: 0.05
+                        }, {
+                          href: "/dashboard",
+                          label: "Dashboard",
+                          delay: 0.075
+                        }, {
+                          href: "/radar",
+                          label: "Radar",
+                          delay: 0.1
+                        }, {
+                          href: "/predict",
+                          label: "Predict",
+                          delay: 0.125
+                        }, {
+                          href: "/rewards",
+                          label: "Rewards",
+                          delay: 0.15
+                        }, {
+                          href: "/explorer",
+                          label: "Explorer",
+                          delay: 0.25
+                        }].map(({ href, label, delay }, index) => (
+                          <motion.div
+                            key={href}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay }}
                           >
-                            Watchlists
-                          </button>
-                          <button
-                            onClick={() => {
-                              setIsMenuOpen(false);
-                              setShowSettingsModal(true);
-                            }}
-                            className="px-4 py-2.5 rounded-full bg-gray-900/50 text-white text-sm font-medium hover:bg-gray-900/80 transition-colors border border-blue-500/30"
-                          >
-                            Settings
-                          </button>
-                        </div>
+                            <Link
+                              href={href}
+                              className="block px-2 py-2 text-white text-sm font-normal tracking-wide hover:text-blue-300 transition-colors"
+                              prefetch={true}
+                              onClick={() => setIsMenuOpen(false)}
+                            >
+                              {label}
+                            </Link>
+                            {index < 5 && <div className="h-px bg-gray-800/60" />}
+                          </motion.div>
+                        ))}
                       </div>
+
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <button
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            setShowWatchlistsModal(true);
+                          }}
+                          className="px-3 py-2 rounded-lg bg-gray-900/50 text-white text-xs font-medium hover:bg-gray-900/80 transition-colors"
+                        >
+                          Watchlists
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            setShowSettingsModal(true);
+                          }}
+                          className="px-3 py-2 rounded-lg bg-gray-900/50 text-white text-xs font-medium hover:bg-gray-900/80 transition-colors"
+                        >
+                          Settings
+                        </button>
+                      </div>
+                    </div>
                   </motion.div>
                 </>
               )}
@@ -680,55 +602,57 @@ const Header: React.FC = () => {
       <AnimatePresence>
         {showWatchlistsModal && (
           <motion.div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center sm:justify-center"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 sm:flex sm:items-center sm:justify-center sm:p-6"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setShowWatchlistsModal(false)}
           >
             <motion.div
-              className="bg-gray-950 w-full h-[85vh] sm:h-auto sm:max-w-md sm:mx-4 sm:max-h-[80vh] sm:border sm:border-gray-800/60 sm:rounded-2xl rounded-t-3xl shadow-2xl flex flex-col overflow-hidden"
-              initial={{ opacity: 0, y: '100%' }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="bg-gray-950 sm:border sm:border-gray-800 w-full h-full sm:h-auto sm:max-w-lg sm:max-w-xl shadow-2xl p-5 sm:p-6 flex flex-col sm:max-h-[85vh]"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Mobile drag handle */}
-              <div className="sm:hidden flex justify-center pt-3 pb-1">
-                <div className="w-10 h-1 rounded-full bg-gray-600" />
-              </div>
-              
-              {/* Header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/40 flex-shrink-0">
-                <h3 className="text-sm text-white">Watchlists</h3>
+              <div className="relative flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">
+                  My Watchlists
+                </h3>
                 <button
                   onClick={() => setShowWatchlistsModal(false)}
-                  className="p-2 text-gray-500 hover:text-white transition-colors"
+                  className="absolute top-0 right-0 w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg bg-gray-900/50 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 text-gray-300 hover:text-white transition-all duration-200"
                   aria-label="Close"
                 >
-                  <FiX className="w-5 h-5" />
+                  <FiX className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
               </div>
-              
-              {/* Content */}
-              <div className="flex-1 overflow-y-auto scrollbar-hide px-4 py-3">
-                {/* Favorites Section */}
-                <div className="mb-4">
-                  <div className="flex items-center justify-between py-2 border-b border-gray-800/40">
-                    <div className="flex items-center gap-2">
-                      <FiStar className="w-4 h-4 text-gray-500" />
-                      <span className="text-sm text-gray-300">Favorites</span>
-                    </div>
-                    <span className="text-xs text-gray-500">{favorites.length}</span>
+              <div className="space-y-4 overflow-y-auto scrollbar-hide pr-0.5">
+                {/* Default Watchlist (Favorites) */}
+                <div className="bg-gray-900/50 border border-gray-800 p-3 sm:p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-medium text-gray-100">
+                      Favorites
+                    </h4>
+                    <span className="text-xs text-gray-400">{favorites.length} tokens</span>
                   </div>
                   {favorites.length === 0 ? (
-                    <div className="text-gray-500 text-xs py-4 text-center">
-                      Star any token to add it here
+                    <div className="text-gray-400 text-xs">
+                      No tokens in your favorites yet. Tap the star icon on any token to add it.
                     </div>
                   ) : (
-                    <div>
-                      {(expandedFavorites ? favorites : favorites.slice(0, 3)).map((poolAddress) => (
+                    <div className="space-y-2">
+                      {expandedFavorites ? (
+                        favorites.map((poolAddress) => (
+                          <FavoriteTokenItem 
+                            key={poolAddress} 
+                            poolAddress={poolAddress} 
+                            onRemove={() => toggleFavorite(poolAddress)}
+                          />
+                        ))
+                      ) : (
+                        <>
+                          {favorites.slice(0, 3).map((poolAddress) => (
                             <FavoriteTokenItem 
                               key={poolAddress} 
                               poolAddress={poolAddress} 
@@ -737,10 +661,20 @@ const Header: React.FC = () => {
                           ))}
                           {favorites.length > 3 && (
                             <button
-                          onClick={() => setExpandedFavorites(!expandedFavorites)}
-                          className="w-full text-xs text-gray-500 hover:text-gray-400 transition-colors py-2 text-center"
+                              onClick={() => setExpandedFavorites(true)}
+                              className="text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+                            >
+                              +{favorites.length - 3} more tokens
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {expandedFavorites && favorites.length > 3 && (
+                        <button
+                          onClick={() => setExpandedFavorites(false)}
+                          className="text-xs text-gray-400 hover:text-gray-300 transition-colors cursor-pointer"
                         >
-                          {expandedFavorites ? 'Show less' : `Show ${favorites.length - 3} more`}
+                          Show less
                         </button>
                       )}
                     </div>
@@ -748,49 +682,61 @@ const Header: React.FC = () => {
                 </div>
 
                 {/* Custom Watchlists */}
-                {watchlists.length > 0 && watchlists.map((watchlist) => (
-                  <div key={watchlist.id} className="mb-4">
-                    <div className="flex items-center justify-between py-2 border-b border-gray-800/40">
+                {watchlists.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-medium text-gray-300">Custom Watchlists</h4>
+                    {watchlists.map((watchlist) => (
+                      <div key={watchlist.id} className="bg-gray-900/50 border border-gray-800 p-3 sm:p-4">
+                        <div className="flex items-center justify-between mb-2 gap-2">
                           <button
                             onClick={() => setExpandedWatchlist(expandedWatchlist === watchlist.id ? null : watchlist.id)}
-                        className="text-sm text-gray-300 hover:text-white transition-colors"
+                            className="text-sm font-medium text-gray-200 hover:text-white transition-colors cursor-pointer text-left flex-1"
                           >
                             {watchlist.name}
                           </button>
-                      <span className="text-xs text-gray-500">{watchlist.tokens.length}</span>
+                          <span className="text-xs text-gray-400 whitespace-nowrap">{watchlist.tokens.length} tokens</span>
                         </div>
-                    <div>
-                      {(expandedWatchlist === watchlist.id ? watchlist.tokens : watchlist.tokens.slice(0, 3)).map((poolAddress) => (
-                        <div key={poolAddress} className="flex items-center justify-between py-2.5 border-b border-gray-800/30">
-                          <span className="text-xs text-gray-400 font-mono">{poolAddress.slice(0, 8)}...{poolAddress.slice(-6)}</span>
+                        <div className="space-y-2">
+                          {expandedWatchlist === watchlist.id ? (
+                            <div className="max-h-48 overflow-y-auto scrollbar-hide pr-0.5">
+                              {watchlist.tokens.map((poolAddress) => (
+                                <div key={poolAddress} className="flex items-center justify-between text-xs py-1">
+                                  <span className="text-gray-300 truncate">{poolAddress.slice(0, 8)}...{poolAddress.slice(-6)}</span>
                                   <button
                                     onClick={() => removeFromWatchlist(watchlist.id, poolAddress)}
-                            className="text-gray-600 hover:text-red-400 transition-colors p-1"
-                          >
-                            <FiTrash2 className="w-3.5 h-3.5" />
+                                    className="text-gray-400 hover:text-red-400 transition-colors"
+                                  >
+                                    <FiTrash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <>
+                              {watchlist.tokens.slice(0, 3).map((poolAddress) => (
+                                <div key={poolAddress} className="flex items-center justify-between text-xs">
+                                  <span className="text-gray-300 truncate">{poolAddress.slice(0, 8)}...{poolAddress.slice(-6)}</span>
+                                  <button
+                                    onClick={() => removeFromWatchlist(watchlist.id, poolAddress)}
+                                    className="text-gray-400 hover:text-red-400 transition-colors"
+                                  >
+                                    <FiTrash2 className="w-3 h-3" />
                                   </button>
                                 </div>
                               ))}
                               {watchlist.tokens.length > 3 && (
                                 <button
-                          onClick={() => setExpandedWatchlist(expandedWatchlist === watchlist.id ? null : watchlist.id)}
-                          className="w-full text-xs text-gray-500 hover:text-gray-400 transition-colors py-2 text-center"
+                                  onClick={() => setExpandedWatchlist(watchlist.id)}
+                                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
                                 >
-                          {expandedWatchlist === watchlist.id ? 'Show less' : `Show ${watchlist.tokens.length - 3} more`}
+                                  +{watchlist.tokens.length - 3} more tokens
                                 </button>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
                     ))}
-                
-                {/* Empty state */}
-                {watchlists.length === 0 && favorites.length === 0 && (
-                  <div className="text-center py-8">
-                    <div className="w-10 h-10 mx-auto rounded-full bg-gray-800 flex items-center justify-center mb-2">
-                      <FiStar className="w-5 h-5 text-gray-600" />
-                    </div>
-                    <p className="text-gray-500 text-sm">No saved tokens</p>
-                    <p className="text-gray-600 text-xs mt-1">Star tokens to track them here</p>
                   </div>
                 )}
               </div>
@@ -817,138 +763,6 @@ const Header: React.FC = () => {
       , document.body
       )}
 
-      {/* Full Page Search Overlay for Mobile */}
-      {showFullPageSearch && typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[10001] lg:hidden"
-            onClick={() => setShowFullPageSearch(false)}
-          />
-          {/* Modal */}
-          <motion.div
-            initial={{ opacity: 0, y: '100%' }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed left-0 right-0 bottom-0 z-[10002] bg-gray-950 border-t border-gray-800/60 lg:hidden flex flex-col h-[70vh] max-h-[680px] rounded-t-[28px] overflow-hidden"
-          >
-            {/* Mobile drag handle */}
-            <div className="flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 rounded-full bg-gray-600" />
-            </div>
-            
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800/40 flex-shrink-0">
-              <h3 className="text-white text-sm font-medium">Search</h3>
-              <button
-                onClick={() => setShowFullPageSearch(false)}
-                className="p-2 text-gray-500 hover:text-white transition-colors -mr-2"
-                aria-label="Close search"
-              >
-                <FiX className="w-5 h-5" />
-              </button>
-            </div>
-            
-            {/* Search Content */}
-            <div className="flex-1 flex flex-col min-h-0 relative" style={{ overflow: 'visible' }}>
-              <div className="px-4 pt-3 pb-2 flex-shrink-0 relative z-10 bg-gray-950">
-                <GlobalSearch 
-                  placeholder="Search tokens, addresses, transactions..."
-                  variant="header"
-                  fullScreenMobile={true}
-                  onSearchStateChange={setHasActiveSearch}
-                />
-              </div>
-              
-              {/* Separator and Recent Tokens - only show when no active search */}
-              {!hasActiveSearch && (
-                <div id="recent-tokens-section" className="flex-1 overflow-y-auto min-h-0 relative z-0">
-                <div className="w-full py-2 flex-shrink-0">
-                  <div className="border-t border-gray-800"></div>
-                </div>
-                <div className="px-4 pb-4">
-                {recentTokens.length > 0 ? (
-                  <>
-                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-                      Recent Tokens
-                    </h4>
-                    <div className="space-y-1">
-                      {recentTokens.map((token, index) => (
-                        <motion.button
-                          key={`${token.address}-${index}`}
-                          initial={{ opacity: 0, x: -8 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.03 }}
-                          onClick={() => {
-                            const targetPath = token.poolAddress 
-                              ? `/discover/${token.poolAddress}/chart`
-                              : `/discover/${token.address}/chart`;
-                            router.push(targetPath);
-                            setShowFullPageSearch(false);
-                          }}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-800/50 transition-colors text-left group"
-                        >
-                          {/* Token Icon */}
-                          <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                            {token.logo ? (
-                              <img 
-                                src={token.logo} 
-                                alt={token.symbol || 'Token'} 
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                  const fallback = e.currentTarget.nextElementSibling;
-                                  if (fallback) {
-                                    (fallback as HTMLElement).classList.remove('hidden');
-                                  }
-                                }}
-                              />
-                            ) : null}
-                            <div className={`w-full h-full bg-blue-500/20 flex items-center justify-center ${token.logo ? 'hidden' : ''}`}>
-                              <span className="text-xs text-blue-400 font-semibold">
-                                {(token.symbol || token.name || 'T').slice(0, 1).toUpperCase()}
-                              </span>
-                            </div>
-                          </div>
-                          
-                          {/* Token Info */}
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white text-sm font-medium truncate">
-                              {token.name || token.symbol || 'Unknown Token'}
-                            </div>
-                            <div className="text-gray-400 text-xs truncate">
-                              {token.symbol && token.name && token.symbol !== token.name ? token.symbol : token.address.slice(0, 6) + '...' + token.address.slice(-4)}
-                            </div>
-                          </div>
-                          
-                          {/* Arrow Icon */}
-                          <div className="text-gray-500 group-hover:text-gray-300 transition-colors flex-shrink-0">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                          </div>
-                        </motion.button>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex items-center h-full">
-                    <p className="text-gray-500 text-sm">No recent tokens</p>
-                  </div>
-                )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        </AnimatePresence>
-      , document.body
-      )}
-
     </>
   );
 };
@@ -958,7 +772,6 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
   const { user } = useAuth();
   const { selfCustodialWallet } = useWalletSystem();
   const walletAddress = selfCustodialWallet?.address;
-  const { config: quickBuyConfig, saveConfig: saveQuickBuyConfig, loading: quickBuyConfigLoading } = useQuickBuyConfig();
   const [profilePicture, setProfilePicture] = useState<string>("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -980,65 +793,8 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
   } as const;
   const [notifications, setNotifications] = useState(() => ({ ...DEFAULT_NOTIFICATIONS }));
   const [privacy, setPrivacy] = useState(() => ({ ...DEFAULT_PRIVACY }));
-  
-  // Quick Buy Configuration State
-  const [quickBuyAmounts, setQuickBuyAmounts] = useState<number[]>([0.01, 0.025, 0.05, 0.1]);
-  const [defaultSlippage, setDefaultSlippage] = useState<number>(1);
-  const [autoApprove, setAutoApprove] = useState<boolean>(false);
-  const [preferredDex, setPreferredDex] = useState<string | null>(null);
-  const [savingQuickBuy, setSavingQuickBuy] = useState(false);
-  
-  // Auto DCA State
-  const DCA_ASSETS = [
-    { symbol: 'cbBTC', address: '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf', name: 'Coinbase BTC' },
-    { symbol: 'cbETH', address: '0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22', name: 'Coinbase ETH' },
-    { symbol: 'WETH', address: '0x4200000000000000000000000000000000000006', name: 'Wrapped ETH' },
-    { symbol: 'AERO', address: '0x940181a94A35A4569E4529A3CDfB74e38FD98631', name: 'Aerodrome' },
-  ];
-  const [autoDcaEnabled, setAutoDcaEnabled] = useState<boolean>(false);
-  const [autoDcaPercentage, setAutoDcaPercentage] = useState<number>(10);
-  const [autoDcaAsset, setAutoDcaAsset] = useState<string>('cbBTC');
-  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
-
-  // Load quick buy config when it's available
-  useEffect(() => {
-    if (!quickBuyConfigLoading && quickBuyConfig) {
-      setQuickBuyAmounts(quickBuyConfig.amounts || [0.01, 0.025, 0.05, 0.1]);
-      setDefaultSlippage(quickBuyConfig.defaultSlippage || 1);
-      setAutoApprove(quickBuyConfig.autoApprove || false);
-      setPreferredDex(quickBuyConfig.preferredDex || null);
-    }
-  }, [quickBuyConfig, quickBuyConfigLoading]);
-
-  // Load Auto DCA settings from localStorage
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('cypherx_auto_dca_settings');
-      if (saved) {
-        const settings = JSON.parse(saved);
-        setAutoDcaEnabled(settings.enabled || false);
-        setAutoDcaPercentage(settings.percentage || 10);
-        setAutoDcaAsset(settings.assetSymbol || 'cbBTC');
-      }
-    } catch (error) {
-      console.error('Error loading DCA settings:', error);
-    }
-  }, []);
-
-  // Save Auto DCA settings
-  const saveAutoDcaSettings = (enabled: boolean, percentage: number, assetSymbol: string) => {
-    try {
-      localStorage.setItem('cypherx_auto_dca_settings', JSON.stringify({
-        enabled,
-        percentage,
-        assetSymbol,
-      }));
-    } catch (error) {
-      console.error('Error saving DCA settings:', error);
-    }
-  };
 
   // Fetch user profile data
   useEffect(() => {
@@ -1170,6 +926,7 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
         notifications,
         privacy,
         updatedAt: new Date(),
+        // Quick buy config will be saved separately via useQuickBuyConfig hook
       }, { merge: true });
       
       setSettingsStatus('success');
@@ -1191,71 +948,12 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
     }
   };
 
-  const handleSaveQuickBuyConfig = async () => {
-    setSavingQuickBuy(true);
-    try {
-      const success = await saveQuickBuyConfig({
-        amounts: quickBuyAmounts,
-        defaultSlippage,
-        autoApprove,
-        preferredDex,
-      });
-      
-      if (success) {
-        setSettingsStatus('success');
-        setSettingsMessage('Quick buy preferences saved!');
-        setTimeout(() => {
-          setSettingsStatus('idle');
-          setSettingsMessage('');
-        }, 3000);
-      } else {
-        setSettingsStatus('error');
-        setSettingsMessage('Failed to save quick buy preferences');
-        setTimeout(() => {
-          setSettingsStatus('idle');
-          setSettingsMessage('');
-        }, 5000);
-      }
-    } catch (error) {
-      console.error('Error saving quick buy config:', error);
-      setSettingsStatus('error');
-      setSettingsMessage('Failed to save quick buy preferences');
-      setTimeout(() => {
-        setSettingsStatus('idle');
-        setSettingsMessage('');
-      }, 5000);
-    } finally {
-      setSavingQuickBuy(false);
-    }
-  };
-
-  const handleAddAmount = () => {
-    if (quickBuyAmounts.length < 6) {
-      setQuickBuyAmounts([...quickBuyAmounts, 0.1]);
-    }
-  };
-
-  const handleRemoveAmount = (index: number) => {
-    if (quickBuyAmounts.length > 1) {
-      setQuickBuyAmounts(quickBuyAmounts.filter((_, i) => i !== index));
-    }
-  };
-
-  const handleUpdateAmount = (index: number, value: string) => {
-    const numValue = parseFloat(value) || 0;
-    if (numValue >= 0) {
-      const newAmounts = [...quickBuyAmounts];
-      newAmounts[index] = numValue;
-      setQuickBuyAmounts(newAmounts);
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-end sm:items-center sm:justify-center"
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] sm:flex sm:items-center sm:justify-center sm:p-5"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -1263,68 +961,97 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
       >
         <motion.div
           ref={modalRef}
-          className="bg-gray-950 w-full h-full sm:h-auto sm:max-w-[520px] sm:mx-4 sm:border sm:border-gray-800/60 shadow-2xl flex flex-col sm:max-h-[85vh] sm:rounded-2xl"
-          initial={{ opacity: 0, y: '100%' }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: '100%' }}
-          transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+          className="bg-gray-950 w-full h-full sm:h-auto sm:max-w-[520px] sm:mx-0 sm:border sm:border-gray-800 shadow-2xl flex flex-col sm:max-h-[82vh] sm:my-auto"
+          initial={{ scale: 0.9, opacity: 0, y: 20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.9, opacity: 0, y: 20 }}
+          transition={{ duration: 0.2 }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Mobile drag handle */}
-          <div className="sm:hidden flex justify-center pt-3 pb-1">
-            <div className="w-10 h-1 rounded-full bg-gray-600" />
+          <div className="relative flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-800 bg-gray-950">
+            <div className="text-left">
+              <span className="text-[10px] uppercase tracking-[0.3em] text-blue-400/70 font-medium">Profile</span>
+              <h3 className="text-white text-base sm:text-2xl font-semibold mt-1">Account Settings</h3>
             </div>
-          
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/40 flex-shrink-0">
-            <h3 className="text-sm text-white">Settings</h3>
             <button
               onClick={onClose}
-              className="p-2 text-gray-500 hover:text-white transition-colors"
+              className="absolute top-3 sm:top-4 right-4 sm:right-6 w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg bg-gray-900/50 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 text-gray-300 hover:text-white transition-all duration-200"
               aria-label="Close"
             >
-              <FiX className="w-5 h-5" />
+              <FiX className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto scrollbar-hide px-4 py-3">
+          <div className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-6 py-4 space-y-4 sm:space-y-6">
             {/* Profile Section */}
-            <div className="mb-4">
-              <h4 className="text-xs text-gray-500 uppercase tracking-wide mb-3">Profile</h4>
-              <div className="flex items-center gap-3 py-3 border-b border-gray-800/40">
-                <div className="relative">
-                  <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-800">
+            <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner mt-1">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <h4 className="text-white font-semibold text-base sm:text-lg">Profile Information</h4>
+              </div>
+              <div className="space-y-3 sm:space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-5 gap-3 sm:gap-4">
+                  <div className="relative self-center sm:self-auto">
+                    <div className="w-14 h-14 sm:w-20 sm:h-20 overflow-hidden bg-gray-900 border border-gray-800 shadow-lg">
                       {profilePicture ? (
                         <Image
                           src={profilePicture}
                           alt="Profile"
-                        width={48}
-                        height={48}
+                          width={72}
+                          height={72}
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <FiUser className="w-5 h-5 text-gray-500" />
+                        <div className="w-full h-full flex items-center justify-center bg-gray-900">
+                          <FiUser className="w-6 h-6 text-gray-500" />
                         </div>
                       )}
                       {uploadingImage && (
                         <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent" />
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
                         </div>
                       )}
                     </div>
-                  </div>
-                <div className="flex-1">
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingImage}
-                    className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                      className="absolute -bottom-2 -right-2 w-6 h-6 sm:w-7 sm:h-7 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 flex items-center justify-center transition-colors shadow-lg"
                     >
-                    Change photo
+                      {uploadingImage ? (
+                        <div className="animate-spin rounded-full h-3 w-3 border-b border-white"></div>
+                      ) : (
+                        <FiUser className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
+                      )}
+                    </button>
+                  </div>
+                  <div className="flex-1 w-full">
+                    <h5 className="text-white font-semibold text-sm sm:text-base">Profile Picture</h5>
+                    <p className="text-gray-400 text-xs sm:text-sm mb-3">
+                      Upload an image with a minimum size of 256x256 for best clarity.
+                    </p>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingImage}
+                      className="inline-flex items-center gap-2 px-3 py-2 bg-gray-900 border border-gray-800 hover:border-gray-600 hover:bg-gray-900/80 text-xs sm:text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-1"
+                    >
+                      {uploadingImage ? 'Uploading...' : 'Upload Image'}
                     </button>
                     {uploadStatus !== 'idle' && uploadMessage && (
-                    <p className={`text-xs mt-1 ${uploadStatus === 'success' ? 'text-green-400' : 'text-red-400'}`}>
-                      {uploadMessage}
-                    </p>
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`mt-3 px-3 py-2 text-xs sm:text-sm flex items-center gap-2 border ${
+                          uploadStatus === 'success' 
+                            ? 'bg-green-500/15 text-green-300 border-green-500/30'
+                            : 'bg-red-500/15 text-red-300 border-red-500/30'
+                        }`}
+                      >
+                        {uploadStatus === 'success' ? (
+                          <FiCheck className="w-4 h-4" />
+                        ) : (
+                          <FiAlertCircle className="w-4 h-4" />
+                        )}
+                        <span>{uploadMessage}</span>
+                      </motion.div>
                     )}
                   </div>
                 </div>
@@ -1337,298 +1064,145 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                   className="hidden"
                 />
 
-              <div className="py-3 border-b border-gray-800/40">
-                <label className="block text-xs text-gray-500 mb-1.5">Display Name</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="col-span-1 sm:col-span-2">
+                    <label className="block text-gray-300 text-xs sm:text-sm font-medium mb-2">Display Name</label>
                     <input
                       type="text"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-gray-600 transition-colors"
-                  placeholder="Enter display name"
+                      className="w-full px-3 py-2 bg-gray-950 border border-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/50 text-sm transition"
+                      placeholder="Enter your display name"
                     />
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Notifications Section */}
-            <div className="mb-4">
-              <h4 className="text-xs text-gray-500 uppercase tracking-wide mb-3">Notifications</h4>
-              {[
-                { key: 'email', label: 'Email notifications' },
-                { key: 'push', label: 'Push notifications' },
-                { key: 'trading', label: 'Trading alerts' },
-                { key: 'news', label: 'News updates' },
-              ].map(({ key, label }) => (
-                <label key={key} className="flex items-center justify-between py-3 border-b border-gray-800/40 cursor-pointer">
-                  <span className="text-sm text-gray-400">{label}</span>
+            <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <h4 className="text-white font-semibold text-base sm:text-lg">Notifications</h4>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                {Object.entries(notifications).map(([key, value]) => {
+                  const label = key.replace(/([A-Z])/g, ' $1').trim();
+                  const descriptions: Record<string, string> = {
+                    email: 'Cycle insights and important updates.',
+                    push: 'Instant signals delivered to your device.',
+                    trading: 'Get notified about positions and P&L shifts.',
+                    news: 'Macro stories and curated market commentary.'
+                  };
+                  return (
+                    <label key={key} className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer capitalize">
+                      <div>
+                        <span className="text-gray-200 text-sm font-medium">{label}</span>
+                        <p className="text-[11px] sm:text-xs text-gray-500 mt-1">{descriptions[key] || 'Stay in the loop without the noise.'}</p>
+                      </div>
                       <div className="relative">
                         <input
                           type="checkbox"
-                      checked={notifications[key as keyof typeof notifications]}
+                          checked={value}
                           onChange={(e) => setNotifications(prev => ({ ...prev, [key]: e.target.checked }))}
                           className="sr-only"
                         />
-                    <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 ${
-                      notifications[key as keyof typeof notifications] ? 'bg-blue-500' : 'bg-gray-700'
+                        <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
+                          value ? 'bg-blue-500' : 'bg-gray-700'
                         }`}>
-                      <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                        notifications[key as keyof typeof notifications] ? 'translate-x-4' : ''
-                      }`} />
+                          <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                            value ? 'translate-x-5' : 'translate-x-0'
+                          }`}></div>
                         </div>
                       </div>
                     </label>
-              ))}
+                  );
+                })}
+              </div>
             </div>
 
             {/* Privacy Section */}
-            <div className="mb-4">
-              <h4 className="text-xs text-gray-500 uppercase tracking-wide mb-3">Privacy</h4>
-              {[
-                { key: 'showProfile', label: 'Show profile publicly' },
-                { key: 'showTrades', label: 'Show trades' },
-                { key: 'showBalance', label: 'Show balance' },
-              ].map(({ key, label }) => (
-                <label key={key} className="flex items-center justify-between py-3 border-b border-gray-800/40 cursor-pointer">
-                  <span className="text-sm text-gray-400">{label}</span>
+            <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <h4 className="text-white font-semibold text-base sm:text-lg">Privacy</h4>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                {Object.entries(privacy).map(([key, value]) => {
+                  const label = key.replace(/([A-Z])/g, ' $1').trim();
+                  const descriptions: Record<string, string> = {
+                    showProfile: 'Allow others to discover and follow you.',
+                    showTrades: 'Share recent trades with your followers.',
+                    showBalance: 'Reveal your wallet balance on your profile.'
+                  };
+                  return (
+                    <label key={key} className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer capitalize">
+                      <div>
+                        <span className="text-gray-200 text-sm font-medium">{label}</span>
+                        <p className="text-[11px] sm:text-xs text-gray-500 mt-1">{descriptions[key] || 'Fine-tune visibility to match your comfort.'}</p>
+                      </div>
                       <div className="relative">
                         <input
                           type="checkbox"
-                      checked={privacy[key as keyof typeof privacy]}
+                          checked={value}
                           onChange={(e) => setPrivacy(prev => ({ ...prev, [key]: e.target.checked }))}
                           className="sr-only"
                         />
-                    <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 ${
-                      privacy[key as keyof typeof privacy] ? 'bg-blue-500' : 'bg-gray-700'
+                        <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-1 ${
+                          value ? 'bg-blue-500' : 'bg-gray-700'
                         }`}>
-                      <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                        privacy[key as keyof typeof privacy] ? 'translate-x-4' : ''
-                      }`} />
+                          <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                            value ? 'translate-x-5' : 'translate-x-0'
+                          }`}></div>
                         </div>
                       </div>
                     </label>
-              ))}
-            </div>
-
-            {/* Trading Section */}
-            <div className="mb-4">
-              <h4 className="text-xs text-gray-500 uppercase tracking-wide mb-3">Trading</h4>
-              
-                {/* Quick Buy Amounts */}
-              <div className="py-3 border-b border-gray-800/40">
-                <label className="block text-xs text-gray-500 mb-2">Quick Buy Amounts (ETH)</label>
-                  <div className="space-y-2">
-                    {quickBuyAmounts.map((amount, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          step="0.001"
-                          min="0"
-                          value={amount}
-                          onChange={(e) => handleUpdateAmount(index, e.target.value)}
-                        className="flex-1 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-gray-600 transition-colors"
-                          placeholder="0.01"
-                        />
-                        {quickBuyAmounts.length > 1 && (
-                          <button
-                            onClick={() => handleRemoveAmount(index)}
-                          className="p-2 text-gray-500 hover:text-red-400 transition-colors"
-                          >
-                            <FiX className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    {quickBuyAmounts.length < 6 && (
-                      <button
-                        onClick={handleAddAmount}
-                      className="w-full py-2 text-xs text-gray-500 hover:text-gray-400 transition-colors"
-                      >
-                      + Add amount
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Default Slippage */}
-              <div className="py-3 border-b border-gray-800/40">
-                <label className="block text-xs text-gray-500 mb-1.5">Default Slippage (%)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0.1"
-                    max="50"
-                    value={defaultSlippage}
-                    onChange={(e) => setDefaultSlippage(parseFloat(e.target.value) || 1)}
-                  className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-gray-600 transition-colors"
-                    placeholder="1"
-                  />
-                </div>
-
-              {/* Preferred DEX */}
-              <div className="py-3 border-b border-gray-800/40">
-                <label className="block text-xs text-gray-500 mb-1.5">Preferred DEX</label>
-                <select
-                  value={preferredDex || ''}
-                  onChange={(e) => setPreferredDex(e.target.value || null)}
-                  className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm focus:outline-none focus:border-gray-600 transition-colors"
-                >
-                  <option value="">Auto (Best Price)</option>
-                  <option value="uniswap">Uniswap</option>
-                  <option value="sushiswap">SushiSwap</option>
-                  <option value="0x">0x Protocol</option>
-                </select>
-                  </div>
-
-              {/* Auto Approve */}
-              <label className="flex items-center justify-between py-3 border-b border-gray-800/40 cursor-pointer">
-                <span className="text-sm text-gray-400">Auto approve tokens</span>
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      checked={autoApprove}
-                      onChange={(e) => setAutoApprove(e.target.checked)}
-                      className="sr-only"
-                    />
-                  <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 ${
-                      autoApprove ? 'bg-blue-500' : 'bg-gray-700'
-                    }`}>
-                    <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                      autoApprove ? 'translate-x-4' : ''
-                    }`} />
-                    </div>
-                  </div>
-                </label>
-
-              {/* Auto Profit DCA */}
-              <label className="flex items-center justify-between py-3 border-b border-gray-800/40 cursor-pointer">
-                <div>
-                  <span className="text-sm text-gray-400">Auto Profit DCA</span>
-                  <p className="text-xs text-gray-600">Auto-save trading profits</p>
-                </div>
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={autoDcaEnabled}
-                    onChange={(e) => {
-                      setAutoDcaEnabled(e.target.checked);
-                      saveAutoDcaSettings(e.target.checked, autoDcaPercentage, autoDcaAsset);
-                    }}
-                    className="sr-only"
-                  />
-                  <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 ${
-                    autoDcaEnabled ? 'bg-blue-500' : 'bg-gray-700'
-                  }`}>
-                    <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                      autoDcaEnabled ? 'translate-x-4' : ''
-                    }`} />
-                  </div>
-                </div>
-                  </label>
-
-              {/* DCA Options - Show when enabled */}
-              {autoDcaEnabled && (
-                <div className="py-3 border-b border-gray-800/40 space-y-3">
-                  {/* Percentage */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs text-gray-500">Percentage of profit</span>
-                      <span className="text-xs text-blue-400">{autoDcaPercentage}%</span>
-                    </div>
-                    <div className="flex gap-2">
-                      {[5, 10, 25, 50].map((pct) => (
-                        <button
-                          key={pct}
-                          onClick={() => {
-                            setAutoDcaPercentage(pct);
-                            saveAutoDcaSettings(autoDcaEnabled, pct, autoDcaAsset);
-                          }}
-                          className={`flex-1 py-1.5 text-xs rounded transition-colors ${
-                            autoDcaPercentage === pct
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                          }`}
-                        >
-                          {pct}%
-                        </button>
-                      ))}
-                    </div>
-                </div>
-
-                  {/* Asset Selection */}
-                  <div>
-                    <span className="text-xs text-gray-500 block mb-2">DCA into</span>
-                    <div className="grid grid-cols-2 gap-2">
-                      {DCA_ASSETS.map((asset) => (
-                        <button
-                          key={asset.symbol}
-                          onClick={() => {
-                            setAutoDcaAsset(asset.symbol);
-                            saveAutoDcaSettings(autoDcaEnabled, autoDcaPercentage, asset.symbol);
-                          }}
-                          className={`py-2 px-3 text-xs rounded transition-colors ${
-                            autoDcaAsset === asset.symbol
-                              ? 'bg-blue-500/20 border border-blue-500/40 text-blue-400'
-                              : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-transparent'
-                          }`}
-                        >
-                          {asset.symbol}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Save Trading Settings Button */}
-              <div className="pt-3">
-                <button
-                  onClick={handleSaveQuickBuyConfig}
-                  disabled={savingQuickBuy || quickBuyConfigLoading}
-                  className="w-full py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm rounded-lg transition-colors"
-                >
-                  {savingQuickBuy ? 'Saving...' : 'Save Trading Settings'}
-                </button>
+                  );
+                })}
               </div>
             </div>
 
             {/* Settings Status Messages */}
             {settingsStatus !== 'idle' && settingsMessage && (
               <motion.div
-                initial={{ opacity: 0, y: -8 }}
+                initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`p-3 text-xs flex items-center gap-2 rounded-xl ${
+                className={`p-3 sm:p-4 text-xs sm:text-sm flex items-center gap-2 sm:gap-3 border ${
                   settingsStatus === 'success' 
-                    ? 'bg-green-500/15 text-green-400'
-                    : 'bg-red-500/15 text-red-400'
+                    ? 'bg-green-500/15 text-green-300 border-green-500/30'
+                    : 'bg-red-500/15 text-red-300 border-red-500/30'
                 }`}
               >
-                {settingsStatus === 'success' ? <FiCheck className="w-4 h-4" /> : <FiAlertCircle className="w-4 h-4" />}
+                {settingsStatus === 'success' ? (
+                  <FiCheck className="w-4 h-4" />
+                ) : (
+                  <FiAlertCircle className="w-4 h-4" />
+                )}
                 <span>{settingsMessage}</span>
               </motion.div>
             )}
-          </div>
 
-          {/* Footer Actions */}
-          <div className="flex gap-3 px-4 sm:px-5 py-4 border-t border-gray-800/60 flex-shrink-0">
+            {/* Actions */}
+            <div className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 pt-2 sm:pt-0">
               <button
                 onClick={onClose}
-              className="flex-1 px-4 py-2.5 bg-gray-900/60 border border-gray-800/60 text-gray-300 hover:bg-gray-800/60 hover:border-gray-700 rounded-xl transition-all duration-200 font-medium text-sm"
+                className="flex-1 px-4 py-2.5 bg-gray-900 border border-gray-800 text-gray-300 hover:border-gray-600 hover:text-white transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveSettings}
                 disabled={savingSettings}
-              className="flex-1 px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-medium text-sm"
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
               >
                 {savingSettings ? (
                   <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                     <span>Saving...</span>
                   </>
                 ) : (
                   <span>Save Changes</span>
                 )}
               </button>
+            </div>
           </div>
         </motion.div>
       </motion.div>

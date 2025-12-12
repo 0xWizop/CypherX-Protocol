@@ -61,7 +61,6 @@ interface WalletSearchResult {
   balance?: string;
   transactionCount?: number;
   lastActivity?: string;
-  isContract?: boolean;
 }
 
 interface TransactionSearchResult {
@@ -233,12 +232,6 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
         case "Escape":
           setShowResults(false);
           setSelectedIndex(-1);
-          // Clear position immediately to prevent flashing
-          if (variant === "header") {
-            setDropdownPosition(null);
-          } else {
-            setHomepagePosition(null);
-          }
           break;
       }
     };
@@ -418,12 +411,6 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
       if (!isInSearchContainer && !isInDropdown && !isInInput) {
         setShowResults(false);
         setSelectedIndex(-1);
-        // Clear position immediately to prevent flashing
-        if (variant === "header") {
-          setDropdownPosition(null);
-        } else {
-          setHomepagePosition(null);
-        }
       }
     };
 
@@ -830,12 +817,6 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
                 // Double check that mouse is not in results before closing
                 if (!isMouseInResults && !fullScreenMobile) {
                   setShowResults(false);
-                  // Clear position immediately to prevent flashing
-                  if (variant === "header") {
-                    setDropdownPosition(null);
-                  } else {
-                    setHomepagePosition(null);
-                  }
                 }
               }, 200);
             }
@@ -846,7 +827,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
               e.stopPropagation();
             }
           }}
-          className={`w-full pl-10 pr-10 py-1.5 text-sm text-gray-100 ${variant === "header" ? "bg-[#111827]" : "bg-gray-950"} rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all duration-300 placeholder-gray-400 shadow-lg`}
+          className={`w-full pl-10 pr-10 py-1.5 text-sm text-gray-100 ${variant === "header" ? "bg-[#111827]" : "bg-gray-950"} border border-gray-600 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-gray-500 transition-all duration-300 placeholder-gray-400 shadow-lg group-hover:border-gray-500`}
         />
         
         {/* Search Icon */}
@@ -917,8 +898,8 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
       ) : (
         // Portal results for desktop mode
         typeof document !== 'undefined' && createPortal(
-          <AnimatePresence mode="wait">
-            {showResults && (query.length >= 2 || totalResults > 0) && (variant === "header" ? dropdownPosition : homepagePosition) && (
+          <AnimatePresence>
+            {showResults && (query.length >= 2 || totalResults > 0) && (
               <motion.div
                 ref={dropdownRef}
                 key="search-dropdown"
@@ -936,13 +917,12 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
                 maxWidth: variant === "header" 
                     ? (dropdownPosition?.width ? `${dropdownPosition.width}px` : '580px')
                   : 'none',
-                zIndex: 99999,
-                display: showResults ? 'flex' : 'none'
+                zIndex: 99999
               }}
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.15 }}
+              transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
               onMouseEnter={() => setIsMouseInResults(true)}
               onMouseLeave={() => setIsMouseInResults(false)}

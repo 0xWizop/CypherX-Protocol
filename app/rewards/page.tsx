@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Header from "../components/Header";
+import Footer from "../components/Footer";
 import ReferralModal from "../components/ReferralModal";
 import RefereeStatsModal from "../components/RefereeStatsModal";
 import { useAuth, useWalletSystem } from "../providers";
@@ -17,26 +18,66 @@ import {
 import { FiX } from "react-icons/fi";
 import { SiEthereum } from "react-icons/si";
 
-// Referral Volume Tiers - more referral volume = lower fees
-const REFERRAL_VOLUME_TIERS = [
-  { name: "Starter", minVolume: 0, feeDiscount: 0, color: "text-gray-400" },
-  { name: "Bronze", minVolume: 1000, feeDiscount: 5, color: "text-gray-300" },
-  { name: "Silver", minVolume: 5000, feeDiscount: 10, color: "text-gray-200" },
-  { name: "Gold", minVolume: 25000, feeDiscount: 15, color: "text-white" },
-  { name: "Diamond", minVolume: 100000, feeDiscount: 20, color: "text-blue-400" },
-];
+// Proper tier definitions matching app/api/tiers/route.ts
+const TIERS = {
+  normie: { 
+    name: "Normie", 
+    cashback: 0.05,  // 5% of remaining fee
+    color: "text-gray-400", 
+    bgColor: "bg-gray-500/10",
+    borderColor: "border-gray-500/30",
+    minPoints: 0 
+  },
+  degen: { 
+    name: "Degen", 
+    cashback: 0.10,  // 10% of remaining fee
+    color: "text-orange-500", 
+    bgColor: "bg-orange-500/10",
+    borderColor: "border-orange-500/30",
+    minPoints: 2000 
+  },
+  alpha: { 
+    name: "Alpha", 
+    cashback: 0.15,  // 15% of remaining fee
+    color: "text-green-500", 
+    bgColor: "bg-green-500/10",
+    borderColor: "border-green-500/30",
+    minPoints: 8000 
+  },
+  mogul: { 
+    name: "Mogul", 
+    cashback: 0.20,  // 20% of remaining fee
+    color: "text-yellow-500", 
+    bgColor: "bg-yellow-500/10",
+    borderColor: "border-yellow-500/30",
+    minPoints: 20000 
+  },
+  titan: { 
+    name: "Titan", 
+    cashback: 0.25,  // 25% of remaining fee
+    color: "text-purple-500", 
+    bgColor: "bg-purple-500/10",
+    borderColor: "border-purple-500/30",
+    minPoints: 50000 
+  }
+};
 
 // Mock data - will be replaced with real data
 const mockUserData = {
+  points: 0,
+  earned: 0,
   ethRewards: 0,
+  tier: "normie",
   referralCode: "CYPHERX123",
   referrals: 0,
   referralRate: 30,
   volumeTraded: 0,
   transactions: 0,
-  referredBy: null,
-  referralCodeEdited: false,
-  referralVolume: 0, // Total volume from all referrals
+  referredBy: null, // Will be set when user uses a referral code
+  referralBonusEligible: false, // Will be set to true when user uses a referral code
+  referralBonusClaimed: false, // Will be set to true after first trade
+  referralCodeEdited: false, // Will be set to true after user edits their referral code
+  quests: []
 };
 
 function fadeInUp(delay = 0) {
@@ -106,27 +147,6 @@ const Toast = ({ message, type, isVisible, onClose }: {
   );
 };
 
-// Get current referral volume tier
-function getReferralVolumeTier(volume: number) {
-  let current = REFERRAL_VOLUME_TIERS[0];
-  for (const tier of REFERRAL_VOLUME_TIERS) {
-    if (volume >= tier.minVolume) {
-      current = tier;
-    }
-  }
-  return current;
-}
-
-// Get next referral volume tier
-function getNextReferralVolumeTier(volume: number) {
-  for (const tier of REFERRAL_VOLUME_TIERS) {
-    if (volume < tier.minVolume) {
-      return tier;
-    }
-  }
-  return null;
-}
-
 export default function RewardsPage() {
   const { user } = useAuth();
   const { selfCustodialWallet } = useWalletSystem();
@@ -172,33 +192,16 @@ export default function RewardsPage() {
   // Use real data or fallback to mock data
   const userData = rewards || mockUserData;
   
-  // Calculate referral volume from referral data
-  const referralVolume = referralData?.referrals?.reduce((sum: number, ref: any) => sum + (ref.swapValueUSD || 0), 0) || 0;
-  const currentVolumeTier = getReferralVolumeTier(referralVolume);
-  const nextVolumeTier = getNextReferralVolumeTier(referralVolume);
-  const volumeProgress = nextVolumeTier 
-    ? Math.min(100, (referralVolume / nextVolumeTier.minVolume) * 100)
+  // Calculate next tier info
+  const currentTier = TIERS[userData.tier as keyof typeof TIERS] || TIERS.normie;
+  const nextTier = Object.values(TIERS).find(tier => tier.minPoints > userData.points);
+  const progressToNextTier = nextTier 
+    ? Math.min(100, (userData.points / nextTier.minPoints) * 100)
     : 100;
-
-  // Base cashback rate (5%) + referral volume discount
-  const baseCashback = 5;
-  const totalCashback = baseCashback + currentVolumeTier.feeDiscount;
-
-  // Show loading skeleton within the UI instead of full-screen loading
-  const isLoading = loading && !rewards;
-
-  // Show error as toast notification instead of inline banner (prevents layout issues)
-  const prevErrorRef = React.useRef<string | null>(null);
-  useEffect(() => {
-    if (error && error !== prevErrorRef.current) {
-      prevErrorRef.current = error;
-      showToast(`Error: ${error}`, 'error');
-    }
-  }, [error]);
 
   if (!user) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gray-950 text-gray-200">
+      <div className="min-h-screen flex items-center justify-center bg-gray-950 text-gray-200">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Authentication Required</h1>
           <p className="text-gray-400">Please sign in to access your rewards.</p>
@@ -207,306 +210,349 @@ export default function RewardsPage() {
     );
   }
 
+  // Show loading skeleton within the UI instead of full-screen loading
+  const isLoading = loading && !rewards;
+
   return (
-    <div className="min-h-full bg-gray-950 text-gray-200 flex flex-col">
+    <div className="h-screen bg-gray-950 text-gray-200 flex flex-col overflow-hidden">
       <Header />
 
-      <main className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 py-3 pb-6 flex flex-col min-h-0">
-        {/* Page Header */}
-        <div className="flex items-center justify-between mb-3 flex-shrink-0">
-          <div>
-            <h1 className="text-lg sm:text-xl font-semibold text-white">Rewards & Referrals</h1>
-            {walletAddress && (
-              <p className="text-xs text-gray-400 mt-0.5">
-                Wallet: {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
-              </p>
-            )}
-          </div>
-          {/* Error retry button in header if error exists */}
-        {error && (
-              <button 
-                onClick={refreshAll}
-              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-300 hover:text-white text-xs font-medium transition-all duration-200"
-              >
-              Retry
-              </button>
-          )}
+      <main className="flex-1 w-full flex flex-col min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+              {/* Content Section */}
+              <div className="w-full flex-1 px-4 lg:px-6 pt-4 pb-6 space-y-3 overflow-hidden">
+          {/* Page Header */}
+          <div className="flex items-center justify-between mb-3 flex-shrink-0">
+            <div>
+              <h1 className="text-lg font-semibold text-white">Rewards</h1>
+              {walletAddress && (
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Wallet: {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                </p>
+              )}
             </div>
+          </div>
 
-        {/* Main Content */}
-        <div className="flex-1 min-h-0 space-y-3">
+          {/* Error Banner */}
+          {error && (
+            <motion.div {...fadeInUp(0.05)} className="mb-3 p-3 bg-red-500/20 border border-red-500/30 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
+                  <span className="text-red-400 font-medium text-sm">Error Loading Rewards</span>
+                </div>
+                <button 
+                  onClick={refreshAll}
+                  className="text-red-400 hover:text-red-300 text-xs underline"
+                >
+                  Try Again
+                </button>
+              </div>
+              <p className="text-red-300 text-xs mt-1">{error}</p>
+            </motion.div>
+          )}
+
+          {/* Loading Indicator */}
+          {isLoading && (
+            <motion.div {...fadeInUp(0.1)} className="mb-3 flex justify-end">
+              <div className="flex items-center space-x-2 text-blue-400">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+                <span className="text-sm">Loading...</span>
+              </div>
+            </motion.div>
+          )}
+
           {/* Main Stats Row */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-            {/* ETH Earned */}
-            <motion.div {...fadeInUp(0.1)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-2.5 sm:p-3">
-              <p className="text-[9px] sm:text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">ETH Earned</p>
-              <p className="text-base sm:text-lg font-semibold text-white flex items-center gap-1.5">
-                <SiEthereum className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
-                <span>{isLoading ? "..." : userData.ethRewards?.toFixed(4) || "0.0000"}</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
+            {/* Points */}
+            <motion.div {...fadeInUp(0.2)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
+              <p className="text-xs text-gray-400 mb-0.5">Total Points</p>
+              <p className="text-lg font-semibold text-white">
+                {isLoading ? "..." : userData.points.toLocaleString()}
+              </p>
+            </motion.div>
+
+            {/* Tier */}
+            <motion.div {...fadeInUp(0.3)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
+              <p className="text-xs text-gray-400 mb-0.5">Current Tier</p>
+              <p className="text-lg font-semibold text-white">{currentTier.name}</p>
+            </motion.div>
+
+            {/* ETH Rewards */}
+            <motion.div {...fadeInUp(0.4)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
+              <p className="text-xs text-gray-400 mb-0.5">ETH Earned</p>
+              <p className="text-lg font-semibold text-green-400 flex items-center gap-1.5">
+                <SiEthereum className="w-4 h-4" />
+                <span>{userData.ethRewards.toFixed(4)}</span>
               </p>
             </motion.div>
 
             {/* Referrals */}
-            <motion.div {...fadeInUp(0.15)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-2.5 sm:p-3">
-              <p className="text-[9px] sm:text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Referrals</p>
-              <p className="text-base sm:text-lg font-semibold text-white">{isLoading ? "..." : userData.referrals || 0}</p>
+            <motion.div {...fadeInUp(0.5)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
+              <p className="text-xs text-gray-400 mb-0.5">Referrals</p>
+              <p className="text-lg font-semibold text-white">{userData.referrals}</p>
             </motion.div>
 
-            {/* Referral Volume */}
-            <motion.div {...fadeInUp(0.2)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-2.5 sm:p-3">
-              <p className="text-[9px] sm:text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Referral Volume</p>
-              <p className="text-base sm:text-lg font-semibold text-white">
-                ${isLoading ? "..." : referralVolume.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-              </p>
-            </motion.div>
-
-            {/* Your Fee Discount */}
-            <motion.div {...fadeInUp(0.25)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-2.5 sm:p-3">
-              <p className="text-[9px] sm:text-[10px] text-emerald-400 uppercase tracking-wider mb-0.5">Your Cashback</p>
-              <p className="text-base sm:text-lg font-semibold text-white">
-                <span className="text-emerald-400">{totalCashback}%</span>
-                {currentVolumeTier.feeDiscount > 0 && (
-                  <span className="text-[10px] text-emerald-300 ml-1">(+{currentVolumeTier.feeDiscount}%)</span>
-                )}
-              </p>
+            {/* Cashback Rate */}
+            <motion.div {...fadeInUp(0.6)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
+              <p className="text-xs text-gray-400 mb-0.5">Cashback Rate</p>
+              <p className="text-lg font-semibold text-green-400">{(currentTier.cashback * 100).toFixed(0)}%</p>
             </motion.div>
           </div>
 
-          {/* Fee Discount & Claim Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-3">
-            {/* Referral Volume Perks */}
-            <motion.div {...fadeInUp(0.3)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3 sm:p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium text-white">
-                  Referral Volume Perks
-                </h3>
-                <span className="text-xs font-medium px-2 py-0.5 rounded text-blue-300 bg-blue-500/10 border border-blue-500/30">
-                  {currentVolumeTier.name}
-                </span>
-              </div>
-              
-              {nextVolumeTier && (
-                <div className="mb-3">
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-blue-400">Progress to {nextVolumeTier.name}</span>
-                    <span className="text-blue-300 font-medium">
-                      ${referralVolume.toLocaleString()} / ${nextVolumeTier.minVolume.toLocaleString()}
-                    </span>
+          {/* Progress and Actions */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
+            {/* Tier Progress */}
+            <motion.div {...fadeInUp(0.6)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
+              <h3 className="text-sm font-medium text-white mb-2">Tier Progress</h3>
+              {nextTier && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-400">Progress to {nextTier.name}</span>
+                    <span className="text-blue-400 font-medium">{Math.round(progressToNextTier)}%</span>
                   </div>
-                  <div className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                  <div className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden shadow-inner">
                     <div 
-                      className="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
-                      style={{ width: `${volumeProgress}%` }}
+                      className="bg-gradient-to-r from-blue-500 to-blue-400 h-1.5 rounded-full transition-all duration-500 ease-out shadow-sm"
+                      style={{ width: `${progressToNextTier}%` }}
                     ></div>
                   </div>
-                  <p className="text-[10px] text-blue-400/70 mt-1">
-                    +{nextVolumeTier.feeDiscount - currentVolumeTier.feeDiscount}% more cashback at next tier
-                  </p>
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>{userData.points} pts</span>
+                    <span>{nextTier.minPoints} pts</span>
+                  </div>
                 </div>
               )}
-
-              <div className="flex flex-wrap gap-1.5 sm:grid sm:grid-cols-5">
-                {REFERRAL_VOLUME_TIERS.map((tier) => (
-                  <div
-                    key={tier.name}
-                    className={`flex-1 min-w-[60px] p-1.5 sm:p-2 rounded-md text-center ${
-                      referralVolume >= tier.minVolume 
-                        ? 'bg-blue-500/10 border border-blue-500/40' 
-                        : 'bg-gray-800/50 border border-gray-700/30'
-                    }`}
-                  >
-                    <p className={`text-[10px] font-medium ${tier.color}`}>{tier.name}</p>
-                    <p className="text-[9px] text-gray-400">+{tier.feeDiscount}%</p>
-                  </div>
-                ))}
-              </div>
             </motion.div>
 
+            {/* Trading Stats */}
+            <motion.div {...fadeInUp(0.7)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
+              <h3 className="text-sm font-medium text-white mb-2">Trading Stats</h3>
+               <div className="space-y-2">
+                 <div className="p-2 bg-gray-800/50 rounded-md border border-gray-600/30">
+                   <div className="flex justify-between items-center">
+                     <p className="text-xs text-gray-400">Total Volume</p>
+                     <p className="text-xs font-medium text-gray-200">
+                       ${isLoading ? "..." : userData.volumeTraded?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}
+                     </p>
+                   </div>
+                 </div>
+                 <div className="p-2 bg-gray-800/50 rounded-md border border-gray-600/30">
+                   <div className="flex justify-between items-center">
+                     <p className="text-xs text-gray-400">Total Transactions</p>
+                     <p className="text-xs font-medium text-gray-200">
+                       {isLoading ? "..." : userData.transactions || 0}
+                     </p>
+                   </div>
+                 </div>
+                 <div className="p-2 bg-gray-800/50 rounded-md border border-gray-600/30">
+                   <div className="flex justify-between items-center">
+                     <p className="text-xs text-gray-400">Avg. Trade Size</p>
+                     <p className="text-xs font-medium text-gray-200">
+                       ${isLoading ? "..." : userData.transactions > 0 
+                         ? (userData.volumeTraded / userData.transactions).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                         : "0.00"}
+                     </p>
+                   </div>
+                 </div>
+               </div>
+             </motion.div>
+
             {/* Claim Section */}
-            <motion.div {...fadeInUp(0.35)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3 sm:p-4">
-              <h3 className="text-sm font-medium text-white mb-3">Claim Rewards</h3>
-              <div className="space-y-3">
-                <div className="text-center p-3 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-lg border border-emerald-500/20">
-                  <p className="text-xs text-emerald-400 mb-1">Available to Claim</p>
-                  <p className="text-xl font-semibold text-white flex items-center justify-center gap-2">
-                    <SiEthereum className="w-5 h-5 text-emerald-400" />
-                    <span className="text-emerald-300">{(userData.ethRewards || 0).toFixed(4)}</span>
+            <motion.div {...fadeInUp(0.8)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
+              <h3 className="text-sm font-medium text-white mb-2">Claim Rewards</h3>
+              <div className="space-y-2">
+                <div className="text-center p-2 bg-gray-800 rounded-md">
+                  <p className="text-xs text-gray-400">Available to Claim</p>
+                  <p className="text-sm font-semibold text-green-400 flex items-center justify-center gap-1.5">
+                    <SiEthereum className="w-3 h-3" />
+                    <span>+{userData.ethRewards.toFixed(4)}</span>
                   </p>
                 </div>
                 <button 
-                  onClick={async () => {
-                    if (userData.ethRewards > 0) {
-                      const result = await claimRewards();
-                      if (result.success) {
-                        showToast(`Successfully claimed ${userData.ethRewards.toFixed(4)} ETH!`, 'success');
-                      } else {
-                        showToast(`Error: ${result.error}`, 'error');
+                                       onClick={async () => {
+                      if (userData.ethRewards > 0) {
+                        const result = await claimRewards();
+                        if (result.success) {
+                          showToast(`Successfully claimed ${userData.ethRewards.toFixed(4)} ETH!`, 'success');
+                        } else {
+                          showToast(`Error: ${result.error}`, 'error');
+                        }
                       }
-                    }
-                  }}
-                  className={`w-full py-2.5 transition-all duration-300 rounded-lg text-sm font-medium ${
-                    userData.ethRewards > 0
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/20'
-                      : 'bg-gray-800 border border-gray-700 text-gray-400 cursor-not-allowed'
-                  }`}
-                  disabled={userData.ethRewards <= 0}
-                >
-                  {userData.ethRewards > 0 ? 'Claim ETH' : 'Nothing to Claim'}
-                </button>
+                    }}
+                   className={`w-full py-2 transition-all duration-300 rounded-md text-xs font-medium ${
+                     userData.ethRewards > 0
+                       ? 'bg-green-500 hover:bg-green-600 text-white'
+                       : 'bg-gray-800 border border-gray-700 text-gray-400 cursor-not-allowed'
+                   }`}
+                   disabled={userData.ethRewards <= 0}
+                 >
+                   {userData.ethRewards > 0 ? 'Claim ETH' : 'Nothing to Claim'}
+                 </button>
               </div>
             </motion.div>
           </div>
 
+          
+
           {/* My Referral Code */}
-          <motion.div {...fadeInUp(0.4)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3 sm:p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+          <motion.div {...fadeInUp(1.0)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3 mb-3">
+            <div className="flex items-center justify-between mb-3">
               <div>
-                <div className="flex items-center gap-3">
-                  <h3 className="text-sm font-medium text-white">My Referral Code</h3>
-                  <p className="text-lg font-mono font-semibold text-blue-400">'{userData.referralCode}'</p>
-                </div>
+                <h3 className="text-sm font-medium text-white mb-1">My Referral Code</h3>
+                <p className="text-lg font-mono font-semibold text-blue-400">'{userData.referralCode}'</p>
                 {userData.referredBy && (
-                  <p className="text-xs text-gray-400 mt-1">
-                    Using Referral Code: <span className="text-gray-300">'{userData.referredBy}'</span>
-                  </p>
+                  <p className="text-xs text-gray-400 mt-2">Using Referral Code: <span className="text-sm font-medium text-blue-400">'{userData.referredBy}'</span></p>
                 )}
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setShowReferralModal(true)}
-                  className="px-3 py-2 bg-gray-800 hover:bg-blue-500/20 border border-gray-700 hover:border-blue-500/40 text-white hover:text-blue-300 text-xs font-medium rounded-md transition-all duration-200 flex items-center space-x-2"
-                >
-                  <FaUserFriends className="w-3 h-3" />
-                  <span>View Referrals</span>
-                </button>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(userData.referralCode);
-                    showToast('Referral code copied to clipboard!', 'success');
-                  }}
-                  className="px-3 py-2 bg-gray-800 hover:bg-blue-500/20 border border-gray-700 hover:border-blue-500/40 text-white hover:text-blue-300 text-xs font-medium rounded-md transition-all duration-200 flex items-center space-x-2"
-                >
-                  <FaShare className="w-3 h-3" />
-                  <span>Copy Code</span>
-                </button>
-                {!userData.referralCodeEdited && (
-                  <button
-                    onClick={() => setShowEditReferralModal(true)}
-                    className="px-3 py-2 bg-gray-800 hover:bg-blue-500/20 border border-gray-700 hover:border-blue-500/40 text-white hover:text-blue-300 text-xs font-medium rounded-md transition-all duration-200 flex items-center space-x-2"
+               <div className="flex space-x-2">
+                                   <button
+                    onClick={() => setShowReferralModal(true)}
+                    className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-400 text-xs font-medium rounded-md transition-all duration-200 flex items-center justify-center space-x-2"
                   >
-                    <FaEdit className="w-3 h-3" />
-                    <span>Edit Code</span>
+                    <FaUserFriends className="w-3 h-3" />
+                    <span>View Referrals</span>
                   </button>
-                )}
+                                   <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(userData.referralCode);
+                      showToast('Referral code copied to clipboard!', 'success');
+                    }}
+                    className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-400 text-xs font-medium rounded-md transition-all duration-200 flex items-center justify-center space-x-2"
+                  >
+                    <FaShare className="w-3 h-3" />
+                    <span>Copy Code</span>
+                  </button>
+                 {!userData.referralCodeEdited && (
+                   <button
+                     onClick={() => setShowEditReferralModal(true)}
+                     className="px-3 py-2 bg-green-500/20 hover:bg-green-500/30 border border-green-500/40 text-green-400 text-xs font-medium rounded-md transition-all duration-200 flex items-center justify-center space-x-2"
+                   >
+                     <FaEdit className="w-3 h-3" />
+                     <span>Edit Code</span>
+                   </button>
+                 )}
+               </div>
+             </div>
+             
+                                                       
+             
+              {/* Referral Stats */}
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div className="bg-gray-700/30 rounded-lg p-3 text-center border border-gray-600/30">
+                  <p className="text-xs text-gray-400 mb-0.5">Total Referrals</p>
+                  <p className="text-base font-semibold text-white">{userData.referrals}</p>
+                </div>
+                <div className="bg-gray-700/30 rounded-lg p-3 text-center border border-gray-600/30">
+                  <p className="text-xs text-gray-400 mb-0.5">Earnings from Referrals</p>
+                  <p className="text-base font-semibold text-green-400 flex items-center justify-center gap-1.5">
+                    <SiEthereum className="w-4 h-4" />
+                    <span>{(userData.ethRewards * 0.3).toFixed(4)}</span>
+                  </p>
+                </div>
               </div>
-            </div>
-            
-            {/* Referral Stats */}
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div className="bg-blue-500/5 rounded-lg p-3 text-center border border-blue-500/20">
-                <p className="text-xs text-blue-400 mb-0.5">Total Referrals</p>
-                <p className="text-base font-semibold text-blue-300">{userData.referrals || 0}</p>
-              </div>
-              <div className="bg-blue-500/5 rounded-lg p-3 text-center border border-blue-500/20">
-                <p className="text-xs text-blue-400 mb-0.5">Earnings from Referrals</p>
-                <p className="text-base font-semibold text-blue-300 flex items-center justify-center gap-1.5">
-                  <SiEthereum className="w-4 h-4 text-blue-400" />
-                  <span>{((userData.ethRewards || 0) * 0.3).toFixed(4)}</span>
-                </p>
-              </div>
-            </div>
-            
-            {/* Referral List */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-medium text-white mb-2">Recent Referrals</h4>
-              <div className="max-h-40 overflow-y-auto scrollbar-hide">
-                {referralData && referralData.referrals.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {referralData.referrals.slice(0, 6).map((referral: any, i: number) => (
-                      <div 
-                        key={referral.id || i} 
-                        onClick={() => {
-                          setSelectedRefereeId(referral.refereeId);
-                          setShowRefereeStatsModal(true);
-                        }}
-                        className="p-2.5 bg-gray-800 rounded-lg border border-gray-700/50 hover:border-blue-500/40 hover:bg-blue-500/5 cursor-pointer transition-all duration-200"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2 flex-1">
-                            <div className="w-7 h-7 bg-gray-700 rounded-md flex items-center justify-center">
-                              <FaUserFriends className="w-3 h-3 text-gray-400" />
+             
+              {/* Referral List */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium text-white mb-2">Recent Referrals</h4>
+                <div className="max-h-32 overflow-hidden">
+                  {referralData && referralData.referrals.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-2">
+                      {referralData.referrals.map((referral: any, i: number) => (
+                        <div 
+                          key={referral.id || i} 
+                          onClick={() => {
+                            setSelectedRefereeId(referral.refereeId);
+                            setShowRefereeStatsModal(true);
+                          }}
+                          className="p-3 bg-gray-800 rounded-md border border-gray-600/30 hover:border-blue-500/50 hover:bg-gray-800/70 cursor-pointer transition-all duration-200"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3 flex-1">
+                              <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                                <FaUserFriends className="w-4 h-4 text-blue-400" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-gray-200 truncate">
+                                  {referral.refereeId ? `${referral.refereeId.slice(0, 8)}...${referral.refereeId.slice(-4)}` : `Referral #${i + 1}`}
+                                </p>
+                                <p className="text-xs text-blue-400">
+                                  {referral.timestamp ? new Date(referral.timestamp).toLocaleDateString() : 'Active'}
+                                </p>
+                              </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium text-gray-200 truncate">
-                                {referral.refereeId ? `${referral.refereeId.slice(0, 8)}...${referral.refereeId.slice(-4)}` : `Referral #${i + 1}`}
-                              </p>
-                              <p className="text-[10px] text-gray-500">
-                                {referral.timestamp ? new Date(referral.timestamp).toLocaleDateString() : 'Active'}
+                            <div className="text-right">
+                              <p className="text-xs text-gray-400 mb-1">Earned</p>
+                              <p className="text-xs font-semibold text-green-400 flex items-center space-x-1">
+                                <SiEthereum className="w-3 h-3 text-gray-400" />
+                                <span>{(referral.referralReward || 0).toFixed(4)}</span>
                               </p>
                             </div>
                           </div>
-                          {referral.swapValueUSD > 0 && (
-                            <div className="text-right">
-                              <p className="text-[10px] text-gray-500">Volume</p>
-                              <p className="text-xs font-medium text-gray-300">
-                                ${referral.swapValueUSD.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                          {referral.swapValueUSD && (
+                            <div className="mt-2 pt-2 border-t border-gray-700/30">
+                              <p className="text-xs text-gray-400">
+                                Volume: ${referral.swapValueUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
                             </div>
                           )}
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : userData.referrals > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {Array.from({ length: Math.min(userData.referrals, 6) }, (_, i) => (
-                      <div 
-                        key={i} 
-                        className="p-2.5 bg-gray-800 rounded-lg border border-gray-700/50"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <div className="w-7 h-7 bg-gray-700 rounded-md flex items-center justify-center">
-                            <FaUserFriends className="w-3 h-3 text-gray-400" />
-                          </div>
-                          <div>
-                            <p className="text-xs font-medium text-gray-200">Referral #{i + 1}</p>
-                            <p className="text-[10px] text-gray-500">Active</p>
+                      ))}
+                    </div>
+                  ) : userData.referrals > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-2">
+                      {Array.from({ length: Math.min(userData.referrals, 6) }, (_, i) => (
+                        <div 
+                          key={i} 
+                          className="p-3 bg-gray-800 rounded-md border border-gray-600/30 hover:border-blue-500/50 hover:bg-gray-800/70 cursor-pointer transition-all duration-200"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                              <FaUserFriends className="w-4 h-4 text-blue-400" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-xs font-medium text-gray-200">Referral #{i + 1}</p>
+                              <p className="text-xs text-blue-400">Active</p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-6">
-                    <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-2">
-                      <FaUserFriends className="w-6 h-6 text-gray-500" />
+                      ))}
                     </div>
-                    <p className="text-gray-400 text-xs mb-1">No referrals yet</p>
-                    <p className="text-gray-500 text-[10px]">Share your code to start earning rewards</p>
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            {/* How It Works */}
-            <div className="mt-3 pt-3 border-t border-gray-700/30">
-              <h4 className="text-xs font-medium text-white mb-2">How Referrals Work</h4>
-              <div className="space-y-1.5 sm:space-y-0 sm:grid sm:grid-cols-3 sm:gap-2 text-xs text-gray-400">
-                <div className="flex items-center space-x-2">
-                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
-                  <span>Earn {baseCashback}% cashback on fees</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
-                  <span>Get 30% of referee's fee</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
-                  <span>More volume = higher cashback</span>
+                  ) : (
+                    <div className="text-center py-4">
+                      <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-2">
+                        <FaUserFriends className="w-6 h-6 text-gray-500" />
+                      </div>
+                      <p className="text-gray-400 text-xs mb-2">No referrals yet</p>
+                      <p className="text-gray-500 text-xs">Share your referral code to start earning rewards</p>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          </motion.div>
+              
+              {/* Additional Referral Info */}
+              <div className="mt-3">
+                <div className="bg-gray-700/30 rounded-lg p-3 border border-gray-600/30">
+                  <h4 className="text-xs font-medium text-white mb-2">How Referrals Work</h4>
+                  <div className="space-y-1.5 text-xs text-gray-400">
+
+                     <div className="flex items-center space-x-2">
+                       <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                       <span>Earn up to 0.1% - 0.3% back on trading fees</span>
+                     </div>
+                     <div className="flex items-center space-x-2">
+                       <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
+                       <span>Referrers earn 30% of their referee's platform fee</span>
+                     </div>
+                     <div className="flex items-center space-x-2">
+                       <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+                       <span>All rewards are paid in ETH on Base chain</span>
+                     </div>
+                   </div>
+                 </div>
+               </div>
+           </motion.div>
+          </div>
         </div>
       </main>
 
@@ -530,28 +576,30 @@ export default function RewardsPage() {
 
       {/* Edit Referral Code Modal */}
       {showEditReferralModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl w-full max-w-md overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-800">
-              <h3 className="text-base font-semibold text-white">Edit Referral Code</h3>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900/95 backdrop-blur-xl border border-gray-700/50 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-100">Edit Referral Code</h3>
               <button
                 onClick={() => {
                   setShowEditReferralModal(false);
                   setNewReferralCode('');
                   setEditError('');
                 }}
-                className="p-1.5 hover:bg-gray-800 rounded-lg transition-colors"
+                className="text-gray-400 hover:text-gray-200 transition-colors"
               >
-                <FiX className="w-5 h-5 text-gray-400" />
+                <FiX className="w-5 h-5" />
               </button>
             </div>
             
-            {/* Content */}
-            <div className="p-4 space-y-4">
-              <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
-                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Current Code</p>
-                <p className="text-xl font-mono font-semibold text-white">{userData.referralCode}</p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Current Code
+                </label>
+                <div className="p-3 bg-gray-800 rounded-md border border-gray-700/30">
+                  <p className="text-lg font-mono font-semibold text-blue-400">{userData.referralCode}</p>
+                </div>
               </div>
               
               <div>
@@ -563,63 +611,65 @@ export default function RewardsPage() {
                   value={newReferralCode}
                   onChange={(e) => setNewReferralCode(e.target.value.toUpperCase())}
                   placeholder="Enter new code (4-12 characters)"
-                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                  className="w-full p-3 bg-gray-800 border border-gray-700/30 rounded-md text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   maxLength={12}
                 />
-                <p className="text-[10px] text-gray-500 mt-2">
+                <p className="text-xs text-gray-400 mt-1">
                   Letters and numbers only. You can only edit once!
                 </p>
               </div>
 
               {editError && (
-                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-md">
                   <p className="text-red-400 text-sm">{editError}</p>
                 </div>
               )}
-            </div>
 
-            {/* Footer */}
-            <div className="p-4 border-t border-gray-800 flex gap-3">
-              <button
-                onClick={() => {
-                  setShowEditReferralModal(false);
-                  setNewReferralCode('');
-                  setEditError('');
-                }}
-                className="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  if (!newReferralCode.trim()) {
-                    setEditError('Please enter a new referral code');
-                    return;
-                  }
-                  
-                  if (newReferralCode === userData.referralCode) {
-                    setEditError('New code must be different from current code');
-                    return;
-                  }
+              <div className="flex space-x-3">
+                <button
+                  onClick={async () => {
+                    if (!newReferralCode.trim()) {
+                      setEditError('Please enter a new referral code');
+                      return;
+                    }
+                    
+                    if (newReferralCode === userData.referralCode) {
+                      setEditError('New code must be different from current code');
+                      return;
+                    }
 
-                  const result = await editReferralCode(newReferralCode);
-                  if (result.success) {
+                    const result = await editReferralCode(newReferralCode);
+                    if (result.success) {
+                      setShowEditReferralModal(false);
+                      setNewReferralCode('');
+                      setEditError('');
+                      showToast('Referral code updated successfully!', 'success');
+                    } else {
+                      setEditError(result.error || 'Failed to update referral code');
+                    }
+                  }}
+                  className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-medium rounded-md transition-all duration-200"
+                >
+                  Update Code
+                </button>
+                <button
+                  onClick={() => {
                     setShowEditReferralModal(false);
                     setNewReferralCode('');
                     setEditError('');
-                    showToast('Referral code updated successfully!', 'success');
-                  } else {
-                    setEditError(result.error || 'Failed to update referral code');
-                  }
-                }}
-                className="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                Update Code
-              </button>
+                  }}
+                  className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-gray-200 font-medium rounded-md transition-all duration-200"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      <div className="border-t border-gray-700/50 mt-6"></div>
+      <Footer />
       
       {/* Toast Notification */}
       <Toast 

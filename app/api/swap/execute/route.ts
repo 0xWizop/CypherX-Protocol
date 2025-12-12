@@ -14,8 +14,17 @@ const ZEROX_API_KEY = process.env.ZEROX_API_KEY || "";
 const ZEROX_API_URL = "https://api.0x.org";
 
 // Treasury configuration
-// Platform fee is 0.3% (0.003) - calculated inline where needed
-// Rewards are now handled by processSwapRewards from lib/swap-rewards.ts
+const PLATFORM_FEE_PERCENT = 0.3;
+const BASE_CASHBACK_PERCENT = 5;
+
+// Referral volume tiers
+const REFERRAL_VOLUME_TIERS = [
+  { minVolume: 0, extraCashback: 0 },
+  { minVolume: 1000, extraCashback: 5 },
+  { minVolume: 5000, extraCashback: 10 },
+  { minVolume: 25000, extraCashback: 15 },
+  { minVolume: 100000, extraCashback: 20 },
+];
 
 // ERC20 ABI for approvals
 const ERC20_ABI = [
@@ -215,6 +224,17 @@ async function checkAndApproveToken(
   } else {
     console.log("✅ Token already has sufficient allowance");
   }
+}
+
+// Get user's referral volume tier cashback bonus
+function getReferralVolumeCashback(referralVolume: number): number {
+  let extraCashback = 0;
+  for (const tier of REFERRAL_VOLUME_TIERS) {
+    if (referralVolume >= tier.minVolume) {
+      extraCashback = tier.extraCashback;
+    }
+  }
+  return extraCashback;
 }
 
 // Get ETH price
@@ -492,6 +512,7 @@ export async function POST(request: Request) {
     const isEthInput = inputToken === "ETH" || inputToken === "WETH";
     const ethAmount = isEthInput ? parseFloat(inputAmount) : parseFloat(outputAmount || ethers.formatUnits(quote.buyAmount, buyDecimals));
     const swapValueUsd = ethAmount * ethPrice;
+    const swapValueEth = ethAmount;
     
     // Record swap and process fees
     const feeResult = await recordSwap(
