@@ -22,7 +22,7 @@ import { createPortal } from "react-dom";
 import Image from "next/image";
 
 const MobileChainBadge: React.FC = () => (
-  <div className="lg:hidden flex items-center justify-center w-8 h-8 rounded-lg border border-gray-700/60 bg-gray-900/40">
+  <div className="lg:hidden flex items-center justify-center w-8 h-8 rounded-lg bg-gray-900/40">
     <Image
       src="https://i.imgur.com/k4HafXg.png"
       alt="Base Chain"
@@ -56,9 +56,9 @@ const FavoriteTokenItem = ({ poolAddress, onRemove }: { poolAddress: string; onR
 
   if (loading) {
     return (
-      <div className="flex items-center justify-between p-3 bg-gray-800/50 backdrop-blur-sm border border-gray-700/30">
+      <div className="flex items-center justify-between p-3 bg-gray-900/40 rounded-xl">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gray-700/50 animate-pulse"></div>
+          <div className="w-10 h-10 bg-gray-700/50 rounded-lg animate-pulse"></div>
           <div className="space-y-2">
             <div className="h-4 bg-gray-700/50 rounded w-20 animate-pulse"></div>
             <div className="h-3 bg-gray-700/50 rounded w-16 animate-pulse"></div>
@@ -71,16 +71,16 @@ const FavoriteTokenItem = ({ poolAddress, onRemove }: { poolAddress: string; onR
 
   if (!tokenData) {
     return (
-      <div className="flex items-center justify-between p-3 bg-gray-800/50 backdrop-blur-sm border border-gray-700/30">
+      <div className="flex items-center justify-between p-3 bg-gray-900/40 rounded-xl">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gray-700/50"></div>
+          <div className="w-10 h-10 bg-gray-700/50 rounded-lg"></div>
           <div className="text-gray-400 text-sm">
             {poolAddress.slice(0, 8)}...{poolAddress.slice(-6)}
           </div>
         </div>
         <button
           onClick={onRemove}
-          className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
+          className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all duration-200"
         >
           <FiTrash2 className="w-4 h-4" />
         </button>
@@ -92,9 +92,9 @@ const FavoriteTokenItem = ({ poolAddress, onRemove }: { poolAddress: string; onR
   const priceChangeColor = priceChange >= 0 ? 'text-green-400' : 'text-red-400';
 
   return (
-    <div className="flex items-center justify-between p-3 bg-gray-800/50 backdrop-blur-sm border border-gray-700/30 hover:bg-gray-800/70 transition-all duration-200">
+    <div className="flex items-center justify-between p-3 bg-gray-900/40 rounded-xl hover:bg-gray-900/60 transition-all duration-200">
       <div className="flex items-center space-x-3">
-        <div className="relative w-10 h-10 overflow-hidden bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
+        <div className="relative w-10 h-10 overflow-hidden bg-gradient-to-br from-gray-700 to-gray-800 rounded-lg flex items-center justify-center">
           {tokenData.info?.imageUrl && (
             <img src={tokenData.info.imageUrl} alt={tokenData.baseToken?.symbol || 'Token'} className="w-full h-full object-cover" />
           )}
@@ -131,7 +131,7 @@ const FavoriteTokenItem = ({ poolAddress, onRemove }: { poolAddress: string; onR
         </div>
         <button
           onClick={onRemove}
-          className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
+          className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all duration-200"
         >
           <FiTrash2 className="w-4 h-4" />
         </button>
@@ -158,7 +158,7 @@ const Header: React.FC = () => {
   const { setShowLoginModal, setRedirectTo } = useLoginModal();
 
 
-  const navLinks: Array<{ href: string; label: string; isActive: (path: string) => boolean }> = [
+  const navLinks: Array<{ href: string; label: string; isActive: (path: string) => boolean; soon?: boolean }> = [
     {
       href: "/discover",
       label: "Discover",
@@ -180,6 +180,7 @@ const Header: React.FC = () => {
       href: "/predict",
       label: "Predict",
       isActive: (path) => path === "/predict" || path.startsWith("/predict/"),
+      soon: true,
     },
     {
       href: "/rewards",
@@ -318,7 +319,7 @@ const Header: React.FC = () => {
                       exit={{ rotate: 90, opacity: 0 }}
                       transition={{ duration: 0.2 }}
                     >
-                      <FiX className="w-5 h-5 text-gray-300" />
+                      <FiX className="w-4 h-4 text-gray-300" />
                     </motion.div>
                   ) : (
                     <motion.div
@@ -351,13 +352,13 @@ const Header: React.FC = () => {
                     />
                     <div className="hidden lg:flex items-center space-x-2">
                       <Image
-                        src="https://i.imgur.com/d2OCO6H.png"
+                        src="https://i.imgur.com/0DvpsA9.png"
                         alt="CypherX"
                         width={32}
                         height={32}
                         className="w-8 h-8"
                       />
-                      <span className="text-lg text-white font-semibold" style={{ fontFamily: "'Poppins', sans-serif", letterSpacing: '0.02em' }}>
+                      <span className="text-lg text-blue-400 font-semibold" style={{ fontFamily: "'Poppins', sans-serif", letterSpacing: '0.02em' }}>
                         CYPHERX
                       </span>
                     </div>
@@ -367,13 +368,25 @@ const Header: React.FC = () => {
 
                               {/* Desktop Navigation */}
               <nav className="hidden lg:flex items-center gap-2">
-                {navLinks.map(({ href, label, isActive }) => {
+                {navLinks.map(({ href, label, isActive, soon }) => {
                   const active = isActive(currentPath);
                   const baseClasses =
                     "text-sm font-normal px-3 py-2 transition-all duration-200";
                   const stateClasses = active
                     ? "text-blue-300"
                     : "text-white hover:text-blue-300";
+
+                  if (soon) {
+                    return (
+                      <span
+                        key={href}
+                        className={`${baseClasses} ${stateClasses} opacity-60 cursor-not-allowed flex items-center gap-1.5`}
+                      >
+                        {label}
+                        <span className="text-[10px] text-gray-400 font-medium">(Soon)</span>
+                      </span>
+                    );
+                  }
 
                   return (
                  <Link
@@ -402,7 +415,7 @@ const Header: React.FC = () => {
                 {/* Action Buttons */}
                 <div className="hidden lg:flex items-center space-x-2">
                   <motion.button
-                    className="relative flex items-center justify-center w-8 h-8 bg-gray-950/50 backdrop-blur-sm hover:bg-gray-900/50 text-white hover:text-blue-400 rounded-lg transition-all duration-200 border border-gray-600 hover:border-gray-500"
+                    className="relative flex items-center justify-center w-8 h-8 bg-gray-900/40 hover:bg-gray-900/60 text-white hover:text-blue-400 rounded-lg transition-all duration-200"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     title="Watchlist"
@@ -417,7 +430,7 @@ const Header: React.FC = () => {
                   </motion.button>
                   
                   <motion.button
-                    className="flex items-center justify-center w-8 h-8 bg-gray-950/50 backdrop-blur-sm hover:bg-gray-900/50 text-white hover:text-blue-400 rounded-lg transition-all duration-200 border border-gray-600 hover:border-gray-500"
+                    className="flex items-center justify-center w-8 h-8 bg-gray-900/40 hover:bg-gray-900/60 text-white hover:text-blue-400 rounded-lg transition-all duration-200"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     title="Settings"
@@ -432,7 +445,7 @@ const Header: React.FC = () => {
                   <MobileChainBadge />
                   <motion.button
                     onClick={() => setShowSettingsModal(true)}
-                    className="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-700/60 bg-gray-900/40 text-gray-300 hover:text-white hover:border-gray-500 transition-all duration-200"
+                    className="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-900/40 text-gray-300 hover:text-white hover:bg-gray-900/60 transition-all duration-200"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     aria-label="Settings"
@@ -462,7 +475,7 @@ const Header: React.FC = () => {
                        setRedirectTo(pathname);
                        setShowLoginModal(true);
                      }}
-                     className="w-8 h-8 rounded-full bg-gray-950/50 backdrop-blur-sm border border-gray-600 flex items-center justify-center hover:bg-gray-900/50 hover:border-gray-500 transition-all duration-200"
+                     className="w-8 h-8 rounded-full bg-gray-900/40 flex items-center justify-center hover:bg-gray-900/60 transition-all duration-200"
                    >
                      <FiUser className="w-5 h-5 text-gray-300" />
                    </button>
@@ -506,7 +519,7 @@ const Header: React.FC = () => {
                           className="text-gray-400 hover:text-white transition-colors"
                           aria-label="Close menu"
                         >
-                          <FiX className="w-4 h-4" />
+                          <FiX className="w-3.5 h-3.5" />
                         </button>
                       </div>
 
@@ -531,7 +544,8 @@ const Header: React.FC = () => {
                         }, {
                           href: "/predict",
                           label: "Predict",
-                          delay: 0.125
+                          delay: 0.125,
+                          soon: true
                         }, {
                           href: "/rewards",
                           label: "Rewards",
@@ -540,21 +554,28 @@ const Header: React.FC = () => {
                           href: "/explorer",
                           label: "Explorer",
                           delay: 0.25
-                        }].map(({ href, label, delay }, index) => (
+                        }].map(({ href, label, delay, soon }, index) => (
                           <motion.div
                             key={href}
                             initial={{ opacity: 0, y: 8 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay }}
                           >
-                            <Link
-                              href={href}
-                              className="block px-2 py-2 text-white text-sm font-normal tracking-wide hover:text-blue-300 transition-colors"
-                              prefetch={true}
-                              onClick={() => setIsMenuOpen(false)}
-                            >
-                              {label}
-                            </Link>
+                            {soon ? (
+                              <span className="block px-2 py-2 text-white text-sm font-normal tracking-wide opacity-60 cursor-not-allowed flex items-center gap-1.5">
+                                {label}
+                                <span className="text-[10px] text-gray-400 font-medium">(Soon)</span>
+                              </span>
+                            ) : (
+                              <Link
+                                href={href}
+                                className="block px-2 py-2 text-white text-sm font-normal tracking-wide hover:text-blue-300 transition-colors"
+                                prefetch={true}
+                                onClick={() => setIsMenuOpen(false)}
+                              >
+                                {label}
+                              </Link>
+                            )}
                             {index < 5 && <div className="h-px bg-gray-800/60" />}
                           </motion.div>
                         ))}
@@ -609,27 +630,31 @@ const Header: React.FC = () => {
             onClick={() => setShowWatchlistsModal(false)}
           >
             <motion.div
-              className="bg-gray-950 sm:border sm:border-gray-800 w-full h-full sm:h-auto sm:max-w-lg sm:max-w-xl shadow-2xl p-5 sm:p-6 flex flex-col sm:max-h-[85vh]"
+              className="bg-gray-950 w-full h-full sm:h-auto sm:max-w-lg sm:max-w-xl shadow-2xl p-5 sm:p-6 flex flex-col sm:max-h-[85vh] rounded-t-3xl sm:rounded-xl"
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
             >
+              {/* Mobile drag handle */}
+              <div className="sm:hidden flex justify-center pt-2 pb-3">
+                <div className="w-10 h-1 rounded-full bg-gray-600" />
+              </div>
               <div className="relative flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-white">
                   My Watchlists
                 </h3>
                 <button
                   onClick={() => setShowWatchlistsModal(false)}
-                  className="absolute top-0 right-0 w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg bg-gray-900/50 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 text-gray-300 hover:text-white transition-all duration-200"
+                  className="absolute top-0 right-0 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-gray-400 hover:text-white transition-all duration-200"
                   aria-label="Close"
                 >
-                  <FiX className="w-5 h-5 sm:w-6 sm:h-6" />
+                  <FiX className="w-3.5 h-3.5" />
                 </button>
               </div>
               <div className="space-y-4 overflow-y-auto scrollbar-hide pr-0.5">
                 {/* Default Watchlist (Favorites) */}
-                <div className="bg-gray-900/50 border border-gray-800 p-3 sm:p-4">
+                <div className="bg-gray-900/40 rounded-xl p-3 sm:p-4">
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="text-sm font-medium text-gray-100">
                       Favorites
@@ -686,7 +711,7 @@ const Header: React.FC = () => {
                   <div className="space-y-3">
                     <h4 className="text-sm font-medium text-gray-300">Custom Watchlists</h4>
                     {watchlists.map((watchlist) => (
-                      <div key={watchlist.id} className="bg-gray-900/50 border border-gray-800 p-3 sm:p-4">
+                      <div key={watchlist.id} className="bg-gray-900/40 rounded-xl p-3 sm:p-4">
                         <div className="flex items-center justify-between mb-2 gap-2">
                           <button
                             onClick={() => setExpandedWatchlist(expandedWatchlist === watchlist.id ? null : watchlist.id)}
@@ -961,37 +986,41 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
       >
         <motion.div
           ref={modalRef}
-          className="bg-gray-950 w-full h-full sm:h-auto sm:max-w-[520px] sm:mx-0 sm:border sm:border-gray-800 shadow-2xl flex flex-col sm:max-h-[82vh] sm:my-auto"
+          className="bg-gray-950 w-full h-full sm:h-auto sm:max-w-[520px] sm:mx-0 shadow-2xl flex flex-col sm:max-h-[82vh] sm:my-auto rounded-t-3xl sm:rounded-xl overflow-hidden"
           initial={{ scale: 0.9, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
           transition={{ duration: 0.2 }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="relative flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-800 bg-gray-950">
+          {/* Mobile drag handle */}
+          <div className="sm:hidden flex justify-center pt-3 pb-1">
+            <div className="w-10 h-1 rounded-full bg-gray-600" />
+          </div>
+          <div className="relative flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-800/20 bg-gray-950">
             <div className="text-left">
               <span className="text-[10px] uppercase tracking-[0.3em] text-blue-400/70 font-medium">Profile</span>
               <h3 className="text-white text-base sm:text-2xl font-semibold mt-1">Account Settings</h3>
             </div>
             <button
               onClick={onClose}
-              className="absolute top-3 sm:top-4 right-4 sm:right-6 w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg bg-gray-900/50 hover:bg-gray-900 border border-gray-800 hover:border-gray-700 text-gray-300 hover:text-white transition-all duration-200"
+              className="absolute top-3 sm:top-4 right-4 sm:right-6 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-gray-400 hover:text-white transition-all duration-200"
               aria-label="Close"
             >
-              <FiX className="w-5 h-5 sm:w-6 sm:h-6" />
+              <FiX className="w-3.5 h-3.5" />
             </button>
           </div>
 
           <div className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-6 py-4 space-y-4 sm:space-y-6">
             {/* Profile Section */}
-            <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner mt-1">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
-                <h4 className="text-white font-semibold text-base sm:text-lg">Profile Information</h4>
+            <div className="bg-gray-900/40 rounded-xl p-3 sm:p-4 mt-1">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 mb-2 sm:mb-3">
+                <h4 className="text-white font-semibold text-sm sm:text-base">Profile Information</h4>
               </div>
-              <div className="space-y-3 sm:space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-5 gap-3 sm:gap-4">
+              <div className="space-y-2 sm:space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 gap-2 sm:gap-3">
                   <div className="relative self-center sm:self-auto">
-                    <div className="w-14 h-14 sm:w-20 sm:h-20 overflow-hidden bg-gray-900 border border-gray-800 shadow-lg">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 overflow-hidden bg-gray-900/40 rounded-xl shadow-lg">
                       {profilePicture ? (
                         <Image
                           src={profilePicture}
@@ -1007,31 +1036,31 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                       )}
                       {uploadingImage && (
                         <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
                         </div>
                       )}
                     </div>
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingImage}
-                      className="absolute -bottom-2 -right-2 w-6 h-6 sm:w-7 sm:h-7 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 flex items-center justify-center transition-colors shadow-lg"
+                      className="absolute -bottom-1.5 -right-1.5 w-5 h-5 sm:w-6 sm:h-6 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 flex items-center justify-center transition-colors shadow-lg rounded-lg"
                     >
                       {uploadingImage ? (
-                        <div className="animate-spin rounded-full h-3 w-3 border-b border-white"></div>
+                        <div className="animate-spin rounded-full h-2.5 w-2.5 border-b border-white"></div>
                       ) : (
                         <FiUser className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
                       )}
                     </button>
                   </div>
                   <div className="flex-1 w-full">
-                    <h5 className="text-white font-semibold text-sm sm:text-base">Profile Picture</h5>
-                    <p className="text-gray-400 text-xs sm:text-sm mb-3">
+                    <h5 className="text-white font-semibold text-xs sm:text-sm">Profile Picture</h5>
+                    <p className="text-gray-400 text-xs mb-2">
                       Upload an image with a minimum size of 256x256 for best clarity.
                     </p>
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingImage}
-                      className="inline-flex items-center gap-2 px-3 py-2 bg-gray-900 border border-gray-800 hover:border-gray-600 hover:bg-gray-900/80 text-xs sm:text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-1"
+                      className="inline-flex items-center gap-2 px-3 py-2 bg-gray-900/40 hover:bg-gray-900/60 rounded-lg text-xs sm:text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-1"
                     >
                       {uploadingImage ? 'Uploading...' : 'Upload Image'}
                     </button>
@@ -1039,10 +1068,10 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                       <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className={`mt-3 px-3 py-2 text-xs sm:text-sm flex items-center gap-2 border ${
+                        className={`mt-3 px-3 py-2 text-xs sm:text-sm flex items-center gap-2 rounded-lg ${
                           uploadStatus === 'success' 
-                            ? 'bg-green-500/15 text-green-300 border-green-500/30'
-                            : 'bg-red-500/15 text-red-300 border-red-500/30'
+                            ? 'bg-green-500/15 text-green-300'
+                            : 'bg-red-500/15 text-red-300'
                         }`}
                       >
                         {uploadStatus === 'success' ? (
@@ -1071,7 +1100,7 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                       type="text"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
-                      className="w-full px-3 py-2 bg-gray-950 border border-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500/50 text-sm transition"
+                      className="w-full px-3 py-2 bg-gray-900/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 text-sm transition"
                       placeholder="Enter your display name"
                     />
                   </div>
@@ -1080,7 +1109,7 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
             </div>
 
             {/* Notifications Section */}
-            <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner">
+            <div className="bg-gray-900/40 rounded-xl p-3 sm:p-5">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
                 <h4 className="text-white font-semibold text-base sm:text-lg">Notifications</h4>
               </div>
@@ -1094,7 +1123,7 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                     news: 'Macro stories and curated market commentary.'
                   };
                   return (
-                    <label key={key} className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer capitalize">
+                    <label key={key} className="group flex items-center justify-between gap-3 p-3 bg-gray-900/40 hover:bg-gray-900/60 rounded-xl transition-colors cursor-pointer capitalize">
                       <div>
                         <span className="text-gray-200 text-sm font-medium">{label}</span>
                         <p className="text-[11px] sm:text-xs text-gray-500 mt-1">{descriptions[key] || 'Stay in the loop without the noise.'}</p>
@@ -1121,7 +1150,7 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
             </div>
 
             {/* Privacy Section */}
-            <div className="bg-gray-900/40 border border-gray-800 p-3 sm:p-5 shadow-inner">
+            <div className="bg-gray-900/40 rounded-xl p-3 sm:p-5">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
                 <h4 className="text-white font-semibold text-base sm:text-lg">Privacy</h4>
               </div>
@@ -1134,7 +1163,7 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
                     showBalance: 'Reveal your wallet balance on your profile.'
                   };
                   return (
-                    <label key={key} className="group flex items-center justify-between gap-3 p-3 border border-gray-800/70 bg-gray-900/60 hover:border-gray-700 transition-colors cursor-pointer capitalize">
+                    <label key={key} className="group flex items-center justify-between gap-3 p-3 bg-gray-900/40 hover:bg-gray-900/60 rounded-xl transition-colors cursor-pointer capitalize">
                       <div>
                         <span className="text-gray-200 text-sm font-medium">{label}</span>
                         <p className="text-[11px] sm:text-xs text-gray-500 mt-1">{descriptions[key] || 'Fine-tune visibility to match your comfort.'}</p>
@@ -1165,10 +1194,10 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`p-3 sm:p-4 text-xs sm:text-sm flex items-center gap-2 sm:gap-3 border ${
+                className={`p-3 sm:p-4 text-xs sm:text-sm flex items-center gap-2 sm:gap-3 rounded-lg ${
                   settingsStatus === 'success' 
-                    ? 'bg-green-500/15 text-green-300 border-green-500/30'
-                    : 'bg-red-500/15 text-red-300 border-red-500/30'
+                    ? 'bg-green-500/15 text-green-300'
+                    : 'bg-red-500/15 text-red-300'
                 }`}
               >
                 {settingsStatus === 'success' ? (
@@ -1184,14 +1213,14 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
             <div className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 pt-2 sm:pt-0">
               <button
                 onClick={onClose}
-                className="flex-1 px-4 py-2.5 bg-gray-900 border border-gray-800 text-gray-300 hover:border-gray-600 hover:text-white transition-colors"
+                className="flex-1 px-4 py-2.5 bg-gray-900/40 text-gray-300 hover:bg-gray-900/60 hover:text-white rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveSettings}
                 disabled={savingSettings}
-                className="flex-1 px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 {savingSettings ? (
                   <>

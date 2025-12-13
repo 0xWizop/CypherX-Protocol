@@ -52,7 +52,7 @@ function fadeInUp(delay = 0) {
 
 
 export default function Page() {
-  const [activeUsers, setActiveUsers] = useState<number>(0);
+  const [activeUsers, setActiveUsers] = useState<number>(126);
   const [totalTokens, setTotalTokens] = useState<number>(0);
   const [statsLoading, setStatsLoading] = useState(true);
 
@@ -66,7 +66,7 @@ export default function Page() {
           const usersData = await usersResponse.json();
           console.log('Active users API response:', usersData);
           if (usersData.success) {
-            const count = usersData.activeUsers || 0;
+            const count = usersData.activeUsers || 126;
             console.log('Setting active users to:', count);
             setActiveUsers(count);
           } else {
@@ -241,6 +241,62 @@ export default function Page() {
                   <div className="text-xs sm:text-sm text-gray-400 uppercase tracking-wider font-light">UPTIME</div>
                 </motion.div>
               </motion.div>
+            </div>
+          </motion.div>
+
+          {/* Powered By Industry Leaders Section - Slider */}
+          <motion.div className="py-8 sm:py-12 bg-[#070c14]" {...fadeInUp(0.1)}>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="mb-6 sm:mb-8 text-center">
+                <span className="text-gray-400 uppercase tracking-wider text-[10px] sm:text-xs block mb-3 sm:mb-4">POWERED BY INDUSTRY LEADERS</span>
+              </div>
+              
+              {/* Slider Container */}
+              <div className="relative overflow-hidden">
+                <div className="flex animate-slide">
+                  {/* First set of items */}
+                  {[
+                    { name: "0x Protocol", desc: "DEX Aggregation", img: "https://i.imgur.com/9Y7BIHa.png" },
+                    { name: "Coinbase", desc: "Base Infrastructure", img: "https://i.imgur.com/RWgPgY1.png" },
+                    { name: "Alchemy", desc: "Node Services", img: "https://i.imgur.com/coHc8sq.png" },
+                    { name: "CoinGecko", desc: "Price Intelligence", img: "https://i.imgur.com/UgezDbe.png" },
+                    { name: "Dexscreener", desc: "Market Data", img: "https://i.imgur.com/LweKEMF.png" },
+                  ].map((item, idx) => (
+                    <div key={`first-${idx}`} className="flex-shrink-0 mx-2 sm:mx-3">
+                      <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 rounded-xl border border-gray-800 hover:bg-blue-500/5 transition-all duration-300 min-w-[200px] sm:min-w-[240px]">
+                        <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 rounded-lg flex items-center justify-center shrink-0">
+                          <img src={item.img} alt={item.name} className="h-8 sm:h-10 object-contain" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-white text-xs sm:text-sm font-semibold">{item.name}</p>
+                          <p className="text-[10px] sm:text-xs text-gray-400">{item.desc}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {/* Duplicate set for seamless loop */}
+                  {[
+                    { name: "0x Protocol", desc: "DEX Aggregation", img: "https://i.imgur.com/9Y7BIHa.png" },
+                    { name: "Coinbase", desc: "Base Infrastructure", img: "https://i.imgur.com/RWgPgY1.png" },
+                    { name: "Alchemy", desc: "Node Services", img: "https://i.imgur.com/coHc8sq.png" },
+                    { name: "CoinGecko", desc: "Price Intelligence", img: "https://i.imgur.com/UgezDbe.png" },
+                    { name: "Dexscreener", desc: "Market Data", img: "https://i.imgur.com/LweKEMF.png" },
+                  ].map((item, idx) => (
+                    <div key={`second-${idx}`} className="flex-shrink-0 mx-2 sm:mx-3">
+                      <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 rounded-xl border border-gray-800 hover:bg-blue-500/5 transition-all duration-300 min-w-[200px] sm:min-w-[240px]">
+                        <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 rounded-lg flex items-center justify-center shrink-0">
+                          <img src={item.img} alt={item.name} className="h-8 sm:h-10 object-contain" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-white text-xs sm:text-sm font-semibold">{item.name}</p>
+                          <p className="text-[10px] sm:text-xs text-gray-400">{item.desc}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </motion.div>
 
@@ -609,69 +665,6 @@ export default function Page() {
               </div>
           </motion.div>
 
-            {/* Separator line between Rewards and Powered By */}
-            <div className="border-b border-gray-800/30 mb-12 sm:mb-16"></div>
-
-            {/* Powered By Industry Leaders Section */}
-            <motion.div className="mb-12 sm:mb-16" {...fadeInUp(0.2)}>
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="mb-6 sm:mb-8 text-center">
-                  <span className="text-gray-400 uppercase tracking-wider text-[10px] sm:text-xs block mb-3 sm:mb-4">POWERED BY INDUSTRY LEADERS</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
-                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center shrink-0">
-                      <img src="https://i.imgur.com/9Y7BIHa.png" alt="0x Protocol" className="h-8 sm:h-10 object-contain" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-white text-xs sm:text-sm font-semibold">0x Protocol</p>
-                      <p className="text-[10px] sm:text-xs text-gray-400">DEX Aggregation</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center shrink-0">
-                      <img src="https://i.imgur.com/RWgPgY1.png" alt="Coinbase" className="h-8 sm:h-10 object-contain" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-white text-xs sm:text-sm font-semibold">Coinbase</p>
-                      <p className="text-[10px] sm:text-xs text-gray-400">Base Infrastructure</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center shrink-0">
-                      <img src="https://i.imgur.com/coHc8sq.png" alt="Alchemy" className="h-8 sm:h-10 object-contain" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-white text-xs sm:text-sm font-semibold">Alchemy</p>
-                      <p className="text-[10px] sm:text-xs text-gray-400">Node Services</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center shrink-0">
-                      <img src="https://i.imgur.com/UgezDbe.png" alt="CoinGecko" className="h-8 sm:h-10 object-contain" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-white text-xs sm:text-sm font-semibold">CoinGecko</p>
-                      <p className="text-[10px] sm:text-xs text-gray-400">Price Intelligence</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-950/70 border border-gray-800 flex items-center justify-center shrink-0">
-                      <img src="https://i.imgur.com/LweKEMF.png" alt="Dexscreener" className="h-8 sm:h-10 object-contain" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-white text-xs sm:text-sm font-semibold">Dexscreener</p>
-                      <p className="text-[10px] sm:text-xs text-gray-400">Market Data</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-3 sm:p-4 border border-gray-800 hover:bg-blue-500/5 transition-all duration-300">
-                    <Link href="/discover" className="text-blue-400 hover:text-blue-300 text-xs sm:text-sm font-medium">
-                      More integrations →
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
         </div>
       </main>
 

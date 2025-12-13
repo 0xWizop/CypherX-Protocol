@@ -22,37 +22,75 @@ const WalletDisplay: React.FC<WalletDisplayProps> = ({
   const { setSelfCustodialWallet, setWalletLoading } = useWalletSystem();
   const [walletData, setWalletData] = useState<WalletData | null>(null);
   const [ethBalance, setEthBalance] = useState<string>("");
+  const [usdBalance, setUsdBalance] = useState<string>("");
   const walletLoadedRef = useRef(false);
 
 
 
-  // Fetch wallet balance
+  // Fetch wallet balance and total portfolio value
   const fetchBalance = useCallback(async (address: string) => {
     try {
       console.log(`🔍 Fetching balance for: ${address}`);
       
-      const response = await fetch(`/api/wallet/balance?address=${address}`);
+      // Fetch ETH balance and token balances in parallel
+      const [balanceResponse, tokensResponse] = await Promise.all([
+        fetch(`/api/wallet/balance?address=${address}`),
+        fetch('/api/alchemy/wallet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            address,
+            action: 'tokens'
+          })
+        })
+      ]);
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (!balanceResponse.ok) {
+        throw new Error(`HTTP ${balanceResponse.status}: ${balanceResponse.statusText}`);
       }
 
-      const data = await response.json();
+      const balanceData = await balanceResponse.json();
       
-      if (data.success) {
-        console.log(`✅ Balance fetched: ${data.ethBalance} ETH`);
-        setEthBalance(data.ethBalance);
+      if (balanceData.success) {
+        console.log(`✅ Balance fetched: ${balanceData.ethBalance} ETH`);
+        setEthBalance(balanceData.ethBalance);
+        
+        // Fetch ETH price and calculate total portfolio value
+        try {
+          const priceResponse = await fetch('/api/price/eth');
+          const priceData = await priceResponse.json();
+          const ethPrice = priceData.ethereum?.usd || 0;
+          const ethUsdValue = parseFloat(balanceData.ethBalance) * ethPrice;
+          
+          // Calculate total token USD value
+          let totalTokenValue = 0;
+          if (tokensResponse.ok) {
+            const tokensData = await tokensResponse.json();
+            if (tokensData.success && tokensData.data?.tokenBalances) {
+              totalTokenValue = tokensData.data.tokenBalances.reduce((sum: number, token: any) => {
+                return sum + (token.usdValue || 0);
+              }, 0);
+            }
+          }
+          
+          // Total portfolio value = ETH value + all token values
+          const totalPortfolioValue = ethUsdValue + totalTokenValue;
+          setUsdBalance(totalPortfolioValue.toFixed(2));
+        } catch (priceError) {
+          console.error("Error fetching ETH price:", priceError);
+          setUsdBalance("0.00");
+        }
         
         // Update global context with the fetched balance
-        console.log("🔍 WalletDisplay - Updating global context with fetched balance:", data.ethBalance);
+        console.log("🔍 WalletDisplay - Updating global context with fetched balance:", balanceData.ethBalance);
         setSelfCustodialWallet({
           address: address,
           isConnected: true,
-          ethBalance: data.ethBalance,
-          tokenBalance: data.tokenBalance || ""
+          ethBalance: balanceData.ethBalance,
+          tokenBalance: balanceData.tokenBalance || ""
         });
       } else {
-        throw new Error(data.error || 'Failed to fetch balance');
+        throw new Error(balanceData.error || 'Failed to fetch balance');
       }
       
     } catch (error) {
@@ -132,7 +170,7 @@ const WalletDisplay: React.FC<WalletDisplayProps> = ({
   return (
     <button
       onClick={onToggleDropdown}
-      className="flex items-center justify-center h-8 sm:h-auto px-2.5 sm:px-3 sm:py-2 sm:space-x-2 rounded-lg sm:rounded-xl bg-gray-900/40 sm:bg-gray-950/50 sm:backdrop-blur-sm border border-gray-700/60 sm:border-gray-600 hover:bg-gray-900/60 sm:hover:bg-gray-900/50 hover:border-gray-500 transition-all duration-200"
+      className="flex items-center justify-center h-8 sm:h-auto px-2.5 sm:px-3 sm:py-2 sm:space-x-2 rounded-lg sm:rounded-xl bg-gray-900/40 hover:bg-gray-900/60 transition-all duration-200"
     >
       {/* Wallet Icon - Hidden on Mobile */}
       <FaWallet className="w-3.5 h-3.5 text-gray-400 hidden sm:block" />
@@ -140,10 +178,10 @@ const WalletDisplay: React.FC<WalletDisplayProps> = ({
       {/* Separator - Hidden on Mobile */}
       <div className="w-px h-4 bg-gray-600 hidden sm:block"></div>
       
-      {/* ETH Balance Display - Hidden on Mobile */}
+      {/* USD Balance Display - Hidden on Mobile */}
       <div className="hidden sm:flex flex-col items-start">
         <span className="text-white text-sm font-semibold">
-          {parseFloat(ethBalance).toFixed(4)} ETH
+          ${usdBalance || "0.00"}
         </span>
       </div>
       

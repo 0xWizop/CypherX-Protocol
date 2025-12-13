@@ -827,7 +827,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
               e.stopPropagation();
             }
           }}
-          className={`w-full pl-10 pr-10 py-1.5 text-sm text-gray-100 ${variant === "header" ? "bg-[#111827]" : "bg-gray-950"} border border-gray-600 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-gray-500 transition-all duration-300 placeholder-gray-400 shadow-lg group-hover:border-gray-500`}
+          className={`w-full pl-10 pr-10 py-1.5 text-sm text-gray-100 ${variant === "header" ? "bg-gray-900/40" : "bg-gray-950"} rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all duration-300 placeholder-gray-400`}
         />
         
         {/* Search Icon */}

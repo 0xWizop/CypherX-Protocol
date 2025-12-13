@@ -266,7 +266,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 >
                   {children}
                 </main>
-                <Footer isSticky={!isHomepage} />
+                <Footer isSticky={!isHomepage} isHomepage={isHomepage} />
               </div>
               <LoginModal
                 isOpen={showLoginModal}

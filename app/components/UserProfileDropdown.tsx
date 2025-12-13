@@ -422,10 +422,10 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
   const renderProfileContent = () => (
     <>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/40 flex-shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/20 flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden">
+            <div className="w-10 h-10 rounded-lg bg-gray-900/40 flex items-center justify-center overflow-hidden">
                 {profilePicture ? (
                   <Image
                     src={profilePicture}
@@ -452,7 +452,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
           className="sm:hidden p-2 text-gray-500 hover:text-white transition-colors"
           aria-label="Close"
             >
-          <FiX className="w-5 h-5" />
+          <FiX className="w-4 h-4" />
             </button>
         </div>
 
@@ -466,7 +466,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                 setShowPnLCalendar(true);
                 setShowAccountModal(false);
               }}
-              className="flex items-center justify-between w-full py-3 text-gray-400 hover:text-white transition-colors border-b border-gray-800/40"
+              className="flex items-center justify-between w-full py-3 text-gray-400 hover:text-white transition-colors border-b border-gray-800/20"
             >
               <div className="flex items-center gap-3">
                 <FiCalendar className="w-4 h-4" />
@@ -482,7 +482,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                 setShowAuthorDashboardModal(true);
                 setShowAccountModal(false);
               }}
-              className="flex items-center justify-between w-full py-3 text-gray-400 hover:text-white transition-colors border-b border-gray-800/40"
+              className="flex items-center justify-between w-full py-3 text-gray-400 hover:text-white transition-colors border-b border-gray-800/20"
             >
               <div className="flex items-center gap-3">
                 <FiFileText className="w-4 h-4" />
@@ -600,7 +600,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                 <motion.div
                   {...motionPresets.dropdownDesktop}
                   ref={modalRef}
-                  className="fixed w-72 bg-gray-950/95 backdrop-blur-xl border border-gray-800/60 shadow-2xl shadow-black/40 overflow-hidden z-[9999] rounded-2xl"
+                  className="fixed w-72 bg-gray-950 shadow-2xl shadow-black/40 overflow-hidden z-[9999] rounded-xl"
                   style={{
                     top: '85px',
                     right: window.innerWidth - buttonRef.getBoundingClientRect().right,
@@ -624,7 +624,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: '100%' }}
                   transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-                  className="fixed left-0 right-0 bottom-0 sm:bottom-auto sm:left-auto sm:right-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 w-full sm:max-w-sm h-auto max-h-[70vh] sm:max-h-[75vh] bg-gray-950 border-t border-gray-800/60 sm:border sm:border-gray-800/60 shadow-2xl overflow-hidden rounded-t-[28px] sm:rounded-2xl flex flex-col z-[9999]"
+                  className="fixed left-0 right-0 bottom-0 sm:bottom-auto sm:left-auto sm:right-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 w-full sm:max-w-sm h-auto max-h-[70vh] sm:max-h-[75vh] bg-gray-950 shadow-2xl overflow-hidden rounded-t-3xl sm:rounded-xl flex flex-col z-[9999]"
                     onClick={(e) => e.stopPropagation()}
                   >
                   {/* Mobile drag handle */}
@@ -679,7 +679,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="bg-gray-950 w-full sm:w-96 sm:border sm:border-gray-800/60 sm:rounded-2xl rounded-t-3xl shadow-2xl overflow-hidden"
+            className="bg-gray-950 w-full sm:w-96 sm:rounded-xl rounded-t-3xl shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Mobile drag handle */}
@@ -687,7 +687,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
               <div className="w-10 h-1 rounded-full bg-gray-600" />
             </div>
             
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/60">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/20">
               <button
                 onClick={() => setShowAliasModal(false)}
                 className="p-2 text-gray-500 hover:text-white transition-colors -ml-2"
@@ -704,14 +704,14 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                 type="text"
                 value={alias}
                 onChange={(e) => setAlias(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-gray-600 text-sm transition-colors"
+                className="w-full px-3 py-2 bg-gray-900/40 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500/50 text-sm transition-colors"
                 placeholder="Enter display name"
                 maxLength={20}
               />
               <p className="text-gray-600 text-xs mt-1.5">{alias.length}/20 characters</p>
             </div>
 
-            <div className="px-4 py-3 border-t border-gray-800/60">
+            <div className="px-4 py-3 border-t border-gray-800/20">
               <button
                 onClick={async () => {
                   if (alias.trim()) {
@@ -739,14 +739,14 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="bg-gray-950 w-full h-full sm:h-auto sm:max-w-[520px] sm:mx-4 sm:border sm:border-gray-800/60 shadow-2xl flex flex-col sm:max-h-[85vh] sm:rounded-2xl"
+            className="bg-gray-950 w-full h-full sm:h-auto sm:max-w-[520px] sm:mx-4 shadow-2xl flex flex-col sm:max-h-[85vh] sm:rounded-xl rounded-t-3xl"
           >
             {/* Mobile drag handle */}
             <div className="sm:hidden flex justify-center pt-3 pb-1">
               <div className="w-10 h-1 rounded-full bg-gray-600" />
               </div>
             
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/60 flex-shrink-0">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/20 flex-shrink-0">
               <button
                 onClick={() => {
                   setShowAccountSettingsModal(false);
@@ -762,13 +762,13 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
 
             <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent px-4 sm:px-5 py-4 space-y-4">
               {/* Profile Section */}
-              <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
+              <div className="bg-gray-900/40 rounded-xl p-4">
                 <h4 className="text-white font-semibold text-sm mb-4">Profile Information</h4>
                 <div className="space-y-4">
                   {/* Profile Picture */}
                   <div className="flex items-center gap-4">
                     <div className="relative">
-                      <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-900/80 border border-gray-800/60">
+                      <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-900/40">
                         {profilePicture ? (
                           <Image
                             src={profilePicture}
@@ -831,7 +831,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                         type="text"
                         value={displayName}
                         onChange={(e) => setDisplayName(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-gray-900/80 border border-gray-800/60 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 text-sm transition-all duration-200"
+                      className="w-full px-3.5 py-2.5 bg-gray-900/40 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 text-sm transition-all duration-200"
                         placeholder="Enter your display name"
                       />
                     </div>
@@ -839,7 +839,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
               </div>
 
               {/* Notifications Section */}
-              <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
+              <div className="bg-gray-900/40 rounded-xl p-4">
                 <h4 className="text-white font-semibold text-sm mb-3">Notifications</h4>
                 <div className="space-y-2">
                   {[
@@ -848,7 +848,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                     { key: 'trading', label: 'Trading', desc: 'Positions and P&L alerts' },
                     { key: 'news', label: 'News', desc: 'Market commentary' },
                   ].map(({ key, label, desc }) => (
-                    <label key={key} className="flex items-center justify-between gap-3 p-3 bg-gray-900/60 hover:bg-gray-800/40 rounded-xl transition-all duration-200 cursor-pointer border border-transparent hover:border-gray-800/60">
+                    <label key={key} className="flex items-center justify-between gap-3 p-3 bg-gray-900/40 hover:bg-gray-900/60 rounded-xl transition-all duration-200 cursor-pointer">
                       <div className="flex-1 min-w-0">
                         <span className="text-gray-200 text-sm font-medium">{label}</span>
                         <p className="text-[11px] text-gray-500 mt-0.5 truncate">{desc}</p>
@@ -874,7 +874,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
               </div>
 
               {/* Privacy Section */}
-              <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4">
+              <div className="bg-gray-900/40 rounded-xl p-4">
                 <h4 className="text-white font-semibold text-sm mb-3">Privacy</h4>
                 <div className="space-y-2">
                   {[
@@ -882,7 +882,7 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
                     { key: 'showTrades', label: 'Show Trades', desc: 'Share trades with followers' },
                     { key: 'showBalance', label: 'Show Balance', desc: 'Display wallet balance' },
                   ].map(({ key, label, desc }) => (
-                    <label key={key} className="flex items-center justify-between gap-3 p-3 bg-gray-900/60 hover:bg-gray-800/40 rounded-xl transition-all duration-200 cursor-pointer border border-transparent hover:border-gray-800/60">
+                    <label key={key} className="flex items-center justify-between gap-3 p-3 bg-gray-900/40 hover:bg-gray-900/60 rounded-xl transition-all duration-200 cursor-pointer">
                       <div className="flex-1 min-w-0">
                         <span className="text-gray-200 text-sm font-medium">{label}</span>
                         <p className="text-[11px] text-gray-500 mt-0.5 truncate">{desc}</p>
@@ -925,10 +925,10 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
             </div>
 
             {/* Footer Actions */}
-            <div className="flex gap-3 px-4 sm:px-5 py-4 border-t border-gray-800/60 flex-shrink-0">
+            <div className="flex gap-3 px-4 sm:px-5 py-4 border-t border-gray-800/20 flex-shrink-0">
                 <button
                   onClick={() => setShowAccountSettingsModal(false)}
-                className="flex-1 px-4 py-2.5 bg-gray-900/60 border border-gray-800/60 text-gray-300 hover:bg-gray-800/60 hover:border-gray-700 rounded-xl transition-all duration-200 font-medium text-sm"
+                className="flex-1 px-4 py-2.5 bg-gray-900/40 text-gray-300 hover:bg-gray-900/60 rounded-xl transition-all duration-200 font-medium text-sm"
                 >
                   Cancel
                 </button>
@@ -974,9 +974,9 @@ const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({ variant = "ci
               </div>
               <button
                 onClick={() => setShowAuthorDashboardModal(false)}
-                className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-900/60 hover:bg-gray-800/80 border border-gray-800/60 hover:border-gray-700 text-gray-400 hover:text-white transition-all duration-200"
+                className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-gray-400 hover:text-white transition-all duration-200"
               >
-                <FiX className="w-5 h-5" />
+                <FiX className="w-3.5 h-3.5" />
               </button>
             </div>
 

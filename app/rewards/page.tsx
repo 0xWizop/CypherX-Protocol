@@ -220,9 +220,10 @@ export default function RewardsPage() {
       <main className="flex-1 w-full flex flex-col min-h-0 overflow-hidden">
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
               {/* Content Section */}
-              <div className="w-full flex-1 px-4 lg:px-6 pt-4 pb-6 space-y-3 overflow-hidden">
+              <div className="w-full h-full px-4 lg:px-6 pt-3 pb-3 overflow-y-auto">
+                <div className="max-w-7xl mx-auto w-full space-y-3 pb-2">
           {/* Page Header */}
-          <div className="flex items-center justify-between mb-3 flex-shrink-0">
+          <div className="flex items-center justify-between mb-2 flex-shrink-0">
             <div>
               <h1 className="text-lg font-semibold text-white">Rewards</h1>
               {walletAddress && (
@@ -231,56 +232,53 @@ export default function RewardsPage() {
                 </p>
               )}
             </div>
+            <div className="flex items-center gap-2">
+              {/* Error Banner */}
+              {error && (
+                <motion.div {...fadeInUp(0.05)} className="p-2 bg-red-500/20 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse"></div>
+                    <span className="text-red-400 font-medium text-xs">Error</span>
+                    <button 
+                      onClick={refreshAll}
+                      className="text-red-400 hover:text-red-300 text-xs underline ml-1"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+              {/* Loading Indicator */}
+              {isLoading && (
+                <motion.div {...fadeInUp(0.1)}>
+                  <div className="flex items-center space-x-2 text-blue-400">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+                    <span className="text-xs">Loading...</span>
+                  </div>
+                </motion.div>
+              )}
+            </div>
           </div>
 
-          {/* Error Banner */}
-          {error && (
-            <motion.div {...fadeInUp(0.05)} className="mb-3 p-3 bg-red-500/20 border border-red-500/30 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
-                  <span className="text-red-400 font-medium text-sm">Error Loading Rewards</span>
-                </div>
-                <button 
-                  onClick={refreshAll}
-                  className="text-red-400 hover:text-red-300 text-xs underline"
-                >
-                  Try Again
-                </button>
-              </div>
-              <p className="text-red-300 text-xs mt-1">{error}</p>
-            </motion.div>
-          )}
-
-          {/* Loading Indicator */}
-          {isLoading && (
-            <motion.div {...fadeInUp(0.1)} className="mb-3 flex justify-end">
-              <div className="flex items-center space-x-2 text-blue-400">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
-                <span className="text-sm">Loading...</span>
-              </div>
-            </motion.div>
-          )}
-
           {/* Main Stats Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2 mb-2">
             {/* Points */}
-            <motion.div {...fadeInUp(0.2)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
-              <p className="text-xs text-gray-400 mb-0.5">Total Points</p>
+            <motion.div {...fadeInUp(0.2)} className="bg-gray-900/40 rounded-xl p-3">
+              <p className="text-xs text-gray-400 mb-1">Total Points</p>
               <p className="text-lg font-semibold text-white">
                 {isLoading ? "..." : userData.points.toLocaleString()}
               </p>
             </motion.div>
 
             {/* Tier */}
-            <motion.div {...fadeInUp(0.3)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
-              <p className="text-xs text-gray-400 mb-0.5">Current Tier</p>
+            <motion.div {...fadeInUp(0.3)} className="bg-gray-900/40 rounded-xl p-3">
+              <p className="text-xs text-gray-400 mb-1">Current Tier</p>
               <p className="text-lg font-semibold text-white">{currentTier.name}</p>
             </motion.div>
 
             {/* ETH Rewards */}
-            <motion.div {...fadeInUp(0.4)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
-              <p className="text-xs text-gray-400 mb-0.5">ETH Earned</p>
+            <motion.div {...fadeInUp(0.4)} className="bg-gray-900/40 rounded-xl p-3">
+              <p className="text-xs text-gray-400 mb-1">ETH Earned</p>
               <p className="text-lg font-semibold text-green-400 flex items-center gap-1.5">
                 <SiEthereum className="w-4 h-4" />
                 <span>{userData.ethRewards.toFixed(4)}</span>
@@ -288,22 +286,22 @@ export default function RewardsPage() {
             </motion.div>
 
             {/* Referrals */}
-            <motion.div {...fadeInUp(0.5)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
-              <p className="text-xs text-gray-400 mb-0.5">Referrals</p>
+            <motion.div {...fadeInUp(0.5)} className="bg-gray-900/40 rounded-xl p-3">
+              <p className="text-xs text-gray-400 mb-1">Referrals</p>
               <p className="text-lg font-semibold text-white">{userData.referrals}</p>
             </motion.div>
 
             {/* Cashback Rate */}
-            <motion.div {...fadeInUp(0.6)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
-              <p className="text-xs text-gray-400 mb-0.5">Cashback Rate</p>
+            <motion.div {...fadeInUp(0.6)} className="bg-gray-900/40 rounded-xl p-3">
+              <p className="text-xs text-gray-400 mb-1">Cashback Rate</p>
               <p className="text-lg font-semibold text-green-400">{(currentTier.cashback * 100).toFixed(0)}%</p>
             </motion.div>
           </div>
 
           {/* Progress and Actions */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 mb-2">
             {/* Tier Progress */}
-            <motion.div {...fadeInUp(0.6)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
+            <motion.div {...fadeInUp(0.6)} className="bg-gray-900/40 rounded-xl p-3">
               <h3 className="text-sm font-medium text-white mb-2">Tier Progress</h3>
               {nextTier && (
                 <div className="space-y-2">
@@ -311,9 +309,9 @@ export default function RewardsPage() {
                     <span className="text-gray-400">Progress to {nextTier.name}</span>
                     <span className="text-blue-400 font-medium">{Math.round(progressToNextTier)}%</span>
                   </div>
-                  <div className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden shadow-inner">
+                  <div className="w-full bg-gray-800/50 rounded-full h-2 overflow-hidden">
                     <div 
-                      className="bg-gradient-to-r from-blue-500 to-blue-400 h-1.5 rounded-full transition-all duration-500 ease-out shadow-sm"
+                      className="bg-gradient-to-r from-blue-500 to-blue-400 h-2 rounded-full transition-all duration-500 ease-out"
                       style={{ width: `${progressToNextTier}%` }}
                     ></div>
                   </div>
@@ -326,10 +324,10 @@ export default function RewardsPage() {
             </motion.div>
 
             {/* Trading Stats */}
-            <motion.div {...fadeInUp(0.7)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
+            <motion.div {...fadeInUp(0.7)} className="bg-gray-900/40 rounded-xl p-3">
               <h3 className="text-sm font-medium text-white mb-2">Trading Stats</h3>
                <div className="space-y-2">
-                 <div className="p-2 bg-gray-800/50 rounded-md border border-gray-600/30">
+                 <div className="p-2.5 bg-gray-800/50 rounded-lg">
                    <div className="flex justify-between items-center">
                      <p className="text-xs text-gray-400">Total Volume</p>
                      <p className="text-xs font-medium text-gray-200">
@@ -337,7 +335,7 @@ export default function RewardsPage() {
                      </p>
                    </div>
                  </div>
-                 <div className="p-2 bg-gray-800/50 rounded-md border border-gray-600/30">
+                 <div className="p-2.5 bg-gray-800/50 rounded-lg">
                    <div className="flex justify-between items-center">
                      <p className="text-xs text-gray-400">Total Transactions</p>
                      <p className="text-xs font-medium text-gray-200">
@@ -345,7 +343,7 @@ export default function RewardsPage() {
                      </p>
                    </div>
                  </div>
-                 <div className="p-2 bg-gray-800/50 rounded-md border border-gray-600/30">
+                 <div className="p-2.5 bg-gray-800/50 rounded-lg">
                    <div className="flex justify-between items-center">
                      <p className="text-xs text-gray-400">Avg. Trade Size</p>
                      <p className="text-xs font-medium text-gray-200">
@@ -359,11 +357,11 @@ export default function RewardsPage() {
              </motion.div>
 
             {/* Claim Section */}
-            <motion.div {...fadeInUp(0.8)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3">
+            <motion.div {...fadeInUp(0.8)} className="bg-gray-900/40 rounded-xl p-3">
               <h3 className="text-sm font-medium text-white mb-2">Claim Rewards</h3>
               <div className="space-y-2">
-                <div className="text-center p-2 bg-gray-800 rounded-md">
-                  <p className="text-xs text-gray-400">Available to Claim</p>
+                <div className="text-center p-3 bg-gray-800/50 rounded-lg">
+                  <p className="text-xs text-gray-400 mb-1">Available to Claim</p>
                   <p className="text-sm font-semibold text-green-400 flex items-center justify-center gap-1.5">
                     <SiEthereum className="w-3 h-3" />
                     <span>+{userData.ethRewards.toFixed(4)}</span>
@@ -380,10 +378,10 @@ export default function RewardsPage() {
                         }
                       }
                     }}
-                   className={`w-full py-2 transition-all duration-300 rounded-md text-xs font-medium ${
+                   className={`w-full py-2.5 transition-all duration-300 rounded-lg text-xs font-medium ${
                      userData.ethRewards > 0
-                       ? 'bg-green-500 hover:bg-green-600 text-white'
-                       : 'bg-gray-800 border border-gray-700 text-gray-400 cursor-not-allowed'
+                       ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                       : 'bg-gray-800/50 text-gray-400 cursor-not-allowed'
                    }`}
                    disabled={userData.ethRewards <= 0}
                  >
@@ -396,8 +394,8 @@ export default function RewardsPage() {
           
 
           {/* My Referral Code */}
-          <motion.div {...fadeInUp(1.0)} className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3 mb-3">
-            <div className="flex items-center justify-between mb-3">
+          <motion.div {...fadeInUp(1.0)} className="bg-gray-900/40 rounded-xl p-3 mb-2">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
               <div>
                 <h3 className="text-sm font-medium text-white mb-1">My Referral Code</h3>
                 <p className="text-lg font-mono font-semibold text-blue-400">'{userData.referralCode}'</p>
@@ -405,10 +403,10 @@ export default function RewardsPage() {
                   <p className="text-xs text-gray-400 mt-2">Using Referral Code: <span className="text-sm font-medium text-blue-400">'{userData.referredBy}'</span></p>
                 )}
               </div>
-               <div className="flex space-x-2">
+               <div className="flex flex-wrap gap-2">
                                    <button
                     onClick={() => setShowReferralModal(true)}
-                    className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-400 text-xs font-medium rounded-md transition-all duration-200 flex items-center justify-center space-x-2"
+                    className="px-3 py-2 bg-gray-800/50 hover:bg-gray-800/70 text-gray-300 text-xs font-medium rounded-lg transition-all duration-200 flex items-center justify-center space-x-2"
                   >
                     <FaUserFriends className="w-3 h-3" />
                     <span>View Referrals</span>
@@ -418,7 +416,7 @@ export default function RewardsPage() {
                       navigator.clipboard.writeText(userData.referralCode);
                       showToast('Referral code copied to clipboard!', 'success');
                     }}
-                    className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-400 text-xs font-medium rounded-md transition-all duration-200 flex items-center justify-center space-x-2"
+                    className="px-3 py-2 bg-gray-800/50 hover:bg-gray-800/70 text-gray-300 text-xs font-medium rounded-lg transition-all duration-200 flex items-center justify-center space-x-2"
                   >
                     <FaShare className="w-3 h-3" />
                     <span>Copy Code</span>
@@ -426,7 +424,7 @@ export default function RewardsPage() {
                  {!userData.referralCodeEdited && (
                    <button
                      onClick={() => setShowEditReferralModal(true)}
-                     className="px-3 py-2 bg-green-500/20 hover:bg-green-500/30 border border-green-500/40 text-green-400 text-xs font-medium rounded-md transition-all duration-200 flex items-center justify-center space-x-2"
+                     className="px-3 py-2 bg-gray-800/50 hover:bg-gray-800/70 text-gray-300 text-xs font-medium rounded-lg transition-all duration-200 flex items-center justify-center space-x-2"
                    >
                      <FaEdit className="w-3 h-3" />
                      <span>Edit Code</span>
@@ -435,16 +433,14 @@ export default function RewardsPage() {
                </div>
              </div>
              
-                                                       
-             
               {/* Referral Stats */}
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                <div className="bg-gray-700/30 rounded-lg p-3 text-center border border-gray-600/30">
-                  <p className="text-xs text-gray-400 mb-0.5">Total Referrals</p>
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+                  <p className="text-xs text-gray-400 mb-1">Total Referrals</p>
                   <p className="text-base font-semibold text-white">{userData.referrals}</p>
                 </div>
-                <div className="bg-gray-700/30 rounded-lg p-3 text-center border border-gray-600/30">
-                  <p className="text-xs text-gray-400 mb-0.5">Earnings from Referrals</p>
+                <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+                  <p className="text-xs text-gray-400 mb-1">Earnings from Referrals</p>
                   <p className="text-base font-semibold text-green-400 flex items-center justify-center gap-1.5">
                     <SiEthereum className="w-4 h-4" />
                     <span>{(userData.ethRewards * 0.3).toFixed(4)}</span>
@@ -453,9 +449,9 @@ export default function RewardsPage() {
               </div>
              
               {/* Referral List */}
-              <div className="space-y-2">
+              <div className="space-y-2 mb-3">
                 <h4 className="text-xs font-medium text-white mb-2">Recent Referrals</h4>
-                <div className="max-h-32 overflow-hidden">
+                <div className="max-h-24 overflow-y-auto scrollbar-hide">
                   {referralData && referralData.referrals.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-2">
                       {referralData.referrals.map((referral: any, i: number) => (
@@ -465,7 +461,7 @@ export default function RewardsPage() {
                             setSelectedRefereeId(referral.refereeId);
                             setShowRefereeStatsModal(true);
                           }}
-                          className="p-3 bg-gray-800 rounded-md border border-gray-600/30 hover:border-blue-500/50 hover:bg-gray-800/70 cursor-pointer transition-all duration-200"
+                          className="p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800/70 cursor-pointer transition-all duration-200"
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-3 flex-1">
@@ -490,7 +486,7 @@ export default function RewardsPage() {
                             </div>
                           </div>
                           {referral.swapValueUSD && (
-                            <div className="mt-2 pt-2 border-t border-gray-700/30">
+                            <div className="mt-2 pt-2 border-t border-gray-800/30">
                               <p className="text-xs text-gray-400">
                                 Volume: ${referral.swapValueUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
@@ -504,7 +500,7 @@ export default function RewardsPage() {
                       {Array.from({ length: Math.min(userData.referrals, 6) }, (_, i) => (
                         <div 
                           key={i} 
-                          className="p-3 bg-gray-800 rounded-md border border-gray-600/30 hover:border-blue-500/50 hover:bg-gray-800/70 cursor-pointer transition-all duration-200"
+                          className="p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800/70 cursor-pointer transition-all duration-200"
                         >
                           <div className="flex items-center space-x-3">
                             <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
@@ -520,7 +516,7 @@ export default function RewardsPage() {
                     </div>
                   ) : (
                     <div className="text-center py-4">
-                      <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <div className="w-12 h-12 bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-2">
                         <FaUserFriends className="w-6 h-6 text-gray-500" />
                       </div>
                       <p className="text-gray-400 text-xs mb-2">No referrals yet</p>
@@ -531,8 +527,8 @@ export default function RewardsPage() {
               </div>
               
               {/* Additional Referral Info */}
-              <div className="mt-3">
-                <div className="bg-gray-700/30 rounded-lg p-3 border border-gray-600/30">
+              <div>
+                <div className="bg-gray-800/50 rounded-lg p-3">
                   <h4 className="text-xs font-medium text-white mb-2">How Referrals Work</h4>
                   <div className="space-y-1.5 text-xs text-gray-400">
 
@@ -552,6 +548,7 @@ export default function RewardsPage() {
                  </div>
                </div>
            </motion.div>
+                </div>
           </div>
         </div>
       </main>
@@ -576,19 +573,19 @@ export default function RewardsPage() {
 
       {/* Edit Referral Code Modal */}
       {showEditReferralModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900/95 backdrop-blur-xl border border-gray-700/50 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-950 backdrop-blur-xl rounded-xl p-6 w-full max-w-md shadow-2xl">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-100">Edit Referral Code</h3>
+              <h3 className="text-lg font-semibold text-white">Edit Referral Code</h3>
               <button
                 onClick={() => {
                   setShowEditReferralModal(false);
                   setNewReferralCode('');
                   setEditError('');
                 }}
-                className="text-gray-400 hover:text-gray-200 transition-colors"
+                className="text-gray-400 hover:text-white transition-colors"
               >
-                <FiX className="w-5 h-5" />
+                <FiX className="w-4 h-4" />
               </button>
             </div>
             
@@ -597,7 +594,7 @@ export default function RewardsPage() {
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Current Code
                 </label>
-                <div className="p-3 bg-gray-800 rounded-md border border-gray-700/30">
+                <div className="p-3 bg-gray-900/40 rounded-lg">
                   <p className="text-lg font-mono font-semibold text-blue-400">{userData.referralCode}</p>
                 </div>
               </div>
@@ -611,7 +608,7 @@ export default function RewardsPage() {
                   value={newReferralCode}
                   onChange={(e) => setNewReferralCode(e.target.value.toUpperCase())}
                   placeholder="Enter new code (4-12 characters)"
-                  className="w-full p-3 bg-gray-800 border border-gray-700/30 rounded-md text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full p-3 bg-gray-900/40 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                   maxLength={12}
                 />
                 <p className="text-xs text-gray-400 mt-1">
@@ -620,7 +617,7 @@ export default function RewardsPage() {
               </div>
 
               {editError && (
-                <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-md">
+                <div className="p-3 bg-red-500/20 rounded-lg">
                   <p className="text-red-400 text-sm">{editError}</p>
                 </div>
               )}
@@ -648,7 +645,7 @@ export default function RewardsPage() {
                       setEditError(result.error || 'Failed to update referral code');
                     }
                   }}
-                  className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-medium rounded-md transition-all duration-200"
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-all duration-200"
                 >
                   Update Code
                 </button>
@@ -658,7 +655,7 @@ export default function RewardsPage() {
                     setNewReferralCode('');
                     setEditError('');
                   }}
-                  className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-gray-200 font-medium rounded-md transition-all duration-200"
+                  className="px-4 py-2 bg-gray-900/40 hover:bg-gray-800/60 text-gray-200 font-medium rounded-lg transition-all duration-200"
                 >
                   Cancel
                 </button>
@@ -668,7 +665,6 @@ export default function RewardsPage() {
         </div>
       )}
 
-      <div className="border-t border-gray-700/50 mt-6"></div>
       <Footer />
       
       {/* Toast Notification */}

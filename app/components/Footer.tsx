@@ -8,9 +8,10 @@ import { FiBarChart, FiTrendingUp, FiEye, FiCompass, FiGift, FiZap } from "react
 type FooterProps = {
   desktopAddon?: ReactNode;
   isSticky?: boolean;
+  isHomepage?: boolean;
 };
 
-const Footer: React.FC<FooterProps> = ({ desktopAddon, isSticky = true }) => {
+const Footer: React.FC<FooterProps> = ({ desktopAddon, isSticky = true, isHomepage = false }) => {
   const [ethPrice, setEthPrice] = useState<number | null>(null);
   const [btcPrice, setBtcPrice] = useState<number | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<"Connected" | "Disconnected">("Connected");
@@ -141,7 +142,7 @@ const Footer: React.FC<FooterProps> = ({ desktopAddon, isSticky = true }) => {
   return (
     <footer
       id="app-footer"
-      className={`${isSticky ? "fixed inset-x-0 bottom-0" : "relative"} z-40 bg-gray-950 border-t border-gray-800 text-gray-300 text-xs px-4 py-2`}
+      className={`${isSticky ? "fixed inset-x-0 bottom-0" : "relative"} z-40 ${isHomepage ? "bg-[#070c14]" : "bg-gray-950"} border-t border-gray-800 text-gray-300 text-xs px-4 py-2`}
     >
       {desktopAddon && (
         <div className="hidden sm:flex items-center justify-center border-b border-gray-900/60 px-3 py-2">
@@ -197,15 +198,6 @@ const Footer: React.FC<FooterProps> = ({ desktopAddon, isSticky = true }) => {
           >
             <FiEye className="w-3 h-3" />
             <span>Radar</span>
-          </Link>
-
-          <Link 
-            href="/predict" 
-            className="flex items-center space-x-1 hover:text-blue-400 transition-colors duration-200"
-            prefetch={true}
-          >
-            <FiZap className="w-3 h-3" />
-            <span>Predict</span>
           </Link>
 
           <Link 
